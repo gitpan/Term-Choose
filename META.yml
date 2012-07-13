@@ -1,0 +1,28 @@
+---
+abstract: 'Choose items from a list.'
+author:
+  - 'Kürbis <kuerbis@server>'
+build_requires:
+  Test::More: 0
+configure_requires:
+  Module::Build: 0
+dynamic_config: 1
+generated_by: 'Module::Build version 0.4, CPAN::Meta::Converter version 2.120921'
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Term-Choose
+provides:
+  Term::Choose:
+    file: lib/Term/Choose.pm
+    version: v0.7.1
+requires:
+  Carp: 0
+  Scalar::Util: 1.25
+  Signals::XSIG: 0.12
+  Term::ReadKey: 2.3
+  perl: v5.10.1
+resources:
+  license: http://dev.perl.org/licenses/
+version: v0.7.1

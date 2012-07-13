@@ -1,0 +1,50 @@
+{
+   "abstract" : "Choose items from a list.",
+   "author" : [
+      "Kürbis <kuerbis@server>"
+   ],
+   "dynamic_config" : 1,
+   "generated_by" : "Module::Build version 0.4, CPAN::Meta::Converter version 2.120921",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "Term-Choose",
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "Test::More" : "0"
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "Module::Build" : "0"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "Carp" : "0",
+            "Scalar::Util" : "1.25",
+            "Signals::XSIG" : "0.12",
+            "Term::ReadKey" : "2.3",
+            "perl" : "v5.10.1"
+         }
+      }
+   },
+   "provides" : {
+      "Term::Choose" : {
+         "file" : "lib/Term/Choose.pm",
+         "version" : "v0.7.1"
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "license" : [
+         "http://dev.perl.org/licenses/"
+      ]
+   },
+   "version" : "v0.7.1"
+}
