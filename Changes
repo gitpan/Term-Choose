@@ -1,6 +1,12 @@
 Revision history for Term::Choose
 
 
+0.7.2   2012-07-14
+        - Press a key after warnings "not a valid value for option" or "no such option" to continue.
+        - Consideration of the case of calling "choose" in a void context.
+        - Code cleanup.
+        - Documentation cleanup.
+
 0.7.1   2012-07-13
         - First release on cpan.
         

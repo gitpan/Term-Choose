@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.1';
+our $VERSION = '0.7.2';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -55,26 +55,27 @@ use constant {
 };
 
 use constant {
-    BIT_MASK_xxxxxx11    => 0b00000011,
-    BIT_MASK_xx1xxxxx    => 0b00100000,
-    BIT_MASK_x1xxxxxx    => 0b01000000,
+    BIT_MASK_xxxxxx11    => 0x03,
+    BIT_MASK_xx1xxxxx    => 0x20,
+    BIT_MASK_x1xxxxxx    => 0x40,
 };
 
 use constant {
     NEXT_getch          => -1,
-    CONTROL_c           => 3,
-    KEY_TAB             => 9,
-    KEY_ENTER           => 13,
-    KEY_ESC             => 27,
-    KEY_SPACE           => 32,
-    KEY_e               => 101,
-    KEY_h               => 104,
-    KEY_j               => 106,
-    KEY_k               => 107,
-    KEY_l               => 108,
-    KEY_q               => 113,
-    KEY_Tilde           => 126,
-    KEY_BSPACE          => 127,
+    
+    CONTROL_c           => 0x03,
+    KEY_TAB             => 0x09,
+    KEY_ENTER           => 0x0d,
+    KEY_ESC             => 0x1b,
+    KEY_SPACE           => 0x20,
+    KEY_e               => 0x65,
+    KEY_h               => 0x68,
+    KEY_j               => 0x6a,
+    KEY_k               => 0x6b,
+    KEY_l               => 0x6c,
+    KEY_q               => 0x71,
+    KEY_Tilde           => 0x7e,
+    KEY_BSPACE          => 0x7f,
 
     KEY_UP              => 279165,
     KEY_DOWN            => 279166,
@@ -103,19 +104,24 @@ sub _validate_option {
         screen_width     => qr/\A[1-9][0-9]\z/,
         hide_cursor      => qr/\A[01]\z/,
     );
+    my $warn = 0;
     for my $key ( keys %$config ) {
         if ( $validate{$key} ) {
             if ( defined $config->{$key} and not $config->{$key} =~ $validate{$key} ) {
                 carp "choose: \"$config->{$key}\" not a valid value for option \"$key\". Falling back to default value.";
                 $config->{$key} = undef;
-                sleep 2;
+                ++$warn;
             }
         }
         elsif ( not exists $validate{$key} ) {
             carp "choose: \"$key\": no such option";
             delete $config->{$key};
-            sleep 2;
+            ++$warn;
         }
+    }
+    if ( $warn ) {
+        print "Press a key to continue: ";
+        my $dummy = <STDIN>;
     }
     return $config;
 }
@@ -321,16 +327,21 @@ sub _write_first_screen {
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
     if ( $arg->{prompt} ne '0' ) {
-        $arg->{prompt} =~ s/\p{Space}/ /g;
-        $arg->{firstline} = $arg->{prompt};
-        # ----- #
-        if ( $arg->{wantarray} ) {
-            if ( $arg->{prompt} ) {
-                $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
-                $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
-            }
-            else {
-                $arg->{firstline} = '';
+        if ( not defined $arg->{wantarray} ) {
+            $arg->{firstline} = '!!! Called "choose" in void context - nothing to choose !!!';
+        }
+        else {
+            $arg->{prompt} =~ s/\p{Space}/ /g;
+            $arg->{firstline} = $arg->{prompt};
+            # ----- #
+            if ( $arg->{wantarray} ) {
+                if ( $arg->{prompt} ) {
+                    $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
+                    $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
+                }
+                else {
+                    $arg->{firstline} = '';
+                }
             }
         }
         if ( length $arg->{firstline} > $arg->{maxcols} ) {                     # ----- #
@@ -400,7 +411,7 @@ sub choose {
     $arg->{list} = _copy_orig_list( $arg );
     $arg->{length_longest} = _length_longest( $arg->{list} );
     $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
-    $arg->{wantarray} = wantarray ? 1 : 0;
+    $arg->{wantarray} = wantarray ? 1 : 0 if defined wantarray;
     # $arg->{LastEventWasPress} = 0;  # in order to ignore left-over button-ups # orig comment
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
@@ -559,6 +570,7 @@ sub choose {
             when ( $c == KEY_ENTER ) {
                 my @chosen;
                 _end_win( $arg );
+                return if not defined $arg->{wantarray};
                 if ( $arg->{wantarray} ) {
                     if ( $arg->{vertical_order} ) {
                         for my $col ( 0 .. $#{$arg->{new_list}[0]} ) {
@@ -845,7 +857,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.1
+Version 0.7.2
 
 =cut
 
@@ -1198,107 +1210,36 @@ L<Term::ReadKey|http://search.cpan.org/perldoc?Term%3A%3AReadKey>
 
 The Terminal needs to understand the following ANSI escape sequences:
 
-=over
-    
-=item
+    "\e[A"      Cursor Up
 
-Cursor Up
+    "\e[C"      Cursor Forward
 
-    "\e[A"
+    "\e[0J"     Clear to  End of Screen (Erase Data)
 
-=item
+    "\e[0m"     Normal/Reset (SGR)
 
-Cursor Forward
+    "\e[1m"     Bold (SGR)
 
-    "\e[C"
+    "\e[4m"     Underline (SGR)
 
-=item
+    "\e[7m"     Inverse (SGR)
 
-Clear Screen (Erase Data)
-
-    "\e[0J" 
-
-=item
-
-Select Graphic Rendition
-
-=over
-
-=item
-
-Reset / Normal
-
-    "\e[0m" 
-
-=item
-
-Bright (increased intensity) or Bold
-
-    "\e[1m"
-
-=item
-
-Underline: Single
-
-    "\e[4m"
-
-=item
-
-Image: Negative (Reverse)
-
-    "\e[7m"
-
-=back
-
-=back
         
 If option "hide_cursor" is enabled:
 
-=over
+    "\e[?25l"   Hide Cursor (DECTCEM)
 
-=item
-
-Hide Cursor (DECTCEM)
-
-    "\e[?25l    
-
-=item
-
-Show Cursor (DECTCEM)
-
-    "\e[?25h"     
-
-=back
+    "\e[?25h"   Show Cursor (DECTCEM)  
 
 If option "clear_screen" is enabled:
 
-=over
+    "\e[2J"     Clear Screen (Erase Data)
 
-=item
-
-Clear Screen (Erase Data)
-
-    "\e[2J"
-    
-=item
-
-Go to Top Left (Cursor Position)
-
-    "\e[0;0H"
-
-=back
+    "\e[0;0H"   Go to Top Left (Cursor Position)
 
 If option "mouse_mode" is set:
 
-=over
-
-=item
-
-Get Cursor Position (Device Status Report) 
-
-    "\e[6n"
-    
-=back
+    "\e[6n"     Get Cursor Position (Device Status Report) 
 
 Mouse Tracking: The escape sequences 
 
