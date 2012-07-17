@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.2';
+our $VERSION = '0.7.3';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -85,77 +85,12 @@ use constant {
 };
 
 
-sub _validate_option {
-    my ( $config ) = @_;
-    my %validate = (
-        prompt           => '',
-        right_justify    => qr/\A[01]\z/,
-        layout           => qr/\A[0123]\z/,
-        vertical_order   => qr/\A[01]\z/, 
-        clear_screen     => qr/\A[01]\z/,
-        mouse_mode       => qr/\A[01234]\z/,
-        pad              => qr/\A[0-9][0-9]?\z/,
-        pad_one_row      => qr/\A[0-9][0-9]?\z/,
-        extra_key        => qr/\A[01]\z/,
-        beep             => qr/\A[01]\z/,
-        empty_string     => '',
-        undef            => '',
-        max_list         => qr/\A[1-9][0-9]{0,8}\z/,
-        screen_width     => qr/\A[1-9][0-9]\z/,
-        hide_cursor      => qr/\A[01]\z/,
-    );
-    my $warn = 0;
-    for my $key ( keys %$config ) {
-        if ( $validate{$key} ) {
-            if ( defined $config->{$key} and not $config->{$key} =~ $validate{$key} ) {
-                carp "choose: \"$config->{$key}\" not a valid value for option \"$key\". Falling back to default value.";
-                $config->{$key} = undef;
-                ++$warn;
-            }
-        }
-        elsif ( not exists $validate{$key} ) {
-            carp "choose: \"$key\": no such option";
-            delete $config->{$key};
-            ++$warn;
-        }
-    }
-    if ( $warn ) {
-        print "Press a key to continue: ";
-        my $dummy = <STDIN>;
-    }
-    return $config;
-}
-
-
-sub _set_layout {
-    my $config = shift // {};
-    $config = _validate_option( $config );
-    $config->{prompt}           //= 'Your choice:';
-    $config->{right_justify}    //= 0;
-    $config->{layout}           //= 1;
-    $config->{vertical_order}   //= 1;
-    $config->{clear_screen}     //= 0;
-    $config->{mouse_mode}       //= 0;
-    $config->{pad}              //= 2;
-    $config->{pad_one_row}      //= 3;
-    $config->{extra_key}        //= 1;
-    $config->{beep}             //= 0;
-    $config->{empty_string}     //= '<empty>';
-    $config->{undef}            //= '<undef>';
-    $config->{max_list}         //= 100_000;
-    $config->{screen_width}     //= undef; # 100
-    $config->{hide_cursor}      //= 1;
-    $config->{mouse_mode} = 0 if defined $ENV{CLUI_MOUSE} and $ENV{CLUI_MOUSE} =~ /\Aoff\z/i;
-    return $config;
-}
-
-
 sub _getch {
     my ( $arg ) = @_;
     my $c = ReadKey 0;
     if ( $c eq "\e" ) {
         my $c = ReadKey 0.10;
-        if ( not  defined $c ) { return KEY_ESC; }
+        if ( not defined $c ) { return KEY_ESC; }
         elsif ( $c eq 'A' ) { return KEY_UP; }
         elsif ( $c eq 'B' ) { return KEY_DOWN; }
         elsif ( $c eq 'C' ) { return KEY_RIGHT; }
@@ -327,21 +262,16 @@ sub _write_first_screen {
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
     if ( $arg->{prompt} ne '0' ) {
-        if ( not defined $arg->{wantarray} ) {
-            $arg->{firstline} = '!!! Called "choose" in void context - nothing to choose !!!';
-        }
-        else {
-            $arg->{prompt} =~ s/\p{Space}/ /g;
-            $arg->{firstline} = $arg->{prompt};
-            # ----- #
-            if ( $arg->{wantarray} ) {
-                if ( $arg->{prompt} ) {
-                    $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
-                    $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
-                }
-                else {
-                    $arg->{firstline} = '';
-                }
+        $arg->{prompt} =~ s/\p{Space}/ /g;
+        $arg->{firstline} = $arg->{prompt};
+        # ----- #
+        if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
+            if ( $arg->{prompt} ) {
+                $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
+                $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
+            }
+            else {
+                $arg->{firstline} = '';
             }
         }
         if ( length $arg->{firstline} > $arg->{maxcols} ) {                     # ----- #
@@ -368,6 +298,15 @@ sub _write_first_screen {
 
 sub _copy_orig_list {
     my ( $arg ) = @_;
+    if ( defined $arg->{list_to_long} and $arg->{list_to_long} ) {
+        return [ map {
+            my $copy = $_;
+            $copy = ( not defined $copy ) ? $arg->{undef}         : $copy;
+            $copy = ( $copy eq '' )       ? $arg->{empty_string}  : $copy;
+            $copy =~ s/\p{Space}/ /g;
+            $copy; # " $copy ";
+        } @{$arg->{orig_list}}[ 0 .. $arg->{max_list} - 1 ] ];
+    }
     return [ map {
         my $copy = $_;
         $copy = ( not defined $copy ) ? $arg->{undef}         : $copy;
@@ -378,40 +317,101 @@ sub _copy_orig_list {
 }
 
 
+sub _validate_option {
+    my ( $config ) = @_;
+    my %validate = (
+        prompt           => '',
+        right_justify    => qr/\A[01]\z/,
+        layout           => qr/\A[0123]\z/,
+        vertical_order   => qr/\A[01]\z/, 
+        clear_screen     => qr/\A[01]\z/,
+        mouse_mode       => qr/\A[01234]\z/,
+        pad              => qr/\A[0-9][0-9]?\z/,
+        pad_one_row      => qr/\A[0-9][0-9]?\z/,
+        extra_key        => qr/\A[01]\z/,
+        beep             => qr/\A[01]\z/,
+        empty_string     => '',
+        undef            => '',
+        max_list         => qr/\A[1-9][0-9]{0,8}\z/,
+        screen_width     => qr/\A[1-9][0-9]\z/,
+        hide_cursor      => qr/\A[01]\z/,
+    );
+    my $warn = 0;
+    for my $key ( keys %$config ) {
+        if ( $validate{$key} ) {
+            if ( defined $config->{$key} and not $config->{$key} =~ $validate{$key} ) {
+                carp "choose: \"$config->{$key}\" not a valid value for option \"$key\". Falling back to default value.";
+                $config->{$key} = undef;
+                ++$warn;
+            }
+        }
+        elsif ( not exists $validate{$key} ) {
+            carp "choose: \"$key\": no such option";
+            delete $config->{$key};
+            ++$warn;
+        }
+    }
+    if ( $warn ) {
+        print "Press a key to continue";
+        my $dummy = <STDIN>;
+    }
+    return $config;
+}
+
+
+sub _set_layout {
+    my ( $wantarray, $config ) = @_;
+    my $prompt = ( defined $wantarray ) ? 'Your choice:' : '"choose" called in void context - nothing to choose!';
+    $config = _validate_option( $config // {} );
+    $config->{prompt}           //= $prompt;
+    $config->{right_justify}    //= 0;
+    $config->{layout}           //= 1;
+    $config->{vertical_order}   //= 1;
+    $config->{clear_screen}     //= 0;
+    $config->{mouse_mode}       //= 0;
+    $config->{pad}              //= 2;
+    $config->{pad_one_row}      //= 3;
+    $config->{extra_key}        //= 1;
+    $config->{beep}             //= 0;
+    $config->{empty_string}     //= '<empty>';
+    $config->{undef}            //= '<undef>';
+    $config->{max_list}         //= 100_000;
+    $config->{screen_width}     //= undef; # 100
+    $config->{hide_cursor}      //= 1;
+    $config->{mouse_mode} = 0 if defined $ENV{CLUI_MOUSE} and $ENV{CLUI_MOUSE} =~ /\Aoff\z/i;
+    return $config;
+}
+
+
 sub choose {
     my ( $orig_list, $config ) = @_;
-    if ( not defined $orig_list ) {
-        croak "choose: No Argument!\nchoose: First argument has to be an array reference";
-    }
-    elsif ( not reftype( $orig_list ) ) {
-        croak "choose: First argument is not an array reference.\nchoose: First argument has to be an array reference";
-    }
-    elsif ( reftype( $orig_list ) ne 'ARRAY' ) {
-        croak "choose: First argument is a ", reftype( $orig_list ), " reference.\nchoose: First argument has to be a ARRAY reference!";
-    }
-    elsif ( not @$orig_list ) {
+    croak "choose: First argument is not a ARRAY reference" if not defined $orig_list;
+    croak "choose: First argument is not a ARRAY reference" if not reftype( $orig_list );
+    croak "choose: First argument is not a ARRAY reference" if reftype( $orig_list ) ne 'ARRAY';
+    if ( defined $config ) {
+        croak "choose: Second argument is not a HASH reference." if not reftype( $config );
+        croak "choose: Second argument is not a HASH reference." if reftype( $config ) ne 'HASH'
+    }    
+    if ( not @$orig_list ) {
         carp "choose: First argument refers to an empty list!";
         return;
-    }
-    if ( defined $config ) {
-        if ( not reftype( $config ) ) {
-            croak "choose: Second argument is not a hash reference.\nchoose: Second argument has to be a hash reference.";
-        }
-        elsif ( reftype( $config ) ne 'HASH' ) {
-            croak "choose: Second argument is a ", reftype( $config ), " reference.\nchoose: Second argument has to be a HASH reference.";
-        } 
-    }
-    my $arg = _set_layout( $config );
+    }   
+    my $wantarray;
+    $wantarray = wantarray ? 1 : 0 if defined wantarray;
+    my $arg = _set_layout( $wantarray, $config );
     if ( @$orig_list > $arg->{max_list} ) {
         my $list_length = scalar @$orig_list;
-        croak "choose: List is to big! List has $list_length items.\nchoose: Lists with more than $arg->{max_list} items not alowed!";
+        carp "choose: List has $list_length items.\nchoose: \"max_list\" is set to $arg->{max_list} items!\nchoose: The first $arg->{max_list} itmes are used by choose.";
+        $arg->{list_to_long} = 1;
+        print "Press a key to continue";
+        my $dummy = <STDIN>;        
     }    
     $arg->{orig_list} = $orig_list;
     $arg->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
     $arg->{list} = _copy_orig_list( $arg );
     $arg->{length_longest} = _length_longest( $arg->{list} );
     $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
-    $arg->{wantarray} = wantarray ? 1 : 0 if defined wantarray;
+    $arg->{wantarray} = $wantarray;
     # $arg->{LastEventWasPress} = 0;  # in order to ignore left-over button-ups # orig comment
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
@@ -602,7 +602,7 @@ sub choose {
                 }
             }
             when ( $c == KEY_SPACE ) {
-                if ( $arg->{wantarray} ) {
+                if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
                     if ( not $arg->{marked}[$arg->{this_cell}[ROW]][$arg->{this_cell}[COL]] ) {
                         $arg->{marked}[$arg->{this_cell}[ROW]][$arg->{this_cell}[COL]] = 1;
                     }
@@ -857,7 +857,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.2
+Version 0.7.3
 
 =cut
 
@@ -895,15 +895,37 @@ Nothing by default.
 
     @array =  choose( $array_ref [, \%options] );
 
-The first argument (array reference) passes the elements available for selection.
+I<choose> expects as first argument an array reference which passes the elements available for selection.
+    
+The options can be passed with a hash reference as a second (optional) argument. 
 
-If I<choose> is called in a scalar context, the user can choose an item by using the "move-around-keys" and "Return". I<choose> then returns the chosen item.
+=head3 Usage and return values
 
-If I<choose> is called in an list context, the user can also mark an item with the "SpaceBar". I<choose> then returns the list of marked items, (including the item highlight when "Return" was pressed).
+=over
+
+=item 
+
+If I<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and "Return". 
+
+I<choose> then returns the chosen item.
+
+=item 
+
+If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar". 
+
+I<choose> then returns the list of marked items, (including the item highlight when "Return" was pressed).
+
+=item 
+
+If I<choose> is called in an I<void context>, the user can move around but mark nothing; the output shown by I<choose> can be closed with "Return".
+
+I<choose> then returns nothing.
+
+=back
 
 If the items of the list don't fit in the screen, the user can scroll to the next (previous) page(s).
 
-The "q" key returns I<undef> or an empty list in list-context.
+The "q" key returns I<undef> or an empty list in list context.
 
 With a I<mouse_mode> enabled (and if supported by the terminal) the element can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
@@ -914,7 +936,7 @@ If the option I<extra_key> is enabled pressing "e" calls I<exit()>.
 Keys to move around: arrow keys (or hjkl), Tab, BackSpace, Shift-Tab.
 
 
-For the output on the screen the list-elements are modified:
+For the output on the screen the list elements are modified:
 
 =over
 
@@ -934,23 +956,7 @@ For the output on the screen the list-elements are modified:
 
 All these modifications are made on a copy of the original list so I<choose> returns the chosen elements as they were passed to the function without modifications. 
 
-=head3 Error handling
-
-With no arguments I<choose> dies.
-
-If the first argument is not a array reference I<choose> dies.
-
-If the list referred by the first argument is empty I<choose> returns  I<undef> resp. an empty list and issues a warning.
-
-If the list referred by the first argument has more than I<max_list> items (default 100_000) I<choose> dies.
-
-If the (optional) second argument is not a hash reference I<choose> dies. 
-
-If an option does not exist I<choose> warns.
-
-If an option value is not valid  I<choose> warns an falls back to the default value.
-
-=head3 OPTIONS
+=head3 Options
 
 All options are optional.
 
@@ -986,61 +992,56 @@ default: 'Your choice:'
 
 0 - layout off
 
- .-----------------------------.   .-----------------------------.   .-----------------------------.
- |... .. .... ... .... ... ... |   |.... .... .... .... .... ....|   |.... .... .... .... .... ....|
- |                             |   |.... .... .... .... .... ....|   |.... .... .... .... .... ....|
- |                             |   |....                         |   |.... .... .... .... .... ....|
- |                             |   |                             |   |.... .... .... .... .... ....|
- |                             |   |                             |   |.... .... .... .... .... ....|
- |                             |   |                             |   |.... .... .... .... .... ....|
- |                             |   |                             |   |.... .... .... .... .... ....|
- |                             |   |                             |   |.... .... .... .... .... ....|
- '-----------------------------'   '-----------------------------'   '-----------------------------'
+ .----------------------.   .----------------------.   .----------------------.   .----------------------.
+ | .. .. .. .. .. .. .. |   | .. .. .. .. .. .. .. |   | .. .. .. .. .. .. .. |   | .. .. .. .. .. .. .. |
+ |                      |   | .. .. .. .. .. .. .. |   | .. .. .. .. .. .. .. |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   | .. .. .. .. ..       |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   |                      |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   |                      |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   |                      |   | .. .. .. .. .. .. .. |
+ '----------------------'   '----------------------'   '----------------------'   '----------------------'
 
 =item
 
 1 - layout "H" (default)
 
- .-----------------------------.   .-----------------------------.   .-----------------------------.
- |... .. .... ... .... ... ... |   |.... .... .... ....          |   |.... .... .... .... .... ....|
- |                             |   |.... .... .... ....          |   |.... .... .... .... .... ....|
- |                             |   |.... .... .... ....          |   |.... .... .... .... .... ....|
- |                             |   |.... ....                    |   |.... .... .... .... .... ....|
- |                             |   |                             |   |.... .... .... .... .... ....|
- |                             |   |                             |   |.... .... .... .... .... ....|
- |                             |   |                             |   |.... .... .... .... .... ....|
- |                             |   |                             |   |.... .... .... .... .... ....|
- '-----------------------------'   '-----------------------------'   '-----------------------------'
+ .----------------------.   .----------------------.   .----------------------.   .----------------------.
+ | .. .. .. .. .. .. .. |   | .. .. .. ..          |   | .. .. .. .. ..       |   | .. .. .. .. .. .. .. |
+ |                      |   | .. .. .. ..          |   | .. .. .. .. ..       |   | .. .. .. .. .. .. .. |
+ |                      |   | .. ..                |   | .. .. .. .. ..       |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   |                      |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   |                      |   | .. .. .. .. .. .. .. |
+ '----------------------'   '----------------------'   '----------------------'   '----------------------'
+
 
 =item
 
 2 - all in a single column
 
- .-----------------------------.   .-----------------------------.   .-----------------------------.
- |....                         |   |....                         |   |....                         |
- |....                         |   |....                         |   |....                         |
- |...                          |   |...                          |   |...                          |
- |....                         |   |....                         |   |....                         |
- |                             |   |....                         |   |....                         |
- |                             |   |....                         |   |....                         |
- |                             |   |                             |   |....                         |
- |                             |   |                             |   |....                         |
- '-----------------------------'   '-----------------------------'   '-----------------------------'
+ .----------------------.   .----------------------.   .----------------------.   .----------------------.
+ | ..                   |   | ..                   |   | ..                   |   | ..                   |
+ | ..                   |   | ..                   |   | ..                   |   | ..                   |
+ | ..                   |   | ..                   |   | ..                   |   | ..                   |
+ |                      |   | ..                   |   | ..                   |   | ..                   |
+ |                      |   |                      |   | ..                   |   | ..                   |
+ |                      |   |                      |   |                      |   | ..                   |
+ '----------------------'   '----------------------'   '----------------------'   '----------------------'
+
 
 =item
 
 3 - layout "V"
 
- .-----------------------------.   .-----------------------------.   .-----------------------------.
- |....                         |   |.... ....                    |   |.... .... .... .... .... ....|
- |....                         |   |.... ....                    |   |.... .... .... .... .... ....|
- |...                          |   |.... ....                    |   |.... .... .... .... .... ....|
- |....                         |   |.... ....                    |   |.... .... .... .... .... ....|
- |....                         |   |.... ....                    |   |.... .... .... .... .... ....|
- |....                         |   |....                         |   |.... .... .... .... .... ....|
- |...                          |   |                             |   |.... .... .... .... .... ....|
- |....                         |   |                             |   |.... .... .... .... .... ....|
- '-----------------------------'   '-----------------------------'   '-----------------------------'
+ .----------------------.   .----------------------.   .----------------------.   .----------------------.
+ | ..                   |   | .. ..                |   | .. .. ..             |   | .. .. .. .. .. .. .. |
+ | ..                   |   | .. ..                |   | .. .. ..             |   | .. .. .. .. .. .. .. |
+ | ..                   |   | .. ..                |   | .. .. ..             |   | .. .. .. .. .. .. .. |
+ | ..                   |   | ..                   |   | .. .. ..             |   | .. .. .. .. .. .. .. |
+ | ..                   |   |                      |   | .. ..                |   | .. .. .. .. .. .. .. |
+ | ..                   |   |                      |   |                      |   | .. .. .. .. .. .. .. |
+ '----------------------'   '----------------------'   '----------------------'   '----------------------'
+
 
 =back
  
@@ -1180,6 +1181,26 @@ maximal allowed length of the list referred by the first argument (default: 100_
 
 allowed values: 1 - 999_999_999
 
+=head3 Error handling
+
+=over
+
+=item * With no arguments I<choose> dies.
+
+=item * If the first argument is not a array reference I<choose> dies.
+
+=item * If the list referred by the first argument is empty I<choose> returns  I<undef> resp. an empty list and issues a warning.
+
+=item * If the list referred by the first argument has more than I<max_list> items (default 100_000) I<choose> warns and uses the first I<max_list> list items.
+
+=item * If the (optional) second argument is not a hash reference I<choose> dies. 
+
+=item * If an option does not exist I<choose> warns.
+
+=item * If an option value is not valid  I<choose> warns an falls back to the default value.
+
+=back
+
 =head1 REQUIREMENTS
 
 =head2 Perl Version
@@ -1250,6 +1271,14 @@ and
     "\e[?1003l", "\e[?1005l", "\e[?1006l"
 
 are used to enable/disable the different mouse modes.
+
+=head1 BUGS
+
+=head2 Unicode
+
+This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<printf> widths to justify strings.
+
+Therefore strings with code points that take more or less than one print column may disrupt the layout.
 
 =head1 SUPPORT
 

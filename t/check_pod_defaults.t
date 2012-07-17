@@ -9,8 +9,8 @@ unless ( $ENV{RELEASE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 
-my @long = ( qw( prompt pad pad_one_row empty_string undef max_list screen_width ) );
-my @simple = ( qw( right_justify layout vertical_order clear_screen extra_key mouse_mode beep hide_cursor ) );
+my @long = ( qw( pad pad_one_row empty_string undef max_list screen_width ) );
+my @simple = ( qw( right_justify layout vertical_order clear_screen extra_key mouse_mode beep hide_cursor ) ); # prompt
 my @all = ( @long, @simple );
 
 plan tests => 2 + scalar @all;
@@ -24,6 +24,7 @@ open $fh, '<', $file or die $!;
 while ( my $line = readline $fh ) {
     if ( $line =~ /\Asub _set_layout {/ .. $line =~ /\A\s+return\s\$config;/ ) {
         if ( $line =~ m|\A\s+\$config->{(\w+)}\s+//=\s(.*);| ) {
+            next if $1 eq 'prompt';
             $option_default{$1} = $2;
          }
     }
@@ -64,6 +65,8 @@ for my $key ( @long ) {
         }
     }
 }
+ 
+ 
  
 is( scalar @all, scalar keys %option_default, 'scalar @all == scalar keys %option_default' );
 is( scalar keys %pod_default, scalar keys %option_default, 'scalar keys %pod_default == scalar keys %option_default' );

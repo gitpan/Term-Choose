@@ -1,5 +1,12 @@
 Revision history for Term::Choose
 
+0.7.3   2012-07-17
+        - Make calling "choose" in void context more normal.
+        - Modified error messages.
+        - "max_list": exceeding "max_list" now warns and cuts the used list to max_list instead of dying.
+        - Added bug section.
+        - Improved documentation.
+
 
 0.7.2   2012-07-14
         - Press a key after warnings "not a valid value for option" or "no such option" to continue.
