@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.3';
+our $VERSION = '0.7.4';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -262,7 +262,7 @@ sub _write_first_screen {
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
     if ( $arg->{prompt} ne '0' ) {
-        $arg->{prompt} =~ s/\p{Space}/ /g;
+        $arg->{prompt} =~ s/[\h\v]/ /g; # s/\p{Space}/ /g;
         $arg->{firstline} = $arg->{prompt};
         # ----- #
         if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
@@ -303,7 +303,7 @@ sub _copy_orig_list {
             my $copy = $_;
             $copy = ( not defined $copy ) ? $arg->{undef}         : $copy;
             $copy = ( $copy eq '' )       ? $arg->{empty_string}  : $copy;
-            $copy =~ s/\p{Space}/ /g;
+            $copy =~ s/[\h\v]/ /g; # s/\p{Space}/ /g;
             $copy; # " $copy ";
         } @{$arg->{orig_list}}[ 0 .. $arg->{max_list} - 1 ] ];
     }
@@ -311,7 +311,7 @@ sub _copy_orig_list {
         my $copy = $_;
         $copy = ( not defined $copy ) ? $arg->{undef}         : $copy;
         $copy = ( $copy eq '' )       ? $arg->{empty_string}  : $copy;
-        $copy =~ s/\p{Space}/ /g;
+        $copy =~ s/[\h\v]/ /g; # s/\p{Space}/ /g;
         $copy; # " $copy ";
     } @{$arg->{orig_list}} ];
 }
@@ -857,7 +857,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.3
+Version 0.7.4
 
 =cut
 
@@ -873,6 +873,8 @@ Version 0.7.3
 
     my @choices = choose( [ 1 .. 100 ], { right_justify => 1 } ); # multiple choice
     say "@choices";
+    
+    choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
 
 
 =head1 DESCRIPTION
@@ -940,15 +942,15 @@ For the output on the screen the list elements are modified:
 
 =over
 
-=item * if a list-element is not defined the value from the option I<undef> is assigned to the element
+=item * if a list element is not defined the value from the option I<undef> is assigned to the element
 
-=item * if a list-element holds an empty string  the value from the option I<empty_string> is assigned to the element
+=item * if a list element holds an empty string  the value from the option I<empty_string> is assigned to the element
 
-=item * if a list-element contains white-spaces this substitution is applied:
+=item * if a list element contains white-spaces this substitution is applied:
 
-        $element =~ s/\p{Space}/ /g;
+        $element =~ s/[\h\v]/ /g;
 
-=item * if the length of a list-element is greater than the width of the screen the element is cut:
+=item * if the length of a list element is greater than the width of the screen the element is cut:
 
         $element = substr( $element, 0, $allowed_length - 3 ) . '...'; 
 
@@ -976,11 +978,11 @@ default: 'Your choice:'
 
 =item
 
-0 - columns are left-justified (default)
+0 - columns are left justified (default)
 
 =item
 
-1 - columns are right-justified
+1 - columns are right justified
 
 =back
 
@@ -1049,7 +1051,7 @@ default: 'Your choice:'
 
 If set, restricts the screen width to I<screen_width> percentage of the effective screen width.
 
-If not defined all the screen-width is used. 
+If not defined all the screen width is used. 
 
 Allowed values: 10 - 99
 
@@ -1165,7 +1167,7 @@ allowed values: 0 - 99
 
 =head4 undef
 
-string displayed on the screen instead a undefined list-element
+string displayed on the screen instead a undefined list element
 
 default: '<undef>'
 
@@ -1209,7 +1211,7 @@ Requires Perl Version 5.10.1 or greater.
 
 =head2 Modules
 
-Apart from the core-modules L<Exporter|http://search.cpan.org/perldoc?Exporter> and L<Carp|http://search.cpan.org/perldoc?Carp> these modules are I<use>d:
+Used modules not provided as core modules:
 
 =over
 
@@ -1278,7 +1280,7 @@ are used to enable/disable the different mouse modes.
 
 This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<printf> widths to justify strings.
 
-Therefore strings with code points that take more or less than one print column may disrupt the layout.
+Therefore strings with code points that take more or less than one print column will break the layout.
 
 =head1 SUPPORT
 

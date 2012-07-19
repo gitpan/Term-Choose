@@ -1,5 +1,9 @@
 Revision history for Term::Choose
 
+0.7.4   2012-07-19
+        - "s/\p{Space}//;" -> "s/[\v\h]//;".
+        - Improved Documentation.
+
 0.7.3   2012-07-17
         - Make calling "choose" in void context more normal.
         - Modified error messages.
