@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.4';
+our $VERSION = '0.7.5';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -46,7 +46,7 @@ use constant {
 
     BEEP                               => "\07",
     CLEAR_SCREEN                       => "\e[2J",
-    GO_TO_TOP_LEFT                     => "\e[0;0H",
+    GO_TO_TOP_LEFT                     => "\e[1;1H", # changed 
     CLEAR_EOS                          => "\e[0J",
     RESET                              => "\e[0m",
     UNDERLINE                          => "\e[4m",
@@ -262,7 +262,8 @@ sub _write_first_screen {
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
     if ( $arg->{prompt} ne '0' ) {
-        $arg->{prompt} =~ s/[\h\v]/ /g; # s/\p{Space}/ /g;
+        $arg->{prompt} =~ s/\p{Space}/ /g;
+        $arg->{prompt} =~ s/\p{Cntrl}//g;      
         $arg->{firstline} = $arg->{prompt};
         # ----- #
         if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
@@ -303,7 +304,8 @@ sub _copy_orig_list {
             my $copy = $_;
             $copy = ( not defined $copy ) ? $arg->{undef}         : $copy;
             $copy = ( $copy eq '' )       ? $arg->{empty_string}  : $copy;
-            $copy =~ s/[\h\v]/ /g; # s/\p{Space}/ /g;
+            $copy =~ s/\p{Space}/ /g;
+            $copy =~ s/\p{Cntrl}//g;
             $copy; # " $copy ";
         } @{$arg->{orig_list}}[ 0 .. $arg->{max_list} - 1 ] ];
     }
@@ -311,7 +313,8 @@ sub _copy_orig_list {
         my $copy = $_;
         $copy = ( not defined $copy ) ? $arg->{undef}         : $copy;
         $copy = ( $copy eq '' )       ? $arg->{empty_string}  : $copy;
-        $copy =~ s/[\h\v]/ /g; # s/\p{Space}/ /g;
+        $copy =~ s/\p{Space}/ /g;
+        $copy =~ s/\p{Cntrl}//g;
         $copy; # " $copy ";
     } @{$arg->{orig_list}} ];
 }
@@ -361,7 +364,7 @@ sub _validate_option {
 
 sub _set_layout {
     my ( $wantarray, $config ) = @_;
-    my $prompt = ( defined $wantarray ) ? 'Your choice:' : '"choose" called in void context - nothing to choose!';
+    my $prompt = ( defined $wantarray ) ? 'Your choice:' : 'Close with ENTER';
     $config = _validate_option( $config // {} );
     $config->{prompt}           //= $prompt;
     $config->{right_justify}    //= 0;
@@ -857,7 +860,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.4
+Version 0.7.5
 
 =cut
 
@@ -868,13 +871,13 @@ Version 0.7.4
 
     my $list = [ qw( one two three four five ) ];
 
-    my $choice = choose( $list );  # single choice
+    my $choice = choose( $list );                                 # single choice
     say $choice;
 
     my @choices = choose( [ 1 .. 100 ], { right_justify => 1 } ); # multiple choice
     say "@choices";
     
-    choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+    choose( [ 'Press ENTER to continue' ], { prompt => 0 } );     # no choice
 
 
 =head1 DESCRIPTION
@@ -896,10 +899,12 @@ Nothing by default.
     $scalar = choose( $array_ref [, \%options] );
 
     @array =  choose( $array_ref [, \%options] );
-
-I<choose> expects as first argument an array reference which passes the elements available for selection.
     
-The options can be passed with a hash reference as a second (optional) argument. 
+              choose( $array_ref [, \%options] );
+
+I<choose> expects as first argument an array reference which passes the list elements available for selection (in void context no selection can be made).
+    
+Options can be passed with a hash reference as a second (optional) argument. 
 
 =head3 Usage and return values
 
@@ -927,6 +932,8 @@ I<choose> then returns nothing.
 
 If the items of the list don't fit in the screen, the user can scroll to the next (previous) page(s).
 
+If the window size is changed, then as soon as the user enters a keystroke I<choose> rewrites the screen. In list context marked items are reset.
+
 The "q" key returns I<undef> or an empty list in list context.
 
 With a I<mouse_mode> enabled (and if supported by the terminal) the element can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
@@ -942,17 +949,25 @@ For the output on the screen the list elements are modified:
 
 =over
 
-=item * if a list element is not defined the value from the option I<undef> is assigned to the element
+=item * 
 
-=item * if a list element holds an empty string  the value from the option I<empty_string> is assigned to the element
+if a list element is not defined the value from the option I<undef> is assigned to the element
 
-=item * if a list element contains white-spaces this substitution is applied:
+=item * 
 
-        $element =~ s/[\h\v]/ /g;
+if a list element holds an empty string the value from the option I<empty_string> is assigned to the element
 
-=item * if the length of a list element is greater than the width of the screen the element is cut:
+=item * 
 
-        $element = substr( $element, 0, $allowed_length - 3 ) . '...'; 
+white-spaces in list elements are replace with a simple space. 
+        
+=item * 
+
+control characters are removed 
+
+=item * 
+
+if the length of a list element is greater than the width of the screen the element is cut
 
 =back
 
@@ -970,21 +985,13 @@ If prompt is undefined default prompt-string will be shown.
 
 If prompt is 0 no prompt-line will be shown.
 
-default: 'Your choice:'
+default: 'Your choice:' ('Close with ENTER' in void context)
 
 =head4 right_justify
 
-=over
-
-=item
-
 0 - columns are left justified (default)
 
-=item
-
 1 - columns are right justified
-
-=back
 
 =head4 layout
 
@@ -1044,7 +1051,6 @@ default: 'Your choice:'
  | ..                   |   |                      |   |                      |   | .. .. .. .. .. .. .. |
  '----------------------'   '----------------------'   '----------------------'   '----------------------'
 
-
 =back
  
 =head4 screen_width
@@ -1059,57 +1065,28 @@ Allowed values: 10 - 99
 
 =head4 vertical_order
 
-=over
-
-=item
-
 0 - items ordered horizontally
-
-=item
 
 1 - items ordered vertically (default)
 
-=back
-
 =head4 clear_screen
-
-=over
-
-=item
 
 0 - off (default)
 
-=item
-
 1 - clears the screen before printing the choices
 
-=back
 
 =head4 mouse_mode
 
-=over
-
-=item
-
 0 - no mouse mode (default)
-
-=item
 
 1 - mouse mode 1003 enabled
 
-=item
-
 2 - mouse mode 1003 enabled; maxcols/maxrows limited to 224 (mouse mode 1003 doesn't work above 224)
-
-=item
 
 3 - extended mouse mode (1005) - uses utf8
 
-=item
-
 4 - extended SGR mouse mode (1006); mouse mode 1003 if mouse mode 1006 is not supported
-
-=back
 
 =head4 pad
 
@@ -1125,45 +1102,21 @@ allowed values: 0 - 99
 
 =head4 extra_key
 
-=over
-
-=item
-
 0 - off
-
-=item
 
 1 - on: pressing key "e" calls I<exit()> (default)
 
-=back
-
 =head4 beep
-
-=over
-
-=item
 
 0 - off (default)
 
-=item
-
 1 - on
-
-=back
 
 =head4 hide_cursor
 
-=over
-
-=item
-
 0 - off
 
-=item
-
 1 - on (default)
-
-=back
 
 =head4 undef
 
@@ -1217,15 +1170,11 @@ Used modules not provided as core modules:
 
 =item
 
-L<Scalar::Util|http://search.cpan.org/perldoc?Scalar%3A%3AUtil>
+Signals::XSIG
 
 =item
 
-L<Signals::XSIG|http://search.cpan.org/perldoc?Signals%3A%3AXSIG>
-
-=item
-
-L<Term::ReadKey|http://search.cpan.org/perldoc?Term%3A%3AReadKey>
+Term::ReadKey
 
 =back
 
@@ -1258,7 +1207,7 @@ If option "clear_screen" is enabled:
 
     "\e[2J"     Clear Screen (Erase Data)
 
-    "\e[0;0H"   Go to Top Left (Cursor Position)
+    "\e[1;1H"   Go to Top Left (Cursor Position)
 
 If option "mouse_mode" is set:
 

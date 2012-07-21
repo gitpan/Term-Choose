@@ -1,7 +1,12 @@
 Revision history for Term::Choose
 
+0.7.5   2012-07-21
+        - Don't print control characters.
+        - Improved Documentation.
+
+
 0.7.4   2012-07-19
-        - "s/\p{Space}//;" -> "s/[\v\h]//;".
+        - Minor code changes.
         - Improved Documentation.
 
 0.7.3   2012-07-17
