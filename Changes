@@ -1,9 +1,13 @@
 Revision history for Term::Choose
 
+0.7.6   2012-07-23
+        - Added Term::Choose::GC
+        - Code refactoring
+        - Improved documentation
+
 0.7.5   2012-07-21
         - Don't print control characters.
         - Improved Documentation.
-
 
 0.7.4   2012-07-19
         - Minor code changes.
@@ -15,7 +19,6 @@ Revision history for Term::Choose
         - "max_list": exceeding "max_list" now warns and cuts the used list to max_list instead of dying.
         - Added bug section.
         - Improved documentation.
-
 
 0.7.2   2012-07-14
         - Press a key after warnings "not a valid value for option" or "no such option" to continue.

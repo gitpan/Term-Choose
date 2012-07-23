@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.5';
+our $VERSION = '0.7.6';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -242,6 +242,31 @@ sub _length_longest {
     return $longest;
 }
 
+sub _print_firstline {
+    my ( $arg ) = @_;
+    $arg->{prompt} =~ s/\p{Space}/ /g;
+    $arg->{prompt} =~ s/\p{Cntrl}//g;      
+    $arg->{firstline} = $arg->{prompt};
+    # ----- #
+    if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
+        if ( $arg->{prompt} ) {
+            $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
+            $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
+        }
+        else {
+            $arg->{firstline} = '';
+        }
+    }
+    if ( length $arg->{firstline} > $arg->{maxcols} ) {                     # ----- #
+        # ----- #
+        $arg->{firstline} = substr( $arg->{prompt}, 0, $arg->{maxcols} );   # ----- #
+    }
+    print $arg->{firstline};
+    $arg->{head} = 1;
+}
+    
+
+
 
 sub _write_first_screen {
     my ( $arg ) = @_;
@@ -262,25 +287,26 @@ sub _write_first_screen {
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
     if ( $arg->{prompt} ne '0' ) {
-        $arg->{prompt} =~ s/\p{Space}/ /g;
-        $arg->{prompt} =~ s/\p{Cntrl}//g;      
-        $arg->{firstline} = $arg->{prompt};
-        # ----- #
-        if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
-            if ( $arg->{prompt} ) {
-                $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
-                $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
-            }
-            else {
-                $arg->{firstline} = '';
-            }
-        }
-        if ( length $arg->{firstline} > $arg->{maxcols} ) {                     # ----- #
-            # ----- #
-            $arg->{firstline} = substr( $arg->{prompt}, 0, $arg->{maxcols} );   # ----- #
-        }
-        print $arg->{firstline};
-        $arg->{head} = 1;        
+        _print_firstline( $arg );
+#        $arg->{prompt} =~ s/\p{Space}/ /g;
+#        $arg->{prompt} =~ s/\p{Cntrl}//g;      
+#        $arg->{firstline} = $arg->{prompt};
+#        # ----- #
+#        if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
+#            if ( $arg->{prompt} ) {
+#                $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
+#                $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
+#            }
+#            else {
+#                $arg->{firstline} = '';
+#            }
+#        }
+#        if ( length $arg->{firstline} > $arg->{maxcols} ) {                     # ----- #
+#            # ----- #
+#            $arg->{firstline} = substr( $arg->{prompt}, 0, $arg->{maxcols} );   # ----- #
+#        }
+#        print $arg->{firstline};
+#        $arg->{head} = 1;        
     }
     $arg->{maxrows} = $arg->{maxrows} - $arg->{head};
     $arg->{marked} = [];
@@ -860,7 +886,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.5
+Version 0.7.6
 
 =cut
 
@@ -951,23 +977,30 @@ For the output on the screen the list elements are modified:
 
 =item * 
 
-if a list element is not defined the value from the option I<undef> is assigned to the element
+if a list element is not defined the value from the option I<undef> is assigned to the element.
 
 =item * 
 
-if a list element holds an empty string the value from the option I<empty_string> is assigned to the element
+if a list element holds an empty string the value from the option I<empty_string> is assigned to the element.
 
 =item * 
 
-white-spaces in list elements are replace with a simple space. 
+white-spaces in list elements are replace with a simple spaces. 
+
+    $element =~ s/\p{Space}/ /g;
         
 =item * 
 
-control characters are removed 
+control characters are removed.
+
+    $element =~ s/\p{Cntrl}//g;
 
 =item * 
 
-if the length of a list element is greater than the width of the screen the element is cut
+if the length of a list element is greater than the width of the screen the element is cut.
+
+
+    $element = substr( $element, 0, $allowed_length - 3 ) . '...';
 
 =back
 
@@ -985,7 +1018,9 @@ If prompt is undefined default prompt-string will be shown.
 
 If prompt is 0 no prompt-line will be shown.
 
-default: 'Your choice:' ('Close with ENTER' in void context)
+default in list and scalar context: 'Your choice:'
+
+default in void context: 'Close with ENTER'
 
 =head4 right_justify
 
@@ -1170,11 +1205,11 @@ Used modules not provided as core modules:
 
 =item
 
-Signals::XSIG
+L<Signals::XSIG>
 
 =item
 
-Term::ReadKey
+L<Term::ReadKey>
 
 =back
 
@@ -1223,13 +1258,23 @@ and
 
 are used to enable/disable the different mouse modes.
 
-=head1 BUGS
+=head1 BUGS AND LIMITATIONS
 
 =head2 Unicode
 
-This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<printf> widths to justify strings.
+This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings.
 
-Therefore strings with code points that take more or less than one print column will break the layout.
+Therefore strings with code points that take more or less than one print column will break the layout. L<Term::Choose::GC> improves the layout in such conditions by using L<Unicode::GCString::columns> to determine the string length.
+
+    use Term::Choose:GC qw(choose);
+    
+Usage and options are the same as for L<Term::Choose>.
+    
+The use of L<Term::Choose::GC> needs additionally the L<Unicode::GCString> module to be installed.
+
+Known drawbacks:
+
+L<Term::Choose::GC>'s I<choose> is probably slower than I<choose> from L<Term::Choose>.
 
 =head1 SUPPORT
 
@@ -1243,7 +1288,7 @@ Kuerbis cuer2s@gmail.com
 
 =head1 CREDITS
 
-Based on and inspired by the I<choose> function from L<Term::Clui|http://search.cpan.org/perldoc?Term::Clui> module.
+Based on and inspired by the I<choose> function from L<Term::Clui> module.
 
 Thanks to the L<http://www.perl-community.de> and the people form L<http://stackoverflow.com> for the help.
 

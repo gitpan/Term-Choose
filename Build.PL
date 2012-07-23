@@ -15,11 +15,12 @@ my $builder = Module::Build->new(
         'Test::More' => 0,
     },
     requires => {
-        'perl'          => '5.10.1',
-        'Carp'          => 0,
-        'Scalar::Util'  => 1.25,
-        'Signals::XSIG' => 0.12,
-        'Term::ReadKey' => 2.30,        
+        'perl'              => '5.10.1',
+        'Carp'              => 0,
+        'Scalar::Util'      => 1.25,
+        'Signals::XSIG'     => 0.12,
+        'Term::ReadKey'     => 2.30, 
+        'Unicode::GCString' => 2012.04
     },
     add_to_cleanup      => [ 'Term-Choose-*' ],
     create_makefile_pl => 'traditional',
