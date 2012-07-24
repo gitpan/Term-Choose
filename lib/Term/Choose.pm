@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.6';
+our $VERSION = '0.7.7';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -278,38 +278,16 @@ sub _write_first_screen {
     if ( $arg->{screen_width} ) {
         $arg->{maxcols} = int( ( $arg->{maxcols} / 100 ) * $arg->{screen_width} );
     }
-    
     if ( $arg->{mouse_mode} == 2 ) {
 	$arg->{maxcols} = MAX_MOUSE_1003_COL if $arg->{maxcols} > MAX_MOUSE_1003_COL;
         $arg->{maxrows} = MAX_MOUSE_1003_ROW if $arg->{maxrows} > MAX_MOUSE_1003_ROW;
     }
     $arg->{head} = 0;
+    $arg->{marked} = [];
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
-    if ( $arg->{prompt} ne '0' ) {
-        _print_firstline( $arg );
-#        $arg->{prompt} =~ s/\p{Space}/ /g;
-#        $arg->{prompt} =~ s/\p{Cntrl}//g;      
-#        $arg->{firstline} = $arg->{prompt};
-#        # ----- #
-#        if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
-#            if ( $arg->{prompt} ) {
-#                $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
-#                $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
-#            }
-#            else {
-#                $arg->{firstline} = '';
-#            }
-#        }
-#        if ( length $arg->{firstline} > $arg->{maxcols} ) {                     # ----- #
-#            # ----- #
-#            $arg->{firstline} = substr( $arg->{prompt}, 0, $arg->{maxcols} );   # ----- #
-#        }
-#        print $arg->{firstline};
-#        $arg->{head} = 1;        
-    }
+    _print_firstline( $arg )if $arg->{prompt} ne '0';
     $arg->{maxrows} = $arg->{maxrows} - $arg->{head};
-    $arg->{marked} = [];
     _size_and_layout( $arg );
     $arg->{maxrows_index} = $arg->{maxrows} - 1;
     $arg->{maxrows_index} = 0 if $arg->{maxrows_index} < 0;
@@ -458,7 +436,7 @@ sub choose {
             _write_first_screen( $arg );
             next;
         }
-        for ( $c ) {
+        given ( $c ) {
             when ( $c == KEY_j or $c == KEY_DOWN ) {
                 if ( $#{$arg->{new_list}} == 0 or not ( $arg->{new_list}[$arg->{this_cell}[ROW]+1] and $arg->{new_list}[$arg->{this_cell}[ROW]+1][$arg->{this_cell}[COL]] ) ) {
                     _beep( $arg );
@@ -880,13 +858,15 @@ __END__
 
 =pod
 
+=encoding utf8
+
 =head1 NAME
 
 Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.6
+Version 0.7.7
 
 =cut
 
@@ -970,6 +950,7 @@ If the option I<extra_key> is enabled pressing "e" calls I<exit()>.
 
 Keys to move around: arrow keys (or hjkl), Tab, BackSpace, Shift-Tab.
 
+=head3 Modifications for the output
 
 For the output on the screen the list elements are modified:
 
@@ -985,7 +966,7 @@ if a list element holds an empty string the value from the option I<empty_string
 
 =item * 
 
-white-spaces in list elements are replace with a simple spaces. 
+tabs and vertical spaces in list elements are replace with simple spaces. 
 
     $element =~ s/\p{Space}/ /g;
         
@@ -1262,9 +1243,7 @@ are used to enable/disable the different mouse modes.
 
 =head2 Unicode
 
-This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings.
-
-Therefore strings with code points that take more or less than one print column will break the layout. L<Term::Choose::GC> improves the layout in such conditions by using L<Unicode::GCString::columns> to determine the string length.
+This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings. Therefore strings with code points that take more or less than one print column will break the layout. Using L<Term::Choose::GC> instead improves the layout in such conditions. It determines the string length by using the I<columns> method from L<Unicode::GCString> module.
 
     use Term::Choose:GC qw(choose);
     
@@ -1284,7 +1263,7 @@ You can find documentation for this module with the perldoc command.
 
 =head1 AUTHOR
 
-Kuerbis cuer2s@gmail.com
+Kürbis cuer2s@gmail.com
 
 =head1 CREDITS
 
@@ -1294,7 +1273,7 @@ Thanks to the L<http://www.perl-community.de> and the people form L<http://stack
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2012 Kuerbis.
+Copyright 2012 Kürbis.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 

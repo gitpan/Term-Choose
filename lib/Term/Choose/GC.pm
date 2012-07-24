@@ -4,13 +4,18 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '0.7.6';
+our $VERSION = '0.7.7';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
 use Term::Choose qw(choose);
 use Term::ReadKey;
 use Unicode::GCString;
+
+#use warnings FATAL => qw(all);
+#use Log::Log4perl qw(get_logger);
+#my $log = get_logger("Term::Choose");
+
 
 use constant {
     RESET                              => "\e[0m",
@@ -20,6 +25,7 @@ use constant {
 };
 
 no warnings 'redefine';
+
 
 sub Term::Choose::_length_longest {
     my ( $list ) = @_;
@@ -33,8 +39,9 @@ sub Term::Choose::_length_longest {
     }
     for my $str ( @{$list} ) {
         eval {
-            my $gcs = Unicode::GCString->new( $str ); # my
-            $longest = $gcs->columns() if $gcs->columns() > $longest;     
+            my $gcs = Unicode::GCString->new( $str ); 
+            my $length = $gcs->columns();
+            $longest = $length if $length > $longest;     
         };
         if ( $@ ) {
             $longest = length $str if length $str > $longest;
@@ -43,9 +50,10 @@ sub Term::Choose::_length_longest {
     return $longest;
 }
 
+
 sub Term::Choose::_print_firstline {
     my ( $arg ) = @_;
-    $arg->{prompt} =~ s/\p{Space}/ /g; ##############
+    $arg->{prompt} =~ s/\p{Space}/ /g;
     $arg->{prompt} =~ s/\p{Cntrl}//g;      
     $arg->{firstline} = $arg->{prompt};
     if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
@@ -65,17 +73,11 @@ sub Term::Choose::_print_firstline {
             $arg->{firstline} = '';
         }
     }
-#    eval {
-#        my $gcs = Unicode::GCString->new( $arg->{firstline} );
-#        if ( $gcs->columns() > $arg->{maxcols} ) {
-#            my $gcs = Unicode::GCString->new( $arg->{prompt} );
-#            $arg->{firstline} = substr( $gcs->as_string(), 0, $arg->{maxcols} );
-#        }
-#    };
+    $arg->{cut_length} = $arg->{maxcols} + int( $arg->{maxcols} / 10 );
     eval {
         my $gcs = Unicode::GCString->new( $arg->{firstline} );
         if ( $gcs->columns() > $arg->{maxcols} ) {
-            $arg->{firstline} = _unicode_cut( $arg->{prompt}, $arg->{maxcols}, $arg->{maxcols} x 2 );
+            $arg->{firstline} = _unicode_cut( $arg->{prompt}, $arg->{maxcols}, $arg->{cut_length} );
         }
     };
     if ( $@ ) {
@@ -84,9 +86,10 @@ sub Term::Choose::_print_firstline {
         }
     }     
     print $arg->{firstline};
-    $arg->{head} = 1;       
+    $arg->{head} = 1;
 }
-    
+
+
 sub Term::Choose::_wr_cell {
     my( $arg, $row, $col ) = @_;
     if ( $#{$arg->{new_list}} == 0 ) {
@@ -113,6 +116,7 @@ sub Term::Choose::_wr_cell {
     print $arg->{new_list}[$row][$col];
     print RESET if $arg->{marked}[$row][$col] or [ $row, $col ] ~~ $arg->{this_cell};
 }
+
 
 sub Term::Choose::_size_and_layout {
     my ( $arg ) = @_;
@@ -155,16 +159,10 @@ sub Term::Choose::_size_and_layout {
     }
     elsif ( $layout == 2 ) {
         for my $idx ( 0 .. $#{$arg->{list}} ) {
-#           eval {
-#                my $gcs = Unicode::GCString->new( $arg->{list}[$idx] );            
-#                if ( $gcs->columns() > $arg->{length_longest} ) {
-#                    $arg->{list}[$idx] = substr( $gcs->as_string(), 0, $arg->{length_longest} - 3 ) . '...';
-#                }
-#            };
             eval {
                 my $gcs = Unicode::GCString->new( $arg->{list}[$idx] );            
                 if ( $gcs->columns() > $arg->{length_longest} ) {
-                    $arg->{list}[$idx] = _unicode_cut( $arg->{list}[$idx], $arg->{length_longest} - 3, $arg->{maxcols} x 2 ) . '...';
+                    $arg->{list}[$idx] = _unicode_cut( $arg->{list}[$idx], $arg->{length_longest} - 3, $arg->{cut_length} ) . '...';
                 }
             };
             if ( $@ ) {
@@ -172,7 +170,7 @@ sub Term::Choose::_size_and_layout {
                     $arg->{list}[$idx] = substr( $arg->{list}[$idx], 0, $arg->{length_longest} - 3 ) . '...';
                 }
             }
-            $arg->{new_list}[$idx][0] = _unicode_sprintf( $arg->{length_longest}, $arg->{list}[$idx], $arg->{right_justify}, $arg->{maxcols} );
+            $arg->{new_list}[$idx][0] = _unicode_sprintf( $arg->{length_longest}, $arg->{list}[$idx], $arg->{right_justify}, $arg->{cut_length} );
             $arg->{rowcol_to_list_index}[$idx][0] = $idx;
         }
     }
@@ -211,7 +209,7 @@ sub Term::Choose::_size_and_layout {
                 my @temp_idx;
                 for my $c ( 0 .. $cols_per_row - 1 ) {
                     next if $arg->{rest} and $r == $rows - 1 and $c >= $arg->{rest};
-                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list[$c][$r], $arg->{right_justify}, $arg->{maxcols} );
+                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list[$c][$r], $arg->{right_justify}, $arg->{cut_length} );
                     push @temp_idx, $rearranged_idx[$c][$r];
                 }
                 push @{$arg->{new_list}}, \@temp_new_list;
@@ -224,7 +222,7 @@ sub Term::Choose::_size_and_layout {
             while ( my @rearranged_list = @{$arg->{list}}[$begin..$end] ) {
                 my @temp_new_list;
                 for my $rearranged_list_item ( @rearranged_list ) {
-                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list_item, $arg->{right_justify}, $arg->{maxcols} );
+                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list_item, $arg->{right_justify}, $arg->{cut_length} );
                 }
                 push @{$arg->{new_list}}, \@temp_new_list;
                 push @{$arg->{rowcol_to_list_index}}, [ $begin .. $end ];
@@ -237,55 +235,53 @@ sub Term::Choose::_size_and_layout {
 }
 
 
-
-sub _unicode_cut {    # if string has 0 length chars ?
-    my ( $unicode, $length, $max_length ) = @_;
+sub _unicode_cut {
+    my ( $unicode, $length, $cut_length ) = @_; # bz
     my $gcs = Unicode::GCString->new( $unicode );
     my $colwidth = $gcs->columns();
-    if ( $colwidth != length $unicode ) {
-        if ( defined $max_length and $colwidth > $max_length ) {
-            $unicode = substr( $gcs->as_string, 0, $max_length );
-            $gcs = Unicode::GCString->new( $unicode );
+    #if ( $colwidth != length $unicode ) {
+        if ( defined $cut_length and $colwidth > $cut_length ) {
+            $unicode = substr( $gcs->as_string, 0, $cut_length );
+            my $gcs = Unicode::GCString->new( $unicode );
             $colwidth = $gcs->columns();
         }
         while ( $colwidth > $length ) {
             $unicode =~ s/\X\z//;
-            $gcs = Unicode::GCString->new( $unicode );
+            my $gcs = Unicode::GCString->new( $unicode );
             $colwidth = $gcs->columns();
         }
         $unicode .= ' ' if $colwidth < $length;
-    }
-    else {
-        $unicode = substr( $gcs->as_string, 0, $length );
-    }
+    #}
+    #else {
+    #    $unicode = substr( $unicode, 0, $length );
+    #}
     return $unicode;
 }
 
 
-
 sub _unicode_sprintf {
-    my ( $length, $word, $right_justify, $max_length ) = @_;
+    my ( $length, $word, $right_justify, $cut_length ) = @_;
     my $unicode = $word;
     eval {
         my $gcs = Unicode::GCString->new( $unicode );
         my $colwidth = $gcs->columns();
         if ( $colwidth > $length ) {
-            if ( $colwidth != length $unicode ) {
-                if ( defined $max_length and $colwidth > $max_length ) {
-                    $unicode = substr( $gcs->as_string, 0, $max_length );
-                    $gcs = Unicode::GCString->new( $unicode );
+            #if ( $colwidth != length $unicode ) {
+                if ( defined $cut_length and $colwidth > $cut_length ) {
+                    $unicode = substr( $gcs->as_string, 0, $cut_length );
+                    my $gcs = Unicode::GCString->new( $unicode );
                     $colwidth = $gcs->columns();
                 }
                 while ( $colwidth > $length ) {
                     $unicode =~ s/\X\z//;
-                    $gcs = Unicode::GCString->new( $unicode );
+                    my $gcs = Unicode::GCString->new( $unicode );
                     $colwidth = $gcs->columns();
                 }
                 $unicode .= ' ' if $colwidth < $length;
-            }
-            else {
-                $unicode = substr( $gcs->as_string, 0, $length );
-            }
+            #}
+            #else {
+            #    $unicode = substr( $unicode, 0, $length );
+            #}
         } 
         else {
             if ( $right_justify ) {
@@ -294,7 +290,6 @@ sub _unicode_sprintf {
             else {
                 $unicode = $unicode . " " x ( $length - $colwidth );
             }
-            
         }
     };
     if ( $@ ) {
@@ -309,7 +304,6 @@ sub _unicode_sprintf {
             else {
                 $word = $word . " " x ( $length - $colwidth );
             }
-            
         }
         return $word;
     }
@@ -321,13 +315,15 @@ sub _unicode_sprintf {
 
 =pod
 
+=encoding utf8
+
 =head1 NAME
 
 Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 0.7.6
+Version 0.7.7
 
 =cut
 
@@ -360,14 +356,16 @@ See L<Term::Choose> for details.
 Nothing by default.
 
     use Term::Choose::GC qw(choose);
+    
+=head1 DIFFERENCES
 
-=head1 REQUIREMENTS
+=head2 UNICODE
 
-Additionally to the L<Term::Choose> requirements L<Term::Choose::GC> needs the module L<Unicode::GCString>.
+While L<Term::Choose> uses the Perl builtin functions I<length> to determine the length of strings and I<sprintf> widths to justify strings L<Term::Choose::GC> uses L<Unicode::GCString::columns|http://search.cpan.org/perldoc?Unicode::GCString#Sizes> to determine the length of strings. To justify strings it uses its own function based on L<Unicode::GCString>. The codeparts using L<Unicode::GCString::columns|http://search.cpan.org/perldoc?Unicode::GCString#Sizes> run in I<eval> blocks: if the code in the eval block fails builtin I<length> resp. I<substr> are used instead. The reason for this procedure with I<eval> is to make L<Term::Choose::GC>'s choose work also with non-unicode characters. 
 
-=head1 UNICODE
+=head2 REQUIREMENTS
 
-While L<Term::Choose> uses the Perl builtin functions I<length> to determine the length of strings and I<sprintf> widths to justify strings L<Term::Choose::GC> uses L<Unicode::GCString::columns> to determine the length of strings. To justify strings it uses its own function based on L<Unicode::GCString>. The code using L<Unicode::GCString::columns> runs in I<eval> blocks: if eval fails builtin I<length> resp. I<substr> are used instead.
+Additionally to the L<Term::Choose|http://search.cpan.org/perldoc?Term::Choose#REQUIREMENTS> requirements L<Term::Choose::GC> needs the module L<Unicode::GCString>.
 
 =head1 SUPPORT
 
@@ -377,7 +375,7 @@ You can find documentation for this module with the perldoc command.
 
 =head1 AUTHOR
 
-Kuerbis cuer2s@gmail.com
+Kürbis cuer2s@gmail.com
 
 =head1 CREDITS
 
@@ -387,7 +385,7 @@ Thanks to the L<http://www.perl-community.de> and the people form L<http://stack
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2012 Kuerbis.
+Copyright 2012 Kürbis.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
