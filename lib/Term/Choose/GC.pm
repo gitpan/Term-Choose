@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '0.7.7';
+our $VERSION = '0.7.8';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -135,8 +135,8 @@ sub Term::Choose::_size_and_layout {
         $layout = 2 if scalar @{$arg->{list}} <= $arg->{maxrows};
     }
     elsif ( $layout < 2 ) {
-        for my $element ( 0 .. $#{$arg->{list}} ) {
-            $all_in_first_row .= $arg->{list}[$element];
+        for my $idx ( 0 .. $#{$arg->{list}} ) {
+            $all_in_first_row .= $arg->{list}[$idx];
             my $one_row_length;
             eval {
                 my $gcs = Unicode::GCString->new( $all_in_first_row );
@@ -149,7 +149,7 @@ sub Term::Choose::_size_and_layout {
                 $all_in_first_row = '';
                 last;
             }
-            $all_in_first_row .= ' ' x $arg->{pad_one_row} if $element < $#{$arg->{list}};
+            $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
         }
     }
     if ( $all_in_first_row ) {
@@ -236,10 +236,9 @@ sub Term::Choose::_size_and_layout {
 
 
 sub _unicode_cut {
-    my ( $unicode, $length, $cut_length ) = @_; # bz
+    my ( $unicode, $length, $cut_length ) = @_; 
     my $gcs = Unicode::GCString->new( $unicode );
     my $colwidth = $gcs->columns();
-    #if ( $colwidth != length $unicode ) {
         if ( defined $cut_length and $colwidth > $cut_length ) {
             $unicode = substr( $gcs->as_string, 0, $cut_length );
             my $gcs = Unicode::GCString->new( $unicode );
@@ -251,10 +250,6 @@ sub _unicode_cut {
             $colwidth = $gcs->columns();
         }
         $unicode .= ' ' if $colwidth < $length;
-    #}
-    #else {
-    #    $unicode = substr( $unicode, 0, $length );
-    #}
     return $unicode;
 }
 
@@ -266,24 +261,20 @@ sub _unicode_sprintf {
         my $gcs = Unicode::GCString->new( $unicode );
         my $colwidth = $gcs->columns();
         if ( $colwidth > $length ) {
-            #if ( $colwidth != length $unicode ) {
-                if ( defined $cut_length and $colwidth > $cut_length ) {
-                    $unicode = substr( $gcs->as_string, 0, $cut_length );
-                    my $gcs = Unicode::GCString->new( $unicode );
-                    $colwidth = $gcs->columns();
-                }
-                while ( $colwidth > $length ) {
-                    $unicode =~ s/\X\z//;
-                    my $gcs = Unicode::GCString->new( $unicode );
-                    $colwidth = $gcs->columns();
-                }
-                $unicode .= ' ' if $colwidth < $length;
-            #}
-            #else {
-            #    $unicode = substr( $unicode, 0, $length );
-            #}
+            if ( defined $cut_length and $colwidth > $cut_length ) {
+                $unicode = substr( $gcs->as_string, 0, $cut_length );
+                my $gcs = Unicode::GCString->new( $unicode );
+                $colwidth = $gcs->columns();
+            }
+            while ( $colwidth > $length ) {
+                $unicode =~ s/\X\z//;
+                my $gcs = Unicode::GCString->new( $unicode );
+                $colwidth = $gcs->columns();
+            }
+            $unicode .= ' ' if $colwidth < $length;
         } 
-        else {
+        #else { 
+        elsif ( $colwidth < $length ) {
             if ( $right_justify ) {
                 $unicode = " " x ( $length - $colwidth ) . $unicode;
             }
@@ -297,7 +288,8 @@ sub _unicode_sprintf {
         if ( $colwidth > $length ) {
             $word = substr( $word, 0, $length );
         } 
-        else {
+        #else {
+        elsif ( $colwidth < $length ) {        
             if ( $right_justify ) {
                 $word = " " x ( $length - $colwidth ) . $word;
             }
@@ -323,7 +315,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 0.7.7
+Version 0.7.8
 
 =cut
 

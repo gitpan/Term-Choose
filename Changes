@@ -1,13 +1,17 @@
 Revision history for Term::Choose
 
+0.7.8   2012-07-27
+        - Added example.
+        - Minor code changes.
+
 0.7.7   2012-07-24
-        - Fixed bug in _unicode_cut
-        - Improved documentation
+        - Fixed bug in _unicode_cut.
+        - Improved documentation.
         
 0.7.6   2012-07-23
-        - Added Term::Choose::GC
-        - Code refactoring
-        - Improved documentation
+        - Added Term::Choose::GC.
+        - Code refactoring.
+        - Improved documentation.
 
 0.7.5   2012-07-21
         - Don't print control characters.

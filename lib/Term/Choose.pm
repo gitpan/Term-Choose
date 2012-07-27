@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.7';
+our $VERSION = '0.7.8';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -46,7 +46,7 @@ use constant {
 
     BEEP                               => "\07",
     CLEAR_SCREEN                       => "\e[2J",
-    GO_TO_TOP_LEFT                     => "\e[1;1H", # changed 
+    GO_TO_TOP_LEFT                     => "\e[1;1H", 
     CLEAR_EOS                          => "\e[0J",
     RESET                              => "\e[0m",
     UNDERLINE                          => "\e[4m",
@@ -708,14 +708,14 @@ sub _size_and_layout {
         $layout = 2 if scalar @{$arg->{list}} <= $arg->{maxrows};
     }
     elsif ( $layout < 2 ) {
-        for my $element ( 0 .. $#{$arg->{list}} ) {
-            $all_in_first_row .= $arg->{list}[$element];
+        for my $idx ( 0 .. $#{$arg->{list}} ) {
+            $all_in_first_row .= $arg->{list}[$idx];
             # ----- #
             if ( length $all_in_first_row > $arg->{maxcols} ) { # ----- #
                 $all_in_first_row = '';
                 last;
             }
-            $all_in_first_row .= ' ' x $arg->{pad_one_row} if $element < $#{$arg->{list}};
+            $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
         }
     }
     if ( $all_in_first_row ) {
@@ -866,7 +866,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.7
+Version 0.7.8
 
 =cut
 
