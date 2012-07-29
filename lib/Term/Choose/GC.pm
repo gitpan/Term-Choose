@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '0.7.8';
+our $VERSION = '0.7.9';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -18,10 +18,10 @@ use Unicode::GCString;
 
 
 use constant {
-    RESET                              => "\e[0m",
-    UNDERLINE                          => "\e[4m",
-    REVERSE                            => "\e[7m",
-    BOLD                               => "\e[1m",
+    RESET       => "\e[0m",
+    UNDERLINE   => "\e[4m",
+    REVERSE     => "\e[7m",
+    BOLD        => "\e[1m",
 };
 
 no warnings 'redefine';
@@ -56,7 +56,7 @@ sub Term::Choose::_print_firstline {
     $arg->{prompt} =~ s/\p{Space}/ /g;
     $arg->{prompt} =~ s/\p{Cntrl}//g;      
     $arg->{firstline} = $arg->{prompt};
-    if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
+    if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
         if ( $arg->{prompt} ) {
             $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
             my $length_first_line;
@@ -73,11 +73,11 @@ sub Term::Choose::_print_firstline {
             $arg->{firstline} = '';
         }
     }
-    $arg->{cut_length} = $arg->{maxcols} + int( $arg->{maxcols} / 10 );
+    $arg->{max_length} = $arg->{maxcols} + int( $arg->{maxcols} / 10 );
     eval {
         my $gcs = Unicode::GCString->new( $arg->{firstline} );
         if ( $gcs->columns() > $arg->{maxcols} ) {
-            $arg->{firstline} = _unicode_cut( $arg->{prompt}, $arg->{maxcols}, $arg->{cut_length} );
+            $arg->{firstline} = _unicode_cut( $arg->{prompt}, $arg->{maxcols}, $arg->{max_length} );
         }
     };
     if ( $@ ) {
@@ -114,7 +114,7 @@ sub Term::Choose::_wr_cell {
     print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
     print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
     print $arg->{new_list}[$row][$col];
-    print RESET if $arg->{marked}[$row][$col] or [ $row, $col ] ~~ $arg->{this_cell};
+    print RESET if $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell};
 }
 
 
@@ -162,7 +162,7 @@ sub Term::Choose::_size_and_layout {
             eval {
                 my $gcs = Unicode::GCString->new( $arg->{list}[$idx] );            
                 if ( $gcs->columns() > $arg->{length_longest} ) {
-                    $arg->{list}[$idx] = _unicode_cut( $arg->{list}[$idx], $arg->{length_longest} - 3, $arg->{cut_length} ) . '...';
+                    $arg->{list}[$idx] = _unicode_cut( $arg->{list}[$idx], $arg->{length_longest} - 3, $arg->{max_length} ) . '...';
                 }
             };
             if ( $@ ) {
@@ -170,14 +170,15 @@ sub Term::Choose::_size_and_layout {
                     $arg->{list}[$idx] = substr( $arg->{list}[$idx], 0, $arg->{length_longest} - 3 ) . '...';
                 }
             }
-            $arg->{new_list}[$idx][0] = _unicode_sprintf( $arg->{length_longest}, $arg->{list}[$idx], $arg->{right_justify}, $arg->{cut_length} );
+            #$arg->{new_list}[$idx][0] = _unicode_sprintf( $arg->{length_longest}, $arg->{list}[$idx], $arg->{right_justify}, $arg->{max_length} );
+            $arg->{new_list}[$idx][0] = _unicode_sprintf( $arg->{length_longest}, $arg->{list}[$idx], $arg->{right_justify}, undef );            
             $arg->{rowcol_to_list_index}[$idx][0] = $idx;
         }
     }
     else {
         # auto_format
         my $maxcls = $arg->{maxcols};
-        if ( ( $arg->{layout} == 1 or $arg->{layout} == 3 ) and $arg->{maxrows} > 0 ) {
+        if ( ( $arg->{layout} == 1 || $arg->{layout} == 3 ) && $arg->{maxrows} > 0 ) {
             my $tmc = int( @{$arg->{list}} / $arg->{maxrows} );
             $tmc++ if @{$arg->{list}} % $arg->{maxrows};
             $tmc *= $arg->{col_width};
@@ -200,7 +201,7 @@ sub Term::Choose::_size_and_layout {
             my $i = 0;
             my $idxs = [ 0 .. $#{$arg->{list}} ];
             for my $c ( 0 .. $cols_per_row - 1 ) {
-                $i = 1 if $arg->{rest} and $c >= $arg->{rest};
+                $i = 1 if $arg->{rest} && $c >= $arg->{rest};
                 $rearranged_list[$c] = [ splice( @{$arg->{list}}, 0, $rows - $i ) ];
                 $rearranged_idx[$c]  = [ splice( @{$idxs},        0, $rows - $i ) ];
             }
@@ -208,8 +209,9 @@ sub Term::Choose::_size_and_layout {
                 my @temp_new_list;
                 my @temp_idx;
                 for my $c ( 0 .. $cols_per_row - 1 ) {
-                    next if $arg->{rest} and $r == $rows - 1 and $c >= $arg->{rest};
-                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list[$c][$r], $arg->{right_justify}, $arg->{cut_length} );
+                    next if $arg->{rest} && $r == $rows - 1 && $c >= $arg->{rest};
+                    # push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list[$c][$r], $arg->{right_justify}, $arg->{max_length} );
+                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list[$c][$r], $arg->{right_justify}, undef );                    
                     push @temp_idx, $rearranged_idx[$c][$r];
                 }
                 push @{$arg->{new_list}}, \@temp_new_list;
@@ -222,7 +224,8 @@ sub Term::Choose::_size_and_layout {
             while ( my @rearranged_list = @{$arg->{list}}[$begin..$end] ) {
                 my @temp_new_list;
                 for my $rearranged_list_item ( @rearranged_list ) {
-                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list_item, $arg->{right_justify}, $arg->{cut_length} );
+                    # push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list_item, $arg->{right_justify}, $arg->{max_length} );
+                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list_item, $arg->{right_justify}, undef );                    
                 }
                 push @{$arg->{new_list}}, \@temp_new_list;
                 push @{$arg->{rowcol_to_list_index}}, [ $begin .. $end ];
@@ -236,11 +239,11 @@ sub Term::Choose::_size_and_layout {
 
 
 sub _unicode_cut {
-    my ( $unicode, $length, $cut_length ) = @_; 
+    my ( $unicode, $length, $max_length ) = @_; 
     my $gcs = Unicode::GCString->new( $unicode );
     my $colwidth = $gcs->columns();
-        if ( defined $cut_length and $colwidth > $cut_length ) {
-            $unicode = substr( $gcs->as_string, 0, $cut_length );
+        if ( defined $max_length && $colwidth > $max_length ) {
+            $unicode = substr( $gcs->as_string, 0, $max_length );
             my $gcs = Unicode::GCString->new( $unicode );
             $colwidth = $gcs->columns();
         }
@@ -255,14 +258,14 @@ sub _unicode_cut {
 
 
 sub _unicode_sprintf {
-    my ( $length, $word, $right_justify, $cut_length ) = @_;
+    my ( $length, $word, $right_justify, $max_length ) = @_;
     my $unicode = $word;
     eval {
         my $gcs = Unicode::GCString->new( $unicode );
         my $colwidth = $gcs->columns();
         if ( $colwidth > $length ) {
-            if ( defined $cut_length and $colwidth > $cut_length ) {
-                $unicode = substr( $gcs->as_string, 0, $cut_length );
+            if ( defined $max_length && $colwidth > $max_length ) {
+                $unicode = substr( $gcs->as_string, 0, $max_length );
                 my $gcs = Unicode::GCString->new( $unicode );
                 $colwidth = $gcs->columns();
             }
@@ -315,7 +318,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 0.7.8
+Version 0.7.9
 
 =cut
 

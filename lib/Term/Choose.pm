@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.8';
+our $VERSION = '0.7.9';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -77,11 +77,11 @@ use constant {
     KEY_Tilde           => 0x7e,
     KEY_BSPACE          => 0x7f,
 
-    KEY_UP              => 279165,
-    KEY_DOWN            => 279166,
-    KEY_RIGHT           => 279167,
-    KEY_LEFT            => 279168,
-    KEY_BTAB            => 279190,
+    KEY_UP              => 0x1b5b41,
+    KEY_DOWN            => 0x1b5b42,
+    KEY_RIGHT           => 0x1b5b43,
+    KEY_LEFT            => 0x1b5b44,
+    KEY_BTAB            => 0x1b5b5a,
 };
 
 
@@ -90,7 +90,7 @@ sub _getch {
     my $c = ReadKey 0;
     if ( $c eq "\e" ) {
         my $c = ReadKey 0.10;
-        if ( not defined $c ) { return KEY_ESC; }
+        if ( ! defined $c ) { return KEY_ESC; }
         elsif ( $c eq 'A' ) { return KEY_UP; }
         elsif ( $c eq 'B' ) { return KEY_DOWN; }
         elsif ( $c eq 'C' ) { return KEY_RIGHT; }
@@ -103,7 +103,7 @@ sub _getch {
             elsif ( $c eq 'C' ) { return KEY_RIGHT; }
             elsif ( $c eq 'D' ) { return KEY_LEFT; }
             elsif ( $c eq 'Z' ) { return KEY_BTAB; }
-            elsif ( $c eq 'M' and $arg->{mouse_mode} ) {
+            elsif ( $c eq 'M' && $arg->{mouse_mode} ) {
                 # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
                 # http://leonerds-code.blogspot.co.uk/2012/04/wide-mouse-support-in-libvterm.html
                 my $event_type  = ord( ReadKey 0 ) - 32;        # byte 4
@@ -137,7 +137,7 @@ sub _getch {
                     my $abs_curs_X = 0;
                     while ( 1 ) {
                         $c1 = ReadKey 0;
-                        last if not $c1 =~ /\d/; 
+                        last if $c1 !~ /\d/; 
                         $abs_curs_X = 10 * $abs_curs_X + $c1;
                     }
                     if ( $c1 eq 'R' ) {
@@ -248,7 +248,7 @@ sub _print_firstline {
     $arg->{prompt} =~ s/\p{Cntrl}//g;      
     $arg->{firstline} = $arg->{prompt};
     # ----- #
-    if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
+    if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
         if ( $arg->{prompt} ) {
             $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
             $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
@@ -303,11 +303,11 @@ sub _write_first_screen {
 
 sub _copy_orig_list {
     my ( $arg ) = @_;
-    if ( defined $arg->{list_to_long} and $arg->{list_to_long} ) {
+    if ( defined $arg->{list_to_long} && $arg->{list_to_long} ) {
         return [ map {
             my $copy = $_;
-            $copy = ( not defined $copy ) ? $arg->{undef}         : $copy;
-            $copy = ( $copy eq '' )       ? $arg->{empty_string}  : $copy;
+            $copy = ( ! defined $copy ) ? $arg->{undef}         : $copy;
+            $copy = ( $copy eq '' )     ? $arg->{empty_string}  : $copy;
             $copy =~ s/\p{Space}/ /g;
             $copy =~ s/\p{Cntrl}//g;
             $copy; # " $copy ";
@@ -315,8 +315,8 @@ sub _copy_orig_list {
     }
     return [ map {
         my $copy = $_;
-        $copy = ( not defined $copy ) ? $arg->{undef}         : $copy;
-        $copy = ( $copy eq '' )       ? $arg->{empty_string}  : $copy;
+        $copy = ( ! defined $copy ) ? $arg->{undef}         : $copy;
+        $copy = ( $copy eq '' )     ? $arg->{empty_string}  : $copy;
         $copy =~ s/\p{Space}/ /g;
         $copy =~ s/\p{Cntrl}//g;
         $copy; # " $copy ";
@@ -346,13 +346,13 @@ sub _validate_option {
     my $warn = 0;
     for my $key ( keys %$config ) {
         if ( $validate{$key} ) {
-            if ( defined $config->{$key} and not $config->{$key} =~ $validate{$key} ) {
+            if ( defined $config->{$key} && $config->{$key} !~ $validate{$key} ) {
                 carp "choose: \"$config->{$key}\" not a valid value for option \"$key\". Falling back to default value.";
                 $config->{$key} = undef;
                 ++$warn;
             }
         }
-        elsif ( not exists $validate{$key} ) {
+        elsif ( ! exists $validate{$key} ) {
             carp "choose: \"$key\": no such option";
             delete $config->{$key};
             ++$warn;
@@ -385,21 +385,21 @@ sub _set_layout {
     $config->{max_list}         //= 100_000;
     $config->{screen_width}     //= undef; # 100
     $config->{hide_cursor}      //= 1;
-    $config->{mouse_mode} = 0 if defined $ENV{CLUI_MOUSE} and $ENV{CLUI_MOUSE} =~ /\Aoff\z/i;
+    $config->{mouse_mode} = 0 if defined $ENV{CLUI_MOUSE} && $ENV{CLUI_MOUSE} =~ /\Aoff\z/i;
     return $config;
 }
 
 
 sub choose {
     my ( $orig_list, $config ) = @_;
-    croak "choose: First argument is not a ARRAY reference" if not defined $orig_list;
-    croak "choose: First argument is not a ARRAY reference" if not reftype( $orig_list );
+    croak "choose: First argument is not a ARRAY reference" if ! defined $orig_list;
+    croak "choose: First argument is not a ARRAY reference" if ! reftype( $orig_list );
     croak "choose: First argument is not a ARRAY reference" if reftype( $orig_list ) ne 'ARRAY';
     if ( defined $config ) {
-        croak "choose: Second argument is not a HASH reference." if not reftype( $config );
+        croak "choose: Second argument is not a HASH reference." if ! reftype( $config );
         croak "choose: Second argument is not a HASH reference." if reftype( $config ) ne 'HASH'
     }    
-    if ( not @$orig_list ) {
+    if ( ! @$orig_list ) {
         carp "choose: First argument refers to an empty list!";
         return;
     }   
@@ -437,8 +437,8 @@ sub choose {
             next;
         }
         given ( $c ) {
-            when ( $c == KEY_j or $c == KEY_DOWN ) {
-                if ( $#{$arg->{new_list}} == 0 or not ( $arg->{new_list}[$arg->{this_cell}[ROW]+1] and $arg->{new_list}[$arg->{this_cell}[ROW]+1][$arg->{this_cell}[COL]] ) ) {
+            when ( $c == KEY_j || $c == KEY_DOWN ) {
+                if ( $#{$arg->{new_list}} == 0 || ! ( $arg->{new_list}[$arg->{this_cell}[ROW]+1] && $arg->{new_list}[$arg->{this_cell}[ROW]+1][$arg->{this_cell}[COL]] ) ) {
                     _beep( $arg );
                 }
                 else {
@@ -457,7 +457,7 @@ sub choose {
                     }
                 }
             }
-            when ( $c == KEY_k or $c == KEY_UP ) {
+            when ( $c == KEY_k || $c == KEY_UP ) {
                 if ( $arg->{this_cell}[ROW] == 0 ) {
                     _beep( $arg );
                 }
@@ -478,7 +478,7 @@ sub choose {
                 }
             }
             when ( $c == KEY_TAB ) {
-                if ( $arg->{this_cell}[COL] == $#{$arg->{new_list}[$arg->{this_cell}[ROW]]} and $arg->{this_cell}[ROW] == $#{$arg->{new_list}} ) {
+                if ( $arg->{this_cell}[COL] == $#{$arg->{new_list}[$arg->{this_cell}[ROW]]} && $arg->{this_cell}[ROW] == $#{$arg->{new_list}} ) {
                     _beep( $arg );
                 }
                 else {
@@ -506,8 +506,8 @@ sub choose {
                     }
                 }
             }
-            when ( ( $c == KEY_BSPACE or $c == KEY_BTAB ) and ( $arg->{this_cell} > 0 ) ) {
-                if ( $arg->{this_cell}[COL] == 0 and $arg->{this_cell}[ROW] == 0 ) {
+            when ( ( $c == KEY_BSPACE || $c == KEY_BTAB ) && ( $arg->{this_cell} > 0 ) ) {
+                if ( $arg->{this_cell}[COL] == 0 && $arg->{this_cell}[ROW] == 0 ) {
                     _beep( $arg );
                 }
                 else {
@@ -535,7 +535,7 @@ sub choose {
                     }
                 }
             }
-            when ( $c == KEY_l or $c == KEY_RIGHT ) {
+            when ( $c == KEY_l || $c == KEY_RIGHT ) {
                 if ( $arg->{this_cell}[COL] == $#{$arg->{new_list}[$arg->{this_cell}[ROW]]} ) {
                     _beep( $arg );
                 }
@@ -545,7 +545,7 @@ sub choose {
                     _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] );
                 }
             }
-            when ( $c == KEY_h or $c == KEY_LEFT ) {
+            when ( $c == KEY_h || $c == KEY_LEFT ) {
                 if ( $arg->{this_cell}[COL] == 0 ) {
                     _beep( $arg );
                 }
@@ -577,12 +577,12 @@ sub choose {
             when ( $c == KEY_ENTER ) {
                 my @chosen;
                 _end_win( $arg );
-                return if not defined $arg->{wantarray};
+                return if ! defined $arg->{wantarray};
                 if ( $arg->{wantarray} ) {
                     if ( $arg->{vertical_order} ) {
                         for my $col ( 0 .. $#{$arg->{new_list}[0]} ) {
                             for my $row ( 0 .. $#{$arg->{new_list}} ) {
-                                if ( $arg->{marked}[$row][$col] or [ $row, $col ] ~~ $arg->{this_cell} ) {
+                                if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
                                     my $i = $arg->{rowcol_to_list_index}[$row][$col];
                                     $i //= $row; # ? layout
                                     push @chosen, $arg->{orig_list}[$i];
@@ -593,7 +593,7 @@ sub choose {
                     else {
                          for my $row ( 0 .. $#{$arg->{new_list}} ) {
                             for my $col ( 0 .. $#{$arg->{new_list}[$row]} ) {
-                                if ( $arg->{marked}[$row][$col] or [ $row, $col ] ~~ $arg->{this_cell} ) {
+                                if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
                                     my $i = $arg->{rowcol_to_list_index}[$row][$col];
                                     $i //= $row; # ? layout
                                     push @chosen, $arg->{orig_list}[$i];
@@ -609,8 +609,8 @@ sub choose {
                 }
             }
             when ( $c == KEY_SPACE ) {
-                if ( defined $arg->{wantarray} and $arg->{wantarray} ) {
-                    if ( not $arg->{marked}[$arg->{this_cell}[ROW]][$arg->{this_cell}[COL]] ) {
+                if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
+                    if ( ! $arg->{marked}[$arg->{this_cell}[ROW]][$arg->{this_cell}[COL]] ) {
                         $arg->{marked}[$arg->{this_cell}[ROW]][$arg->{this_cell}[COL]] = 1;
                     }
                     else {
@@ -687,7 +687,7 @@ sub _wr_cell {
     print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
     print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
     print $arg->{new_list}[$row][$col];
-    print RESET if $arg->{marked}[$row][$col] or [ $row, $col ] ~~ $arg->{this_cell};
+    print RESET if $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell};
 }
 
 
@@ -730,14 +730,14 @@ sub _size_and_layout {
                 $arg->{list}[$idx] = substr( $arg->{list}[$idx], 0, $arg->{length_longest} - 3 ) . '...';    # ----- #
             }
             $arg->{new_list}[$idx][0] = sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$idx] if $arg->{right_justify};   # ----- #
-            $arg->{new_list}[$idx][0] = sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$idx] if not $arg->{right_justify};
+            $arg->{new_list}[$idx][0] = sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$idx] if ! $arg->{right_justify};
             $arg->{rowcol_to_list_index}[$idx][0] = $idx;
         }
     }
     else {
         # auto_format
 	my $maxcls = $arg->{maxcols};
-	if ( ( $arg->{layout} == 1 or $arg->{layout} == 3 ) and $arg->{maxrows} > 0 ) {
+	if ( ( $arg->{layout} == 1 || $arg->{layout} == 3 ) && $arg->{maxrows} > 0 ) {
             my $tmc = int( @{$arg->{list}} / $arg->{maxrows} );
 	    $tmc++ if @{$arg->{list}} % $arg->{maxrows};
 	    $tmc *= $arg->{col_width};
@@ -760,7 +760,7 @@ sub _size_and_layout {
             my $i = 0;
             my $idxs = [ 0 .. $#{$arg->{list}} ];
             for my $c ( 0 .. $cols_per_row - 1 ) {
-                $i = 1 if $arg->{rest} and $c >= $arg->{rest};
+                $i = 1 if $arg->{rest} && $c >= $arg->{rest};
                 $rearranged_list[$c] = [ splice( @{$arg->{list}}, 0, $rows - $i ) ];
                 $rearranged_idx[$c]  = [ splice( @{$idxs},        0, $rows - $i ) ];
             }
@@ -768,9 +768,9 @@ sub _size_and_layout {
                 my @temp_new_list;
                 my @temp_idx;
                 for my $c ( 0 .. $cols_per_row - 1 ) {
-                    next if $arg->{rest} and $r == $rows - 1 and $c >= $arg->{rest};
+                    next if $arg->{rest} && $r == $rows - 1 && $c >= $arg->{rest};
                     push @temp_new_list, sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $rearranged_list[$c][$r] if $arg->{right_justify};   # ----- # 
-                    push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list[$c][$r] if not $arg->{right_justify};
+                    push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list[$c][$r] if ! $arg->{right_justify};
                     push @temp_idx, $rearranged_idx[$c][$r];
                 }
                 push @{$arg->{new_list}}, \@temp_new_list;
@@ -784,7 +784,7 @@ sub _size_and_layout {
                 my @temp_new_list;
                 for my $rearranged_list_item ( @rearranged_list ) {
                     push @temp_new_list, sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $rearranged_list_item if $arg->{right_justify};   # ----- #
-                    push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list_item if not $arg->{right_justify};
+                    push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list_item if ! $arg->{right_justify};
                 }
                 push @{$arg->{new_list}}, \@temp_new_list;
                 push @{$arg->{rowcol_to_list_index}}, [ $begin .. $end ];
@@ -800,7 +800,7 @@ sub _size_and_layout {
 sub _handle_mouse {
     my ( $x, $y, $button_pressed, $button_drag, $arg ) = @_;
     return NEXT_getch if $button_drag;
-    my $top_row = $arg->{abs_curs_Y}; # $arg->{abs_curs_Y} - $arg->{cursor_row_begin}; # history
+    my $top_row = $arg->{abs_curs_Y}; # $arg->{abs_curs_Y} - $arg->{cursor_row_begin}; # history ?
     if ( $button_pressed == 4 ) {
         return KEY_UP;
     }
@@ -811,7 +811,7 @@ sub _handle_mouse {
 #        $arg->{LastEventWasPress} = 0;
 #        return NEXT_getch;
 #    }
-    return NEXT_getch if not $y >= $top_row;
+    return NEXT_getch if $y < $top_row;    
     my $mouse_row = $y - $top_row;
     my $mouse_col = $x;
     my( $found_row, $found_col );
@@ -819,7 +819,7 @@ sub _handle_mouse {
     for my $row ( 0 .. @{$arg->{new_list}} ) {
 	if ( $row == $mouse_row ) {
             for my $col ( 0 .. $#{$arg->{new_list}[$row]} ) {
-                if ( $col * $arg->{col_width} < $mouse_col and ( ( $col + 1 ) * $arg->{col_width} ) >= $mouse_col ) {
+                if ( ( $col * $arg->{col_width} < $mouse_col ) && ( ( $col + 1 ) * $arg->{col_width} >= $mouse_col ) ) {
                     $found = 1;
                     $found_row = $row + $arg->{page};
                     $found_col = $col;
@@ -828,7 +828,7 @@ sub _handle_mouse {
             }
         }
     }
-    return NEXT_getch if not $found;
+    return NEXT_getch if ! $found;
     # if xterm doesn't receive a button-up event it thinks it's dragging # orig comment
     my $return_char = '';
     if ( $button_pressed == 1 ) {
@@ -842,7 +842,7 @@ sub _handle_mouse {
     else {
         return NEXT_getch; # xterm
     }
-    if ( not [ $found_row, $found_col ] ~~ $arg->{this_cell} ) {
+    if ( ! ( [ $found_row, $found_col ] ~~ $arg->{this_cell} ) ) {
         my $t = $arg->{this_cell};
         $arg->{this_cell} = [ $found_row, $found_col ];
         _wr_cell( $arg, $t->[0], $t->[1] );
@@ -866,7 +866,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.8
+Version 0.7.9
 
 =cut
 
@@ -891,6 +891,28 @@ Version 0.7.8
 Choose from a list of elements.
 
 Requires Perl Version 5.10.1 or greater.
+
+Based on the I<choose> function from L<Term::Clui> module.
+
+Differences between L<Term::Clui> and L<Term::Choose>:
+
+L<Term::Clui>'s I<choose> expects a first argument a I<question> (scalar), and as a second argument the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).  
+
+The reason for writing L<Term::Choose> was to get a nicer output. If the list does not fit in one row, I<choose> from L<Term::Clui> puts the elements on the screen without ordering the items in columns. L<Term::Choose> arranges the elements in columns which makes it easier for me to find elements and easier to navigate on the screen.
+
+Another difference is how lists which don't find on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
+
+Strings where the number of characters are not equal to the number of columns on the screen break the output from L<Term::Clui> and L<Term::Choose>. L<Term::Choose::GC> tries to get along with such situations (L</"BUGS AND LIMITATIONS">).
+
+L<Term::Clui>'s I<choose> prints and returns the chosen items, while I<choose> from L<Term::Choose> only returns the chosen items.
+
+Only in L<Term::Clui>:
+
+L<Term::Clui> provides a speaking interface, offers a bundle of functions and has a fallback to work when only Perl core modules are available.
+
+The I<choose> function from L<Term::Clui> can remember choices made in scalar context and allows multiline question - the first line is put on the top, the subsequent lines are displayed below the list. 
+
+These differences refer to L<Term::Clui|http://search.cpan.org/~pjb/Term-Clui-1.65/Clui.pm> version 1.65. For a more precise description of L<Term::Clui> consult its own documentation. 
 
 =head1 EXPORT
 
@@ -1243,7 +1265,7 @@ are used to enable/disable the different mouse modes.
 
 =head2 Unicode
 
-This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings. Therefore strings with code points that take more or less than one print column will break the layout. Using L<Term::Choose::GC> instead improves the layout in such conditions. It determines the string length by using the I<columns> method from L<Unicode::GCString> module.
+This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings. Therefore strings with characters that take more or less than one print column will break the layout. Using L<Term::Choose::GC> instead improves the layout in such conditions. It determines the string length by using the I<columns> method from L<Unicode::GCString> module.
 
     use Term::Choose:GC qw(choose);
     

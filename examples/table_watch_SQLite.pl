@@ -4,6 +4,8 @@ use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
 
+# Version 0.02
+
 use Cwd qw(realpath);
 use File::Find qw(find); 
 use File::Spec::Functions qw(catfile tmpdir);
@@ -181,9 +183,27 @@ DATABASES: while ( 1 ) {
         my @tables = sort keys %tables;
         push @tables, $master if $master;
         push @tables, $temp_master if $temp_master;
+        push @tables, '  delete database';
         my $table = choose( [ undef, @tables ], { prompt => 'Choose Table', %lyt, undef => "  $back" } );
-        $table =~ s/\A..// if defined $table;
         last TABLES if not defined $table;
+        $table =~ s/\A..//;
+        if ( $table eq 'delete database' ) {
+            say 'realy delete database "', colored( $db, 'red' ), '"?';
+            my $c = choose( [ ' No ', ' Yes ' ], { prompt => 0, pad_one_row => 1 } );
+            if ( $c eq ' Yes ' ) {
+                eval { unlink $db or die $! };
+                if ( $@ ) {
+                    say "Could not remove database \"$db\"";
+                    print $@;
+                }
+                else {
+                    $cache->remove( $key );
+                    @databases = grep { $_ ne $db } @databases;
+                }
+                last TABLES;
+            }
+        }
+
 
         CHOOSE: while ( 1 ) {
             my $choice = choose( [ undef, @auswahl{@aw_keys} ], { %lyt, undef => "  $back" } );
@@ -241,10 +261,18 @@ DATABASES: while ( 1 ) {
                     choose( [ 'Press ENTER to continue' ], { prompt => 0 } ); 
                 }
                 when ( $auswahl{delete_table} ) {
-                    my $c = choose( [ ' No ', ' Yes ' ], { prompt => "realy delete table \"$table\"?", pad_one_row => 1 } );
+                    say 'realy delete table "', colored( $table, 'red' ), '"?';
+                    my $c = choose( [ ' No ', ' Yes ' ], { prompt => 0, pad_one_row => 1 } );
                     if ( $c eq ' Yes ' ) {
-                        $dbh->do( "DROP TABLE $table" );
-                        last TABLES;
+                        eval { $dbh->do( "DROP TABLE $table" ) };
+                        if ( $@ ) {
+                            say "Could not drop table \"$table\"";
+                            print $@;
+                        }
+                        else {
+                            @tables = grep { $_ ne $table } @tables;
+                        }
+                        last CHOOSE;
                     }
                 }
                 default {
@@ -278,7 +306,7 @@ sub read_db_table {
 }
 
 
-sub cal_tab {
+sub calc_widths {
     my ( $ref, $cut ) = @_; 
     my ( $max, $not_a_number );
     my $count = 0;
@@ -315,7 +343,7 @@ sub recalc_widths {
     my ( $maxcols, $ref, $cut ) = @_;
     my ( $max, $not_a_number );
     eval {
-        ( $max, $not_a_number ) = cal_tab( $ref, $cut );
+        ( $max, $not_a_number ) = calc_widths( $ref, $cut );
     };
     if ( $@ ) {
         print $@, '  ';
