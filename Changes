@@ -1,5 +1,10 @@
 Revision history for Term::Choose
 
+0.7.10  2012-07-30
+        - Code refactoring - "_size_and_layout": don't copy the list.
+        - Fixed bug in example.
+        - Improved documentation.
+
 0.7.9   2012-07-29
         - Form "and,or,not" to "&&,||,!".
         - Minor code changes.

@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '0.7.9';
+our $VERSION = '0.7.10';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -92,16 +92,16 @@ sub Term::Choose::_print_firstline {
 
 sub Term::Choose::_wr_cell {
     my( $arg, $row, $col ) = @_;
-    if ( $#{$arg->{new_list}} == 0 ) {
+    if ( $#{$arg->{rowcol_to_list_index}} == 0 ) {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
                 eval {
-                    my $gcs = Unicode::GCString->new( $arg->{new_list}[$row][$cl] );
+                    my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol_to_list_index}[$row][$cl]] );
                     $lngth += $gcs->columns();
                 };
                 if ( $@ ) {
-                    $lngth += length $arg->{new_list}[$row][$cl];
+                    $lngth += length $arg->{list}[$arg->{rowcol_to_list_index}[$row][$cl]];
                 }
                 $lngth += $arg->{pad_one_row} // 0;
             }
@@ -113,7 +113,8 @@ sub Term::Choose::_wr_cell {
     }
     print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
     print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
-    print $arg->{new_list}[$row][$col];
+    #print $arg->{new_list}[$row][$col];
+    print _unicode_sprintf( $arg->{length_longest}, $arg->{list}[$arg->{rowcol_to_list_index}[$row][$col]], $arg->{right_justify}, $arg->{max_length} );   
     print RESET if $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell};
 }
 
@@ -121,7 +122,7 @@ sub Term::Choose::_wr_cell {
 sub Term::Choose::_size_and_layout {
     my ( $arg ) = @_;
     my $layout = $arg->{layout};
-    $arg->{new_list} = [];
+    #$arg->{new_list} = [];
     $arg->{rowcol_to_list_index} = [];
     $arg->{all_in_first_row} = 0;
     if ( $arg->{length_longest} > $arg->{maxcols} ) {
@@ -154,7 +155,7 @@ sub Term::Choose::_size_and_layout {
     }
     if ( $all_in_first_row ) {
         $arg->{all_in_first_row} = 1;
-        $arg->{new_list}[0] = [ @{$arg->{list}} ];
+        #$arg->{new_list}[0] = [ @{$arg->{list}} ];
         $arg->{rowcol_to_list_index}[0] = [ 0 .. $#{$arg->{list}} ];    
     }
     elsif ( $layout == 2 ) {
@@ -171,7 +172,7 @@ sub Term::Choose::_size_and_layout {
                 }
             }
             #$arg->{new_list}[$idx][0] = _unicode_sprintf( $arg->{length_longest}, $arg->{list}[$idx], $arg->{right_justify}, $arg->{max_length} );
-            $arg->{new_list}[$idx][0] = _unicode_sprintf( $arg->{length_longest}, $arg->{list}[$idx], $arg->{right_justify}, undef );            
+            #$arg->{new_list}[$idx][0] = _unicode_sprintf( $arg->{length_longest}, $arg->{list}[$idx], $arg->{right_justify}, undef );            
             $arg->{rowcol_to_list_index}[$idx][0] = $idx;
         }
     }
@@ -196,38 +197,49 @@ sub Term::Choose::_size_and_layout {
         my $rows = int( ( $#{$arg->{list}} + $cols_per_row ) / $cols_per_row );
         $arg->{rest} = @{$arg->{list}} % $cols_per_row;
         if ( $arg->{vertical_order} ) {
-            my @rearranged_list;
+            #my @rearranged_list;
             my @rearranged_idx;
-            my $i = 0;
-            my $idxs = [ 0 .. $#{$arg->{list}} ];
+            #my $i = 0;
+            #my $idxs = [ 0 .. $#{$arg->{list}} ];
+            #for my $c ( 0 .. $cols_per_row - 1 ) {
+            #    $i = 1 if $arg->{rest} && $c >= $arg->{rest};
+            #    #$rearranged_list[$c] = [ splice( @{$arg->{list}}, 0, $rows - $i ) ];
+            #    $rearranged_idx[$c]  = [ splice( @{$idxs},        0, $rows - $i ) ];
+            #    say $rows - $i;
+            #}
+            my $begin = 0;
+            my $end = $rows - 1;
             for my $c ( 0 .. $cols_per_row - 1 ) {
-                $i = 1 if $arg->{rest} && $c >= $arg->{rest};
-                $rearranged_list[$c] = [ splice( @{$arg->{list}}, 0, $rows - $i ) ];
-                $rearranged_idx[$c]  = [ splice( @{$idxs},        0, $rows - $i ) ];
+                --$end if $arg->{rest} && $c >= $arg->{rest};
+                $rearranged_idx[$c]  = [ $begin .. $end ];
+                $begin = $end + 1;
+                $end = $begin + $rows - 1;
+                #$end = $#{$arg->{list}} if $end > $#{$arg->{list}};
             }
             for my $r ( 0 .. $rows - 1 ) {
-                my @temp_new_list;
+                #my @temp_new_list;
                 my @temp_idx;
                 for my $c ( 0 .. $cols_per_row - 1 ) {
                     next if $arg->{rest} && $r == $rows - 1 && $c >= $arg->{rest};
-                    # push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list[$c][$r], $arg->{right_justify}, $arg->{max_length} );
-                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list[$c][$r], $arg->{right_justify}, undef );                    
+                    ## push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list[$c][$r], $arg->{right_justify}, $arg->{max_length} );
+                    #push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list[$c][$r], $arg->{right_justify}, undef );                    
                     push @temp_idx, $rearranged_idx[$c][$r];
                 }
-                push @{$arg->{new_list}}, \@temp_new_list;
+                #push @{$arg->{new_list}}, \@temp_new_list;
                 push @{$arg->{rowcol_to_list_index}}, \@temp_idx;
             }
         }
         else {
             my $begin = 0;
             my $end = $cols_per_row - 1;
-            while ( my @rearranged_list = @{$arg->{list}}[$begin..$end] ) {
-                my @temp_new_list;
-                for my $rearranged_list_item ( @rearranged_list ) {
-                    # push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list_item, $arg->{right_justify}, $arg->{max_length} );
-                    push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list_item, $arg->{right_justify}, undef );                    
-                }
-                push @{$arg->{new_list}}, \@temp_new_list;
+            while ( @{$arg->{list}}[$begin..$end] ) { ###
+            #while ( my @rearranged_list = @{$arg->{list}}[$begin..$end] ) {
+                #my @temp_new_list;
+                #for my $rearranged_list_item ( @rearranged_list ) {
+                    ## push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list_item, $arg->{right_justify}, $arg->{max_length} );
+                    #push @temp_new_list, _unicode_sprintf( $arg->{length_longest}, $rearranged_list_item, $arg->{right_justify}, undef );                    
+                #}
+                #push @{$arg->{new_list}}, \@temp_new_list;
                 push @{$arg->{rowcol_to_list_index}}, [ $begin .. $end ];
                 $begin = $end + 1;
                 $end = $begin + $cols_per_row - 1;
@@ -257,7 +269,7 @@ sub _unicode_cut {
 }
 
 
-sub _unicode_sprintf {
+sub _unicode_sprintf { ### _unicode_printf
     my ( $length, $word, $right_justify, $max_length ) = @_;
     my $unicode = $word;
     eval {
@@ -318,7 +330,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 0.7.9
+Version 0.7.10
 
 =cut
 

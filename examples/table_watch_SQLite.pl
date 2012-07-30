@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
 
-# Version 0.02
+# Version 0.03
 
 use Cwd qw(realpath);
 use File::Find qw(find); 
@@ -29,10 +29,11 @@ my $root_dir   = tmpdir(); # Cache root directory
 my $expires_in = '7d';     # Days until data expires. The cache holds the names of the found databases.
 my $no_cache   = 0;        # Reset cache.
 my $max_depth;             # Levels to descend at most when searching in directories for databases.
-my $delete     = 1;        # Enable option "Delete Table".
-my $min_width  = 20;       # The width the columns should have at least when printed (if possible).
+my $delete     = 0;        # Enable option "Delete Table".
+my $min_width  = 30;       # The width the columns should have at least when printed (if possible).
 my $tab        = 2;        # The number of spaces between columns.
 my $undef      = '';       # The string, that will be shown instead of undefined table values.
+my $no_blob    = 1;        # Don't print columns with the type "BLOB";
 
 # colors on a terminal with green fond and black background:
 my @colors = ( 'cyan', '', 'magenta', 'white', 'green', 'blue', 'yellow', 'red' );
@@ -44,6 +45,7 @@ GetOptions (
     's|no-cache'    => \$no_cache,
     'l|limit:i'     => \$limit,
     'm|max-depth:i' => \$max_depth,
+    'd|delete'      => \$delete,
 );
 
 sub help {
@@ -57,6 +59,7 @@ Options:
     -s|--no-cache   : Reset cache. The cache holds the names of the found databases.
     -m|--max-depth  : Levels to descend at most when searching in directories for databases.
     -l|--limit      : Sets the maximum number of rows read from tables.
+    -d|--delete     : Enable "Delete" options to remove tables or databases.
 HELP
 }
 
@@ -101,7 +104,7 @@ sub search_databases {
             wanted      =>  sub {
                 my $file = $File::Find::name;
                 return if not -f $file;
-                push @databases, $file if $flm->describe_filename( $file ) =~ /^SQLite/; 
+                push @databases, $file if $flm->describe_filename( $file ) =~ /\ASQLite/; 
             },
             no_chdir    =>  1, 
         }, 
@@ -183,7 +186,7 @@ DATABASES: while ( 1 ) {
         my @tables = sort keys %tables;
         push @tables, $master if $master;
         push @tables, $temp_master if $temp_master;
-        push @tables, '  delete database';
+        push @tables, '  delete database' if $delete;
         my $table = choose( [ undef, @tables ], { prompt => 'Choose Table', %lyt, undef => "  $back" } );
         last TABLES if not defined $table;
         $table =~ s/\A..//;
@@ -289,11 +292,12 @@ DATABASES: while ( 1 ) {
 
 sub read_db_table {
     my ( $dbh, $table, $str ) = @_;
-    my $ref;
+    my ( $ref, $col_types );
     eval {
         my $sth = $dbh->prepare( "SELECT $str FROM $table LIMIT ?" );
         $sth->execute( $limit );
         my $col_names = $sth->{NAME};
+        $col_types = $sth->{TYPE};
         $ref = $sth->fetchall_arrayref();
         unshift @$ref, $col_names;
     };
@@ -302,17 +306,18 @@ sub read_db_table {
         choose( [ 'Press ENTER to continue' ], { prompt => 0 } ); 
         return;
     }
-    return $ref;
+    return $ref, $col_types;
 }
 
 
 sub calc_widths {
-    my ( $ref, $cut ) = @_; 
+    my ( $ref, $col_types, $cut ) = @_; 
     my ( $max, $not_a_number );
     my $count = 0;
     for my $row ( @$ref ) {
         $count++;
         for my $i ( 0 .. $#$row ) {
+            $row->[$i] = 'Blob' if $col_types->[$i] eq 'BLOB' and $count > 1 and $no_blob;
             $max->[$i] //= 0;
             next if not defined $row->[$i];
             $row->[$i] =~ s/\p{Space}/ /g; #
@@ -340,10 +345,10 @@ sub minus_x_percent {
 }
 
 sub recalc_widths {
-    my ( $maxcols, $ref, $cut ) = @_;
+    my ( $maxcols, $ref, $col_types, $cut ) = @_;
     my ( $max, $not_a_number );
     eval {
-        ( $max, $not_a_number ) = calc_widths( $ref, $cut );
+        ( $max, $not_a_number ) = calc_widths( $ref, $col_types, $cut );
     };
     if ( $@ ) {
         print $@, '  ';
@@ -355,6 +360,7 @@ sub recalc_widths {
         $sum -= $tab;
         my @max_tmp = @$max;
         my $percent = 0;
+        my $min_width_tmp = $min_width;
         while ( $sum > $maxcols ) {
             $percent += 0.5;
             if ( $percent > 99 ) {
@@ -365,9 +371,9 @@ sub recalc_widths {
             }
             my $count = 0;
             for my $i ( 0 .. $#max_tmp ) {
-                next if $min_width >= $max_tmp[$i];
+                next if $min_width_tmp >= $max_tmp[$i];
                 if ( $min_width >= minus_x_percent( $max_tmp[$i], $percent ) ) {
-                    $max_tmp[$i] = $min_width;
+                    $max_tmp[$i] = $min_width_tmp;
                 }
                 else {
                     $max_tmp[$i] = minus_x_percent( $max_tmp[$i], $percent );
@@ -375,7 +381,7 @@ sub recalc_widths {
                 $count++;
                 last if $sum <= $maxcols;   
             }
-            $min_width-- if $count == 0 and $min_width > 1;
+            $min_width_tmp-- if $count == 0 and $min_width_tmp > 1;
             $sum = sum( @max_tmp ) + $tab * @max_tmp; 
             $sum -= $tab;
         }
@@ -394,17 +400,17 @@ sub recalc_widths {
             last if $rest < 1;
         }
         $max = [ @max_tmp ] if @max_tmp;
-    }   
+    } 
     return $max, $not_a_number;
 }
 
 
 sub print_table {
     my ( $dbh, $table, $str, $type, $cut ) = @_;
-    my ( $ref ) = read_db_table ( $dbh, $table, $str );
+    my ( $ref, $col_types ) = read_db_table ( $dbh, $table, $str );
     my ( $maxcols, $maxrows ) = GetTerminalSize( *STDOUT );
     return if not defined $ref;
-    my ( $max, $not_a_number ) = recalc_widths( $maxcols, $ref );
+    my ( $max, $not_a_number ) = recalc_widths( $maxcols, $ref, $col_types, $cut );
     return if not defined $max;
     if ( $type eq 'row' ) {
         my @list;

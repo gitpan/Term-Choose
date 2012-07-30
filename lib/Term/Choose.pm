@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.9';
+our $VERSION = '0.7.10';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -293,7 +293,7 @@ sub _write_first_screen {
     $arg->{maxrows_index} = 0 if $arg->{maxrows_index} < 0;
     $arg->{begin_page} = 0;
     $arg->{end_page} = $arg->{maxrows_index};
-    $arg->{end_page} = $#{$arg->{new_list}} if $arg->{maxrows_index} > $#{$arg->{new_list}};
+    $arg->{end_page} = $#{$arg->{rowcol_to_list_index}} if $arg->{maxrows_index} > $#{$arg->{rowcol_to_list_index}};
     $arg->{page} = 0;
     _wr_screen( $arg );
     print GET_CURSOR_POSITION if $arg->{mouse_mode};  # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
@@ -438,7 +438,7 @@ sub choose {
         }
         given ( $c ) {
             when ( $c == KEY_j || $c == KEY_DOWN ) {
-                if ( $#{$arg->{new_list}} == 0 || ! ( $arg->{new_list}[$arg->{this_cell}[ROW]+1] && $arg->{new_list}[$arg->{this_cell}[ROW]+1][$arg->{this_cell}[COL]] ) ) {
+                if ( $#{$arg->{rowcol_to_list_index}} == 0 || ! ( $arg->{rowcol_to_list_index}[$arg->{this_cell}[ROW]+1] && $arg->{rowcol_to_list_index}[$arg->{this_cell}[ROW]+1][$arg->{this_cell}[COL]] ) ) {
                     _beep( $arg );
                 }
                 else {
@@ -452,7 +452,7 @@ sub choose {
                         $arg->{end_page}++;
                         $arg->{begin_page} = $arg->{end_page};
                         $arg->{end_page} = $arg->{end_page} + $arg->{maxrows_index};
-                        $arg->{end_page} = $#{$arg->{new_list}} if $arg->{end_page} > $#{$arg->{new_list}};
+                        $arg->{end_page} = $#{$arg->{rowcol_to_list_index}} if $arg->{end_page} > $#{$arg->{rowcol_to_list_index}};
                         _wr_screen( $arg );
                     }
                 }
@@ -478,11 +478,11 @@ sub choose {
                 }
             }
             when ( $c == KEY_TAB ) {
-                if ( $arg->{this_cell}[COL] == $#{$arg->{new_list}[$arg->{this_cell}[ROW]]} && $arg->{this_cell}[ROW] == $#{$arg->{new_list}} ) {
+                if ( $arg->{this_cell}[COL] == $#{$arg->{rowcol_to_list_index}[$arg->{this_cell}[ROW]]} && $arg->{this_cell}[ROW] == $#{$arg->{rowcol_to_list_index}} ) {
                     _beep( $arg );
                 }
                 else {
-                    if ( $arg->{this_cell}[COL] < $#{$arg->{new_list}[$arg->{this_cell}[ROW]]} ) {
+                    if ( $arg->{this_cell}[COL] < $#{$arg->{rowcol_to_list_index}[$arg->{this_cell}[ROW]]} ) {
                         $arg->{this_cell}[COL]++;
                         _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] - 1 );
                         _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] );
@@ -491,7 +491,7 @@ sub choose {
                         $arg->{this_cell}[ROW]++;                        
                         if ( $arg->{this_cell}[ROW] <= $arg->{end_page} ) {                       
                             $arg->{this_cell}[COL] = 0;
-                            _wr_cell( $arg, $arg->{this_cell}[ROW] - 1, $#{$arg->{new_list}[$arg->{this_cell}[ROW] - 1]} );
+                            _wr_cell( $arg, $arg->{this_cell}[ROW] - 1, $#{$arg->{rowcol_to_list_index}[$arg->{this_cell}[ROW] - 1]} );
                             _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                         }
                         else {
@@ -499,7 +499,7 @@ sub choose {
                             $arg->{end_page}++;
                             $arg->{begin_page} = $arg->{end_page};
                             $arg->{end_page} = $arg->{end_page} + $arg->{maxrows_index};
-                            $arg->{end_page} = $#{$arg->{new_list}} if $arg->{end_page} > $#{$arg->{new_list}};
+                            $arg->{end_page} = $#{$arg->{rowcol_to_list_index}} if $arg->{end_page} > $#{$arg->{rowcol_to_list_index}};
                             $arg->{this_cell}[COL] = 0;
                             _wr_screen( $arg );
                         }
@@ -519,7 +519,7 @@ sub choose {
                     else {
                         $arg->{this_cell}[ROW]--;
                         if ( $arg->{this_cell}[ROW] >= $arg->{begin_page} ) {
-                            $arg->{this_cell}[COL] = $#{$arg->{new_list}[$arg->{this_cell}[ROW]]};
+                            $arg->{this_cell}[COL] = $#{$arg->{rowcol_to_list_index}[$arg->{this_cell}[ROW]]};
                             _wr_cell( $arg, $arg->{this_cell}[ROW] + 1, 0 );
                             _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                         }
@@ -529,14 +529,14 @@ sub choose {
                             $arg->{end_page} = $arg->{begin_page};
                             $arg->{begin_page} = $arg->{begin_page} - $arg->{maxrows_index};
                             $arg->{begin_page} = 0 if $arg->{begin_page} < 0;
-                            $arg->{this_cell}[COL] = $#{$arg->{new_list}[$arg->{this_cell}[ROW]]};
+                            $arg->{this_cell}[COL] = $#{$arg->{rowcol_to_list_index}[$arg->{this_cell}[ROW]]};
                             _wr_screen( $arg );
                         }
                     }
                 }
             }
             when ( $c == KEY_l || $c == KEY_RIGHT ) {
-                if ( $arg->{this_cell}[COL] == $#{$arg->{new_list}[$arg->{this_cell}[ROW]]} ) {
+                if ( $arg->{this_cell}[COL] == $#{$arg->{rowcol_to_list_index}[$arg->{this_cell}[ROW]]} ) {
                     _beep( $arg );
                 }
                 else {
@@ -580,8 +580,8 @@ sub choose {
                 return if ! defined $arg->{wantarray};
                 if ( $arg->{wantarray} ) {
                     if ( $arg->{vertical_order} ) {
-                        for my $col ( 0 .. $#{$arg->{new_list}[0]} ) {
-                            for my $row ( 0 .. $#{$arg->{new_list}} ) {
+                        for my $col ( 0 .. $#{$arg->{rowcol_to_list_index}[0]} ) {
+                            for my $row ( 0 .. $#{$arg->{rowcol_to_list_index}} ) {
                                 if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
                                     my $i = $arg->{rowcol_to_list_index}[$row][$col];
                                     $i //= $row; # ? layout
@@ -591,8 +591,8 @@ sub choose {
                         }
                     }
                     else {
-                         for my $row ( 0 .. $#{$arg->{new_list}} ) {
-                            for my $col ( 0 .. $#{$arg->{new_list}[$row]} ) {
+                         for my $row ( 0 .. $#{$arg->{rowcol_to_list_index}} ) {
+                            for my $col ( 0 .. $#{$arg->{rowcol_to_list_index}[$row]} ) {
                                 if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
                                     my $i = $arg->{rowcol_to_list_index}[$row][$col];
                                     $i //= $row; # ? layout
@@ -660,7 +660,7 @@ sub _wr_screen {
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
     for my $row ( $arg->{begin_page} .. $arg->{end_page} ) {
-        for my $col ( 0 .. $#{$arg->{new_list}[$row]} ) {
+        for my $col ( 0 .. $#{$arg->{rowcol_to_list_index}[$row]} ) {
             _wr_cell( $arg, $row, $col ); # unless [ $row, $col ] ~~ $this_cell;
         }
     }
@@ -670,12 +670,12 @@ sub _wr_screen {
 
 sub _wr_cell {
     my( $arg, $row, $col ) = @_;
-    if ( $#{$arg->{new_list}} == 0 ) {
+    if ( $#{$arg->{rowcol_to_list_index}} == 0 ) {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
                 # ----- #
-                $lngth += length $arg->{new_list}[$row][$cl];   # ----- #
+                $lngth += length $arg->{list}[$arg->{rowcol_to_list_index}[$row][$cl]];   # ----- #
                 $lngth += $arg->{pad_one_row} // 0;
             }
         }
@@ -686,7 +686,9 @@ sub _wr_cell {
     }
     print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
     print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
-    print $arg->{new_list}[$row][$col];
+    #print $arg->{new_list}[$row][$col];
+    printf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$arg->{rowcol_to_list_index}[$row][$col]] if   $arg->{right_justify};   # ----- #
+    printf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$arg->{rowcol_to_list_index}[$row][$col]] if ! $arg->{right_justify};
     print RESET if $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell};
 }
 
@@ -694,7 +696,7 @@ sub _wr_cell {
 sub _size_and_layout {
     my ( $arg ) = @_;
     my $layout = $arg->{layout};
-    $arg->{new_list} = [];
+    #$arg->{new_list} = [];
     $arg->{rowcol_to_list_index} = [];
     $arg->{all_in_first_row} = 0;
     if ( $arg->{length_longest} > $arg->{maxcols} ) {
@@ -720,7 +722,7 @@ sub _size_and_layout {
     }
     if ( $all_in_first_row ) {
 	$arg->{all_in_first_row} = 1;
-	$arg->{new_list}[0] = [ @{$arg->{list}} ];
+	#$arg->{new_list}[0] = [ @{$arg->{list}} ];
         $arg->{rowcol_to_list_index}[0] = [ 0 .. $#{$arg->{list}} ];	
     }
     elsif ( $layout == 2 ) {
@@ -729,8 +731,8 @@ sub _size_and_layout {
             if ( length $arg->{list}[$idx] > $arg->{length_longest} ) {                                      # ----- #
                 $arg->{list}[$idx] = substr( $arg->{list}[$idx], 0, $arg->{length_longest} - 3 ) . '...';    # ----- #
             }
-            $arg->{new_list}[$idx][0] = sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$idx] if $arg->{right_justify};   # ----- #
-            $arg->{new_list}[$idx][0] = sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$idx] if ! $arg->{right_justify};
+            #$arg->{new_list}[$idx][0] = sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$idx] if $arg->{right_justify};   # ----- #
+            #$arg->{new_list}[$idx][0] = sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$idx] if ! $arg->{right_justify};
             $arg->{rowcol_to_list_index}[$idx][0] = $idx;
         }
     }
@@ -755,38 +757,49 @@ sub _size_and_layout {
         my $rows = int( ( $#{$arg->{list}} + $cols_per_row ) / $cols_per_row );
         $arg->{rest} = @{$arg->{list}} % $cols_per_row;
         if ( $arg->{vertical_order} ) {
-            my @rearranged_list;
+            #my @rearranged_list;
             my @rearranged_idx;
-            my $i = 0;
-            my $idxs = [ 0 .. $#{$arg->{list}} ];
+            #my $i = 0;
+            #my $idxs = [ 0 .. $#{$arg->{list}} ];
+            #for my $c ( 0 .. $cols_per_row - 1 ) {
+            #    $i = 1 if $arg->{rest} && $c >= $arg->{rest};
+            #    #$rearranged_list[$c] = [ splice( @{$arg->{list}}, 0, $rows - $i ) ];
+            #    $rearranged_idx[$c]  = [ splice( @{$idxs},        0, $rows - $i ) ];
+            #    say $rows - $i;
+            #}
+            my $begin = 0;
+            my $end = $rows - 1;
             for my $c ( 0 .. $cols_per_row - 1 ) {
-                $i = 1 if $arg->{rest} && $c >= $arg->{rest};
-                $rearranged_list[$c] = [ splice( @{$arg->{list}}, 0, $rows - $i ) ];
-                $rearranged_idx[$c]  = [ splice( @{$idxs},        0, $rows - $i ) ];
+                --$end if $arg->{rest} && $c >= $arg->{rest};
+                $rearranged_idx[$c]  = [ $begin .. $end ];
+                $begin = $end + 1;
+                $end = $begin + $rows - 1;
+                #$end = $#{$arg->{list}} if $end > $#{$arg->{list}};
             }
             for my $r ( 0 .. $rows - 1 ) {
-                my @temp_new_list;
+                #my @temp_new_list;
                 my @temp_idx;
                 for my $c ( 0 .. $cols_per_row - 1 ) {
                     next if $arg->{rest} && $r == $rows - 1 && $c >= $arg->{rest};
-                    push @temp_new_list, sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $rearranged_list[$c][$r] if $arg->{right_justify};   # ----- # 
-                    push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list[$c][$r] if ! $arg->{right_justify};
+                    #push @temp_new_list, sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $rearranged_list[$c][$r] if $arg->{right_justify};   # ----- # 
+                    #push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list[$c][$r] if ! $arg->{right_justify};
                     push @temp_idx, $rearranged_idx[$c][$r];
                 }
-                push @{$arg->{new_list}}, \@temp_new_list;
+                #push @{$arg->{new_list}}, \@temp_new_list;
                 push @{$arg->{rowcol_to_list_index}}, \@temp_idx;
             }
         }
         else {
             my $begin = 0;
             my $end = $cols_per_row - 1;
-            while ( my @rearranged_list = @{$arg->{list}}[$begin..$end] ) {
-                my @temp_new_list;
-                for my $rearranged_list_item ( @rearranged_list ) {
-                    push @temp_new_list, sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $rearranged_list_item if $arg->{right_justify};   # ----- #
-                    push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list_item if ! $arg->{right_justify};
-                }
-                push @{$arg->{new_list}}, \@temp_new_list;
+            while ( @{$arg->{list}}[$begin..$end] ) { ###
+            #while ( my @rearranged_list = @{$arg->{list}}[$begin..$end] ) {
+                #my @temp_new_list;
+                #for my $rearranged_list_item ( @rearranged_list ) {
+                #    push @temp_new_list, sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $rearranged_list_item if $arg->{right_justify};   # ----- #
+                #    push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list_item if ! $arg->{right_justify};
+                #}
+                #push @{$arg->{new_list}}, \@temp_new_list;
                 push @{$arg->{rowcol_to_list_index}}, [ $begin .. $end ];
                 $begin = $end + 1;
                 $end = $begin + $cols_per_row - 1;
@@ -816,9 +829,9 @@ sub _handle_mouse {
     my $mouse_col = $x;
     my( $found_row, $found_col );
     my $found = 0;
-    for my $row ( 0 .. @{$arg->{new_list}} ) {
+    for my $row ( 0 .. @{$arg->{list}} ) {
 	if ( $row == $mouse_row ) {
-            for my $col ( 0 .. $#{$arg->{new_list}[$row]} ) {
+            for my $col ( 0 .. $#{$arg->{rowcol_to_list_index}[$row]} ) {
                 if ( ( $col * $arg->{col_width} < $mouse_col ) && ( ( $col + 1 ) * $arg->{col_width} >= $mouse_col ) ) {
                     $found = 1;
                     $found_row = $row + $arg->{page};
@@ -866,7 +879,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.9
+Version 0.7.10
 
 =cut
 
@@ -896,13 +909,13 @@ Based on the I<choose> function from L<Term::Clui> module.
 
 Differences between L<Term::Clui> and L<Term::Choose>:
 
-L<Term::Clui>'s I<choose> expects a first argument a I<question> (scalar), and as a second argument the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).  
+L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).  
 
 The reason for writing L<Term::Choose> was to get a nicer output. If the list does not fit in one row, I<choose> from L<Term::Clui> puts the elements on the screen without ordering the items in columns. L<Term::Choose> arranges the elements in columns which makes it easier for me to find elements and easier to navigate on the screen.
 
 Another difference is how lists which don't find on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
 
-Strings where the number of characters are not equal to the number of columns on the screen break the output from L<Term::Clui> and L<Term::Choose>. L<Term::Choose::GC> tries to get along with such situations (L</"BUGS AND LIMITATIONS">).
+Strings where the number of characters are not equal to the number of columns on the screen break the output from L<Term::Clui> and L<Term::Choose>. L<Term::Choose::GC> tries to get along with such situations - see L</"BUGS AND LIMITATIONS">.
 
 L<Term::Clui>'s I<choose> prints and returns the chosen items, while I<choose> from L<Term::Choose> only returns the chosen items.
 
@@ -912,7 +925,7 @@ L<Term::Clui> provides a speaking interface, offers a bundle of functions and ha
 
 The I<choose> function from L<Term::Clui> can remember choices made in scalar context and allows multiline question - the first line is put on the top, the subsequent lines are displayed below the list. 
 
-These differences refer to L<Term::Clui|http://search.cpan.org/~pjb/Term-Clui-1.65/Clui.pm> version 1.65. For a more precise description of L<Term::Clui> consult its own documentation. 
+These differences refer to L<Term::Clui> version 1.65. For a more precise description of L<Term::Clui> consult its own documentation. 
 
 =head1 EXPORT
 
