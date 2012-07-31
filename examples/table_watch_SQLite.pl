@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
 
-# Version 0.03
+# Version 0.04
 
 use Cwd qw(realpath);
 use File::Find qw(find); 
@@ -25,17 +25,17 @@ use Unicode::GCString;
 use constant { GO_TO_TOP_LEFT => "\e[1;1H", CLEAR_EOS => "\e[0J" };
 
 my $limit      = 5_000;    # The maximum number of rows read from tables.
-my $root_dir   = tmpdir(); # Cache root directory
+my $root_dir   = tmpdir(); # Cache root directory.
 my $expires_in = '7d';     # Days until data expires. The cache holds the names of the found databases.
 my $no_cache   = 0;        # Reset cache.
 my $max_depth;             # Levels to descend at most when searching in directories for databases.
-my $delete     = 0;        # Enable option "Delete Table".
+my $delete     = 0;        # Enable option "delete table" and "delete database".
 my $min_width  = 30;       # The width the columns should have at least when printed (if possible).
 my $tab        = 2;        # The number of spaces between columns.
 my $undef      = '';       # The string, that will be shown instead of undefined table values.
-my $no_blob    = 1;        # Don't print columns with the type "BLOB";
+my $no_blob    = 1;        # Don't print columns with the type "BLOB".
 
-# colors on a terminal with green fond and black background:
+# colors on a terminal with green font and black background:
 my @colors = ( 'cyan', '', 'magenta', 'white', 'green', 'blue', 'yellow', 'red' );
 my $table_head_color = 'white reverse';
 
@@ -59,7 +59,7 @@ Options:
     -s|--no-cache   : Reset cache. The cache holds the names of the found databases.
     -m|--max-depth  : Levels to descend at most when searching in directories for databases.
     -l|--limit      : Sets the maximum number of rows read from tables.
-    -d|--delete     : Enable "Delete" options to remove tables or databases.
+    -d|--delete     : Enable "delete" options to remove tables or databases.
 HELP
 }
 
@@ -130,7 +130,7 @@ my %auswahl = (
     row_choose_columns => '* choose columns',
     
     count_rows     => '  count rows',
-    delete_table   => '  delete_table',
+    delete_table   => '  delete table',
 );
 
 my @aw_keys = ( qw( 
@@ -148,7 +148,6 @@ push @aw_keys, 'delete_table' if $delete;
 DATABASES: while ( 1 ) {
     my $db = choose( [ undef, @databases ], { prompt => 'Choose Database' . $cached, %lyt, undef => $quit } );
     last DATABASES if not defined $db;
-    chomp $db;
     my $dbh;
     eval {
         $dbh = DBI->connect( "DBI:SQLite:dbname=$db", '', '', { 
@@ -206,7 +205,6 @@ DATABASES: while ( 1 ) {
                 last TABLES;
             }
         }
-
 
         CHOOSE: while ( 1 ) {
             my $choice = choose( [ undef, @auswahl{@aw_keys} ], { %lyt, undef => "  $back" } );
@@ -330,8 +328,8 @@ sub calc_widths {
             if ( $@ ) { 
                 $max->[$i] = length $row->[$i] if length $row->[$i] > $max->[$i];
             }
-            next if not $cut and $count == 1;
-            $not_a_number->[$i]++ if not looks_like_number $row->[$i];
+            next if $count == 1;
+            ++$not_a_number->[$i] if not looks_like_number $row->[$i];
         }
     }
     return $max, $not_a_number;    
@@ -372,7 +370,7 @@ sub recalc_widths {
             my $count = 0;
             for my $i ( 0 .. $#max_tmp ) {
                 next if $min_width_tmp >= $max_tmp[$i];
-                if ( $min_width >= minus_x_percent( $max_tmp[$i], $percent ) ) {
+                if ( $min_width_tmp >= minus_x_percent( $max_tmp[$i], $percent ) ) {
                     $max_tmp[$i] = $min_width_tmp;
                 }
                 else {
@@ -397,7 +395,6 @@ sub recalc_widths {
                 }
             } 
             last if $count == 0;
-            last if $rest < 1;
         }
         $max = [ @max_tmp ] if @max_tmp;
     } 

@@ -1,5 +1,8 @@
 Revision history for Term::Choose
 
+0.7.11  2012-07-31
+        - "_size_and_layout": back to version 0.7.9.
+
 0.7.10  2012-07-30
         - Code refactoring - "_size_and_layout": don't copy the list.
         - Fixed bug in example.
