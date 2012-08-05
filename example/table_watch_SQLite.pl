@@ -3,7 +3,7 @@ use warnings;
 use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
-# Version 0.05
+# Version 0.06
 
 use File::Find qw(find);
 use File::Path qw(make_path);
@@ -43,7 +43,7 @@ Options:
     Cache rootdir: Set the cache root directory.   
     Maxdepth     : Levels to descend at most when searching in directories for databases.  (-m|max-depth) 
     Limit        : Set the maximum number of rows read from tables.  (-l|--limit)
-    No BLOB      : Don't print columns with the column-type BLOB.
+    No BLOB      : Do not print columns with the column-type BLOB.
     Tab          : Set the number of spaces between columns.
     Min-Width    : Set the width the columns should have at least when printed.
     Delete       : Enable the option "delete table" and "delete database".  (-d|--delete)
@@ -472,7 +472,7 @@ sub print_table {
 
         $progress->update( $total ) if $total >= $next_update and $items > $start;
 
-        choose( \@list, { prompt => 0, layout => 3, length_longest => sum( @$max, $opt->{tab} * $#{$max} ) } );
+        choose( \@list, { prompt => 0, layout => 3 } );
         return;
     }
     my $first_row = '';

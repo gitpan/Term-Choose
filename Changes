@@ -1,5 +1,8 @@
 Revision history for Term::Choose
 
+0.7.13  2012-08-05
+        - Removed option "length_longest". 
+
 0.7.12  2012-08-05
         - Code refactoring - "_size_and_layout": don't copy the list.
         - Added option "length_longest".

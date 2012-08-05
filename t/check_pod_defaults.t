@@ -9,7 +9,7 @@ unless ( $ENV{RELEASE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 
-my @long = ( qw( pad pad_one_row empty_string undef length_longest max_list screen_width ) );
+my @long = ( qw( pad pad_one_row empty_string undef max_list screen_width ) );# 
 my @simple = ( qw( right_justify layout vertical clear_screen extra_key mouse_mode beep hide_cursor ) ); # prompt
 my @all = ( @long, @simple );
 

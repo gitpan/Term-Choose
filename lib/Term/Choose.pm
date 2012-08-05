@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.12';
+our $VERSION = '0.7.13';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -255,7 +255,7 @@ sub _print_firstline {
         }
     }
     if ( length $arg->{firstline} > $arg->{maxcols} ) {
-        $arg->{firstline} = substr( $arg->{prompt}, 0, $arg->{maxcols} );
+        $arg->{firstline} = substr( $arg->{prompt}, 0, $arg->{maxcols} - 3 ) . '...';
     }
     print $arg->{firstline};
     $arg->{head} = 1;
@@ -325,7 +325,7 @@ sub _validate_option {
         right_justify    => qr/\A[01]\z/,
         layout           => qr/\A[0123]\z/,
         vertical         => qr/\A[01]\z/,
-        length_longest   => qr/\A[1-9][0-9]{0,8}\z/,
+        #length_longest   => qr/\A[1-9][0-9]{0,8}\z/,
         clear_screen     => qr/\A[01]\z/,
         mouse_mode       => qr/\A[01234]\z/,
         pad              => qr/\A[0-9][0-9]?\z/,
@@ -369,7 +369,7 @@ sub _set_layout {
     $config->{right_justify}    //= 0;
     $config->{layout}           //= 1;
     $config->{vertical}         //= 1;
-    $config->{length_longest}   //= undef;
+    #$config->{length_longest}   //= undef;
     $config->{clear_screen}     //= 0;
     $config->{mouse_mode}       //= 0;
     $config->{pad}              //= 2;
@@ -411,7 +411,7 @@ sub choose {
     $arg->{orig_list} = $orig_list;
     $arg->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
     $arg->{list} = _copy_orig_list( $arg );
-    $arg->{length_longest} = _length_longest( $arg->{list} ) if ! defined $arg->{length_longest};
+    $arg->{length_longest} = _length_longest( $arg->{list} ); # if ! defined $arg->{length_longest};
     $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
     $arg->{wantarray} = $wantarray;
     # $arg->{LastEventWasPress} = 0;  # in order to ignore left-over button-ups # orig comment
@@ -860,7 +860,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.12
+Version 0.7.13
 
 =cut
 
@@ -1103,20 +1103,6 @@ Allowed values: 10 - 99
 0 - items ordered horizontally
 
 1 - items ordered vertically (default)
-
-=head4 length_longest (new)
-
-If the length of the longest element of the list is known before calling I<choose> it can be passed with this option.
-
-If I<length_longest> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
-
-If I<length_longest> is set to a value less than the length of the longest element, then all elements which a length greater as this value will be cut.
-
-A higher value than the length of the longest element wastes space on the screen.
-
-Allowed values: 1 - 999_999_999
-
-(default: undef)
 
 =head4 clear_screen
 

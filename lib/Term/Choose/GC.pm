@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '0.7.12';
+our $VERSION = '0.7.13';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -12,9 +12,9 @@ use Term::Choose qw(choose);
 use Term::ReadKey;
 use Unicode::GCString;
 
-use warnings FATAL => qw(all);
-use Log::Log4perl qw(get_logger);
-my $log = get_logger("Term::Choose::GC");
+#use warnings FATAL => qw(all);
+#use Log::Log4perl qw(get_logger);
+#my $log = get_logger("Term::Choose::GC");
 
 
 use constant {
@@ -343,7 +343,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 0.7.12
+Version 0.7.13
 
 =cut
 
@@ -382,10 +382,6 @@ Nothing by default.
 =head2 UNICODE
 
 While L<Term::Choose> uses the Perl builtin functions I<length> to determine the length of strings and I<sprintf> widths to justify strings L<Term::Choose::GC> uses L<Unicode::GCString::columns|http://search.cpan.org/perldoc?Unicode::GCString#Sizes> to determine the length of strings. To justify strings it uses its own function based on L<Unicode::GCString>. The codeparts using L<Unicode::GCString::columns|http://search.cpan.org/perldoc?Unicode::GCString#Sizes> run in I<eval> blocks: if the code in the eval block fails builtin I<length> resp. I<substr> are used instead. The reason for this procedure with I<eval> is to make L<Term::Choose::GC>'s choose work also with non-unicode characters.
-
-=head4 length_longest
-
-If the option I<length_longest> is set, it is needed to calculate the value from the strings length of print columns which can be achieved by using the I<columns> method from L<Unicode::GCString>.
 
 =head2 REQUIREMENTS
 
