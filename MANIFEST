@@ -1,6 +1,6 @@
 Build.PL
 Changes
-examples/table_watch_SQLite.pl
+example/table_watch_SQLite.pl
 ignore.txt
 lib/Term/Choose.pm
 lib/Term/Choose/GC.pm
@@ -11,6 +11,7 @@ META.yml
 README
 t/00-load.t
 t/boilerplate.t
+t/check_forked_functions.t
 t/check_pod_defaults.t
 t/manifest.t
 t/pod-coverage.t

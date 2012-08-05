@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.11';
+our $VERSION = '0.7.12';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -12,7 +12,6 @@ use Carp;
 use Scalar::Util qw(reftype);
 use Signals::XSIG;
 use Term::ReadKey;
-# ----- #
 
 #use warnings FATAL => qw(all);
 #use Log::Log4perl qw(get_logger);
@@ -32,7 +31,7 @@ use constant {
     GET_CURSOR_POSITION                => "\e[6n",
 
     HIDE_CURSOR                        => "\e[?25l",
-    SHOW_CURSOR                        => "\e[?25h", 
+    SHOW_CURSOR                        => "\e[?25h",
 
     SET_ANY_EVENT_MOUSE_1003           => "\e[?1003h",
     SET_EXT_MODE_MOUSE_1005            => "\e[?1005h",
@@ -46,7 +45,7 @@ use constant {
 
     BEEP                               => "\07",
     CLEAR_SCREEN                       => "\e[2J",
-    GO_TO_TOP_LEFT                     => "\e[1;1H", 
+    GO_TO_TOP_LEFT                     => "\e[1;1H",
     CLEAR_EOS                          => "\e[0J",
     RESET                              => "\e[0m",
     UNDERLINE                          => "\e[4m",
@@ -62,7 +61,7 @@ use constant {
 
 use constant {
     NEXT_getch          => -1,
-    
+
     CONTROL_c           => 0x03,
     KEY_TAB             => 0x09,
     KEY_ENTER           => 0x0d,
@@ -114,7 +113,7 @@ sub _getch {
                 my $low_2_bits = $event_type & BIT_MASK_xxxxxx11;
                 if ( $low_2_bits == 3 ) {
                     $button_pressed = 0;
-                } 
+                }
                 else {
                     if ( $event_type & BIT_MASK_x1xxxxxx ) {
                         $button_pressed = $low_2_bits + 4; # button 4, 5
@@ -137,7 +136,7 @@ sub _getch {
                     my $abs_curs_X = 0;
                     while ( 1 ) {
                         $c1 = ReadKey 0;
-                        last if $c1 !~ /\d/; 
+                        last if $c1 !~ /\d/;
                         $abs_curs_X = 10 * $abs_curs_X + $c1;
                     }
                     if ( $c1 eq 'R' ) {
@@ -231,41 +230,36 @@ sub _end_win {
 
 sub _length_longest {
     my ( $list ) = @_;
-    # ----- #
-    my $longest = length $list->[0];    # ----- #
+    my $longest = length $list->[0];
     for my $str ( @{$list} ) {
-        # ----- #
-        if ( length $str > $longest ) { # ----- #
-            $longest = length $str;     # ----- #
+        if ( length $str > $longest ) {
+            $longest = length $str;
         }
     }
     return $longest;
 }
 
+
 sub _print_firstline {
     my ( $arg ) = @_;
     $arg->{prompt} =~ s/\p{Space}/ /g;
-    $arg->{prompt} =~ s/\p{Cntrl}//g;      
+    $arg->{prompt} =~ s/\p{Cntrl}//g;
     $arg->{firstline} = $arg->{prompt};
-    # ----- #
     if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
         if ( $arg->{prompt} ) {
             $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
-            $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};    # ----- #
+            $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};
         }
         else {
             $arg->{firstline} = '';
         }
     }
-    if ( length $arg->{firstline} > $arg->{maxcols} ) {                     # ----- #
-        # ----- #
-        $arg->{firstline} = substr( $arg->{prompt}, 0, $arg->{maxcols} );   # ----- #
+    if ( length $arg->{firstline} > $arg->{maxcols} ) {
+        $arg->{firstline} = substr( $arg->{prompt}, 0, $arg->{maxcols} );
     }
     print $arg->{firstline};
     $arg->{head} = 1;
 }
-    
-
 
 
 sub _write_first_screen {
@@ -293,7 +287,7 @@ sub _write_first_screen {
     $arg->{maxrows_index} = 0 if $arg->{maxrows_index} < 0;
     $arg->{begin_page} = 0;
     $arg->{end_page} = $arg->{maxrows_index};
-    $arg->{end_page} = $#{$arg->{new_list}} if $arg->{maxrows_index} > $#{$arg->{new_list}};
+    $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{maxrows_index} > $#{$arg->{rowcol2list}};
     $arg->{page} = 0;
     _wr_screen( $arg );
     print GET_CURSOR_POSITION if $arg->{mouse_mode};  # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
@@ -330,7 +324,8 @@ sub _validate_option {
         prompt           => '',
         right_justify    => qr/\A[01]\z/,
         layout           => qr/\A[0123]\z/,
-        vertical_order   => qr/\A[01]\z/, 
+        vertical         => qr/\A[01]\z/,
+        length_longest   => qr/\A[1-9][0-9]{0,8}\z/,
         clear_screen     => qr/\A[01]\z/,
         mouse_mode       => qr/\A[01234]\z/,
         pad              => qr/\A[0-9][0-9]?\z/,
@@ -373,7 +368,8 @@ sub _set_layout {
     $config->{prompt}           //= $prompt;
     $config->{right_justify}    //= 0;
     $config->{layout}           //= 1;
-    $config->{vertical_order}   //= 1;
+    $config->{vertical}         //= 1;
+    $config->{length_longest}   //= undef;
     $config->{clear_screen}     //= 0;
     $config->{mouse_mode}       //= 0;
     $config->{pad}              //= 2;
@@ -385,7 +381,6 @@ sub _set_layout {
     $config->{max_list}         //= 100_000;
     $config->{screen_width}     //= undef; # 100
     $config->{hide_cursor}      //= 1;
-    $config->{mouse_mode} = 0 if defined $ENV{CLUI_MOUSE} && $ENV{CLUI_MOUSE} =~ /\Aoff\z/i;
     return $config;
 }
 
@@ -398,11 +393,11 @@ sub choose {
     if ( defined $config ) {
         croak "choose: Second argument is not a HASH reference." if ! reftype( $config );
         croak "choose: Second argument is not a HASH reference." if reftype( $config ) ne 'HASH'
-    }    
+    }
     if ( ! @$orig_list ) {
         carp "choose: First argument refers to an empty list!";
         return;
-    }   
+    }
     my $wantarray;
     $wantarray = wantarray ? 1 : 0 if defined wantarray;
     my $arg = _set_layout( $wantarray, $config );
@@ -411,12 +406,12 @@ sub choose {
         carp "choose: List has $list_length items.\nchoose: \"max_list\" is set to $arg->{max_list} items!\nchoose: The first $arg->{max_list} itmes are used by choose.";
         $arg->{list_to_long} = 1;
         print "Press a key to continue";
-        my $dummy = <STDIN>;        
-    }    
+        my $dummy = <STDIN>;
+    }
     $arg->{orig_list} = $orig_list;
     $arg->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
     $arg->{list} = _copy_orig_list( $arg );
-    $arg->{length_longest} = _length_longest( $arg->{list} );
+    $arg->{length_longest} = _length_longest( $arg->{list} ) if ! defined $arg->{length_longest};
     $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
     $arg->{wantarray} = $wantarray;
     # $arg->{LastEventWasPress} = 0;  # in order to ignore left-over button-ups # orig comment
@@ -436,23 +431,36 @@ sub choose {
             _write_first_screen( $arg );
             next;
         }
+        # $arg->{rowcol2list} holds the new list (AoA) formated in "_size_and_layout" appropirate to the choosen layout.
+        # $arg->{rowcol2list} does not hold the values dircetly but the respective list indexes from the original list.
+        # If the original list would be ( 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' ) and the new formated list should be
+        #     a d g
+        #     b e h
+        #     c f
+        # then the $arg->{rowcol2list} would look like this
+        #     0 3 6
+        #     1 4 7
+        #     2 5
+        # so e.g. to get the second value in the second row: $arg->{list}[ $arg->{rowcol2list}[1][1] ]
+        # $#{$arg->{rowcol2list}} would be the index of the last row of the new list
+        # and the index for the last column in the first row should be $#{$arg->{rowcol2list}[0]}.
         given ( $c ) {
             when ( $c == KEY_j || $c == KEY_DOWN ) {
-                if ( $#{$arg->{new_list}} == 0 || ! ( $arg->{new_list}[$arg->{this_cell}[ROW]+1] && $arg->{new_list}[$arg->{this_cell}[ROW]+1][$arg->{this_cell}[COL]] ) ) {
+                if ( $#{$arg->{rowcol2list}} == 0 || ! ( $arg->{rowcol2list}[$arg->{this_cell}[ROW]+1] && $arg->{rowcol2list}[$arg->{this_cell}[ROW]+1][$arg->{this_cell}[COL]] ) ) {
                     _beep( $arg );
                 }
                 else {
-                    $arg->{this_cell}[ROW]++;                    
+                    $arg->{this_cell}[ROW]++;
                     if ( $arg->{this_cell}[ROW] <= $arg->{end_page} ) {
                         _wr_cell( $arg, $arg->{this_cell}[ROW] - 1, $arg->{this_cell}[COL] );
                         _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                     }
                     else {
-                        $arg->{page} = $arg->{this_cell}[ROW];                        
+                        $arg->{page} = $arg->{this_cell}[ROW];
                         $arg->{end_page}++;
                         $arg->{begin_page} = $arg->{end_page};
                         $arg->{end_page} = $arg->{end_page} + $arg->{maxrows_index};
-                        $arg->{end_page} = $#{$arg->{new_list}} if $arg->{end_page} > $#{$arg->{new_list}};
+                        $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
                         _wr_screen( $arg );
                     }
                 }
@@ -462,13 +470,13 @@ sub choose {
                     _beep( $arg );
                 }
                 else {
-                    $arg->{this_cell}[ROW]--;                     
-                    if ( $arg->{this_cell}[ROW] >= $arg->{begin_page} ) {                    
+                    $arg->{this_cell}[ROW]--;
+                    if ( $arg->{this_cell}[ROW] >= $arg->{begin_page} ) {
                         _wr_cell( $arg, $arg->{this_cell}[ROW] + 1, $arg->{this_cell}[COL] );
                         _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                     }
                     else {
-                        $arg->{page} = $arg->{this_cell}[ROW] - $arg->{maxrows_index}; 
+                        $arg->{page} = $arg->{this_cell}[ROW] - $arg->{maxrows_index};
                         $arg->{begin_page}--;
                         $arg->{end_page} = $arg->{begin_page};
                         $arg->{begin_page} = $arg->{begin_page} - $arg->{maxrows_index};
@@ -478,20 +486,20 @@ sub choose {
                 }
             }
             when ( $c == KEY_TAB ) {
-                if ( $arg->{this_cell}[COL] == $#{$arg->{new_list}[$arg->{this_cell}[ROW]]} && $arg->{this_cell}[ROW] == $#{$arg->{new_list}} ) {
+                if ( $arg->{this_cell}[COL] == $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]} && $arg->{this_cell}[ROW] == $#{$arg->{rowcol2list}} ) {
                     _beep( $arg );
                 }
                 else {
-                    if ( $arg->{this_cell}[COL] < $#{$arg->{new_list}[$arg->{this_cell}[ROW]]} ) {
+                    if ( $arg->{this_cell}[COL] < $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]} ) {
                         $arg->{this_cell}[COL]++;
                         _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] - 1 );
                         _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] );
                     }
                     else {
-                        $arg->{this_cell}[ROW]++;                        
-                        if ( $arg->{this_cell}[ROW] <= $arg->{end_page} ) {                       
+                        $arg->{this_cell}[ROW]++;
+                        if ( $arg->{this_cell}[ROW] <= $arg->{end_page} ) {
                             $arg->{this_cell}[COL] = 0;
-                            _wr_cell( $arg, $arg->{this_cell}[ROW] - 1, $#{$arg->{new_list}[$arg->{this_cell}[ROW] - 1]} );
+                            _wr_cell( $arg, $arg->{this_cell}[ROW] - 1, $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW] - 1]} );
                             _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                         }
                         else {
@@ -499,7 +507,7 @@ sub choose {
                             $arg->{end_page}++;
                             $arg->{begin_page} = $arg->{end_page};
                             $arg->{end_page} = $arg->{end_page} + $arg->{maxrows_index};
-                            $arg->{end_page} = $#{$arg->{new_list}} if $arg->{end_page} > $#{$arg->{new_list}};
+                            $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
                             $arg->{this_cell}[COL] = 0;
                             _wr_screen( $arg );
                         }
@@ -519,24 +527,24 @@ sub choose {
                     else {
                         $arg->{this_cell}[ROW]--;
                         if ( $arg->{this_cell}[ROW] >= $arg->{begin_page} ) {
-                            $arg->{this_cell}[COL] = $#{$arg->{new_list}[$arg->{this_cell}[ROW]]};
+                            $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                             _wr_cell( $arg, $arg->{this_cell}[ROW] + 1, 0 );
                             _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                         }
                         else {
-                            $arg->{page} = $arg->{this_cell}[ROW] - $arg->{maxrows_index};                            
+                            $arg->{page} = $arg->{this_cell}[ROW] - $arg->{maxrows_index};
                             $arg->{begin_page}--;
                             $arg->{end_page} = $arg->{begin_page};
                             $arg->{begin_page} = $arg->{begin_page} - $arg->{maxrows_index};
                             $arg->{begin_page} = 0 if $arg->{begin_page} < 0;
-                            $arg->{this_cell}[COL] = $#{$arg->{new_list}[$arg->{this_cell}[ROW]]};
+                            $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                             _wr_screen( $arg );
                         }
                     }
                 }
             }
             when ( $c == KEY_l || $c == KEY_RIGHT ) {
-                if ( $arg->{this_cell}[COL] == $#{$arg->{new_list}[$arg->{this_cell}[ROW]]} ) {
+                if ( $arg->{this_cell}[COL] == $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]} ) {
                     _beep( $arg );
                 }
                 else {
@@ -567,7 +575,7 @@ sub choose {
                 else {
                     _beep( $arg );
                 }
-            }  
+            }
             when ( $c == CONTROL_c ) {
                 _end_win( $arg );
                 print "^C";
@@ -579,32 +587,32 @@ sub choose {
                 _end_win( $arg );
                 return if ! defined $arg->{wantarray};
                 if ( $arg->{wantarray} ) {
-                    if ( $arg->{vertical_order} ) {
-                        for my $col ( 0 .. $#{$arg->{new_list}[0]} ) {
-                            for my $row ( 0 .. $#{$arg->{new_list}} ) {
+                    if ( $arg->{vertical} ) {
+                        for my $col ( 0 .. $#{$arg->{rowcol2list}[0]} ) {
+                            for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
                                 if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
-                                    my $i = $arg->{rowcol_to_list_index}[$row][$col];
-                                    $i //= $row; # ? layout
+                                    my $i = $arg->{rowcol2list}[$row][$col];
+                                    #$i //= $row; # ? layout
                                     push @chosen, $arg->{orig_list}[$i];
                                 }
                             }
                         }
                     }
                     else {
-                         for my $row ( 0 .. $#{$arg->{new_list}} ) {
-                            for my $col ( 0 .. $#{$arg->{new_list}[$row]} ) {
+                         for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
+                            for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
                                 if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
-                                    my $i = $arg->{rowcol_to_list_index}[$row][$col];
-                                    $i //= $row; # ? layout
+                                    my $i = $arg->{rowcol2list}[$row][$col];
+                                    #$i //= $row; # ? layout
                                     push @chosen, $arg->{orig_list}[$i];
                                 }
                             }
-                        }                                
+                        }
                     }
                     return @chosen;
                 }
                 else {
-                    my $i = $arg->{rowcol_to_list_index}[$arg->{this_cell}[ROW]][$arg->{this_cell}[COL]];
+                    my $i = $arg->{rowcol2list}[$arg->{this_cell}[ROW]][$arg->{this_cell}[COL]];
                     return $arg->{orig_list}[$i];
                 }
             }
@@ -629,7 +637,7 @@ sub choose {
 }
 
 
-sub _beep { 
+sub _beep {
     my ( $arg ) = @_;
     print BEEP if $arg->{beep};
 }
@@ -660,7 +668,7 @@ sub _wr_screen {
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
     for my $row ( $arg->{begin_page} .. $arg->{end_page} ) {
-        for my $col ( 0 .. $#{$arg->{new_list}[$row]} ) {
+        for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
             _wr_cell( $arg, $row, $col ); # unless [ $row, $col ] ~~ $this_cell;
         }
     }
@@ -670,23 +678,26 @@ sub _wr_screen {
 
 sub _wr_cell {
     my( $arg, $row, $col ) = @_;
-    if ( $#{$arg->{new_list}} == 0 ) {
+    if ( $#{$arg->{rowcol2list}} == 0 ) {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
-                # ----- #
-                $lngth += length $arg->{new_list}[$row][$cl];   # ----- #
+                $lngth += length $arg->{list}[$arg->{rowcol2list}[$row][$cl]];
                 $lngth += $arg->{pad_one_row} // 0;
             }
         }
         _goto( $arg, $row + $arg->{head} - $arg->{page}, $lngth );
-    } 
+        print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
+        print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
+        print $arg->{list}[$arg->{rowcol2list}[$row][$col]];
+    }
     else {
         _goto( $arg, $row + $arg->{head} - $arg->{page}, $col * $arg->{col_width} );
+        print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
+        print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
+        printf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$arg->{rowcol2list}[$row][$col]] if   $arg->{right_justify};
+        printf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$arg->{rowcol2list}[$row][$col]] if ! $arg->{right_justify};
     }
-    print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
-    print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
-    print $arg->{new_list}[$row][$col];
     print RESET if $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell};
 }
 
@@ -694,24 +705,22 @@ sub _wr_cell {
 sub _size_and_layout {
     my ( $arg ) = @_;
     my $layout = $arg->{layout};
-    $arg->{new_list} = [];
-    $arg->{rowcol_to_list_index} = [];
+    $arg->{rowcol2list} = [];
     $arg->{all_in_first_row} = 0;
     if ( $arg->{length_longest} > $arg->{maxcols} ) {
         $arg->{length_longest} = $arg->{maxcols};
-        $layout = 2;
+        $layout = 3;
     }
-    # layout
+    ### layout
     $arg->{this_cell} = [ 0, 0 ];
     my $all_in_first_row;
-    if ( $layout == 3 ) {
-        $layout = 2 if scalar @{$arg->{list}} <= $arg->{maxrows};
+    if ( $layout == 2 ) {
+        $layout = 3 if scalar @{$arg->{list}} <= $arg->{maxrows};
     }
     elsif ( $layout < 2 ) {
         for my $idx ( 0 .. $#{$arg->{list}} ) {
             $all_in_first_row .= $arg->{list}[$idx];
-            # ----- #
-            if ( length $all_in_first_row > $arg->{maxcols} ) { # ----- #
+            if ( length $all_in_first_row > $arg->{maxcols} ) {
                 $all_in_first_row = '';
                 last;
             }
@@ -719,75 +728,59 @@ sub _size_and_layout {
         }
     }
     if ( $all_in_first_row ) {
-	$arg->{all_in_first_row} = 1;
-	$arg->{new_list}[0] = [ @{$arg->{list}} ];
-        $arg->{rowcol_to_list_index}[0] = [ 0 .. $#{$arg->{list}} ];	
+        $arg->{all_in_first_row} = 1;
+        $arg->{rowcol2list}[0] = [ 0 .. $#{$arg->{list}} ];
     }
-    elsif ( $layout == 2 ) {
+    elsif ( $layout == 3 ) {
         for my $idx ( 0 .. $#{$arg->{list}} ) {
-            # ----- #
-            if ( length $arg->{list}[$idx] > $arg->{length_longest} ) {                                      # ----- #
-                $arg->{list}[$idx] = substr( $arg->{list}[$idx], 0, $arg->{length_longest} - 3 ) . '...';    # ----- #
+            if ( length $arg->{list}[$idx] > $arg->{length_longest} ) {
+                $arg->{list}[$idx] = substr( $arg->{list}[$idx], 0, $arg->{length_longest} - 3 ) . '...';
             }
-            $arg->{new_list}[$idx][0] = sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$idx] if $arg->{right_justify};   # ----- #
-            $arg->{new_list}[$idx][0] = sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$idx] if ! $arg->{right_justify};
-            $arg->{rowcol_to_list_index}[$idx][0] = $idx;
+            $arg->{rowcol2list}[$idx][0] = $idx;
         }
     }
     else {
         # auto_format
-	my $maxcls = $arg->{maxcols};
-	if ( ( $arg->{layout} == 1 || $arg->{layout} == 3 ) && $arg->{maxrows} > 0 ) {
+        my $maxcls = $arg->{maxcols};
+        if ( ( $arg->{layout} == 1 || $arg->{layout} == 2 ) && $arg->{maxrows} > 0 ) {
             my $tmc = int( @{$arg->{list}} / $arg->{maxrows} );
-	    $tmc++ if @{$arg->{list}} % $arg->{maxrows};
-	    $tmc *= $arg->{col_width};
-	    if ( $tmc < $maxcls ) {
-		$tmc = int( $tmc + ( ( $maxcls - $tmc ) / 2 ) ) if $arg->{layout} == 1;
-                $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 6 ) ) if $arg->{layout} == 3;
-		$maxcls = $tmc;
-	    }
-	}
-        # end auto_format
-    # end layout
-    # row_first
+            $tmc++ if @{$arg->{list}} % $arg->{maxrows};
+            $tmc *= $arg->{col_width};
+            if ( $tmc < $maxcls ) {
+                $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 2 ) ) if $arg->{layout} == 1;
+                $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 6 ) ) if $arg->{layout} == 2;
+                $maxcls = $tmc;
+            }
+        }
+    ### vertical
         my $cols_per_row = int( $maxcls / $arg->{col_width} );
         $cols_per_row = 1 if $cols_per_row < 1;
         my $rows = int( ( $#{$arg->{list}} + $cols_per_row ) / $cols_per_row );
         $arg->{rest} = @{$arg->{list}} % $cols_per_row;
-        if ( $arg->{vertical_order} ) {
-            my @rearranged_list;
+        if ( $arg->{vertical} ) {
             my @rearranged_idx;
-            my $i = 0;
-            my $idxs = [ 0 .. $#{$arg->{list}} ];
+            my $begin = 0;
+            my $end = $rows - 1;
             for my $c ( 0 .. $cols_per_row - 1 ) {
-                $i = 1 if $arg->{rest} && $c >= $arg->{rest};
-                $rearranged_list[$c] = [ splice( @{$arg->{list}}, 0, $rows - $i ) ];
-                $rearranged_idx[$c]  = [ splice( @{$idxs},        0, $rows - $i ) ];
+                --$end if $arg->{rest} && $c >= $arg->{rest};
+                $rearranged_idx[$c]  = [ $begin .. $end ];
+                $begin = $end + 1;
+                $end = $begin + $rows - 1;
             }
             for my $r ( 0 .. $rows - 1 ) {
-                my @temp_new_list;
                 my @temp_idx;
                 for my $c ( 0 .. $cols_per_row - 1 ) {
                     next if $arg->{rest} && $r == $rows - 1 && $c >= $arg->{rest};
-                    push @temp_new_list, sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $rearranged_list[$c][$r] if $arg->{right_justify};   # ----- # 
-                    push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list[$c][$r] if ! $arg->{right_justify};
                     push @temp_idx, $rearranged_idx[$c][$r];
                 }
-                push @{$arg->{new_list}}, \@temp_new_list;
-                push @{$arg->{rowcol_to_list_index}}, \@temp_idx;
+                push @{$arg->{rowcol2list}}, \@temp_idx;
             }
         }
         else {
             my $begin = 0;
             my $end = $cols_per_row - 1;
-            while ( my @rearranged_list = @{$arg->{list}}[$begin..$end] ) {
-                my @temp_new_list;
-                for my $rearranged_list_item ( @rearranged_list ) {
-                    push @temp_new_list, sprintf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $rearranged_list_item if $arg->{right_justify};   # ----- #
-                    push @temp_new_list, sprintf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $rearranged_list_item if ! $arg->{right_justify};
-                }
-                push @{$arg->{new_list}}, \@temp_new_list;
-                push @{$arg->{rowcol_to_list_index}}, [ $begin .. $end ];
+            while ( @{$arg->{list}}[$begin..$end] ) { ###
+                push @{$arg->{rowcol2list}}, [ $begin .. $end ];
                 $begin = $end + 1;
                 $end = $begin + $cols_per_row - 1;
                 $end = $#{$arg->{list}} if $end > $#{$arg->{list}};
@@ -811,14 +804,14 @@ sub _handle_mouse {
 #        $arg->{LastEventWasPress} = 0;
 #        return NEXT_getch;
 #    }
-    return NEXT_getch if $y < $top_row;    
+    return NEXT_getch if $y < $top_row;
     my $mouse_row = $y - $top_row;
     my $mouse_col = $x;
     my( $found_row, $found_col );
     my $found = 0;
-    for my $row ( 0 .. @{$arg->{new_list}} ) {
+    for my $row ( 0 .. @{$arg->{list}} ) {
 	if ( $row == $mouse_row ) {
-            for my $col ( 0 .. $#{$arg->{new_list}[$row]} ) {
+            for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
                 if ( ( $col * $arg->{col_width} < $mouse_col ) && ( ( $col + 1 ) * $arg->{col_width} >= $mouse_col ) ) {
                     $found = 1;
                     $found_row = $row + $arg->{page};
@@ -856,6 +849,7 @@ sub _handle_mouse {
 
 __END__
 
+
 =pod
 
 =encoding utf8
@@ -866,7 +860,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.11
+Version 0.7.12
 
 =cut
 
@@ -882,7 +876,7 @@ Version 0.7.11
 
     my @choices = choose( [ 1 .. 100 ], { right_justify => 1 } ); # multiple choice
     say "@choices";
-    
+
     choose( [ 'Press ENTER to continue' ], { prompt => 0 } );     # no choice
 
 
@@ -896,7 +890,7 @@ Based on the I<choose> function from L<Term::Clui> module.
 
 Differences between L<Term::Clui> and L<Term::Choose>:
 
-L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).  
+L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).
 
 The reason for writing L<Term::Choose> was to get a nicer output. If the list does not fit in one row, I<choose> from L<Term::Clui> puts the elements on the screen without ordering the items in columns. L<Term::Choose> arranges the elements in columns which makes it easier for me to find elements and easier to navigate on the screen.
 
@@ -906,13 +900,15 @@ Strings where the number of characters are not equal to the number of columns on
 
 L<Term::Clui>'s I<choose> prints and returns the chosen items, while I<choose> from L<Term::Choose> only returns the chosen items.
 
+L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> is set to I<off>. In L<Term::Choose> the mouse mode is set with the option I<mouse_mode>.
+
 Only in L<Term::Clui>:
 
 L<Term::Clui> provides a speaking interface, offers a bundle of functions and has a fallback to work when only Perl core modules are available.
 
-The I<choose> function from L<Term::Clui> can remember choices made in scalar context and allows multiline question - the first line is put on the top, the subsequent lines are displayed below the list. 
+The I<choose> function from L<Term::Clui> can remember choices made in scalar context and allows multiline question - the first line is put on the top, the subsequent lines are displayed below the list.
 
-These differences refer to L<Term::Clui> version 1.65. For a more precise description of L<Term::Clui> consult its own documentation. 
+These differences refer to L<Term::Clui> version 1.65. For a more precise description of L<Term::Clui> consult its own documentation.
 
 =head1 EXPORT
 
@@ -927,34 +923,34 @@ Nothing by default.
     $scalar = choose( $array_ref [, \%options] );
 
     @array =  choose( $array_ref [, \%options] );
-    
+
               choose( $array_ref [, \%options] );
 
 I<choose> expects as first argument an array reference which passes the list elements available for selection (in void context no selection can be made).
-    
-Options can be passed with a hash reference as a second (optional) argument. 
+
+Options can be passed with a hash reference as a second (optional) argument.
 
 =head3 Usage and return values
 
 =over
 
-=item 
+=item
 
-If I<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and "Return". 
+If I<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and "Return".
 
 I<choose> then returns the chosen item.
 
-=item 
+=item
 
-If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar". 
+If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar".
 
 I<choose> then returns the list of marked items, (including the item highlight when "Return" was pressed).
 
-=item 
+=item
 
 If I<choose> is called in an I<void context>, the user can move around but mark nothing; the output shown by I<choose> can be closed with "Return".
 
-I<choose> then returns nothing.
+Called in void context I<choose> returns nothing.
 
 =back
 
@@ -978,27 +974,27 @@ For the output on the screen the list elements are modified:
 
 =over
 
-=item * 
+=item *
 
 if a list element is not defined the value from the option I<undef> is assigned to the element.
 
-=item * 
+=item *
 
 if a list element holds an empty string the value from the option I<empty_string> is assigned to the element.
 
-=item * 
+=item *
 
-spaces in list elements are replace with simple spaces. 
+white-spaces in list elements are replaced with simple spaces.
 
     $element =~ s/\p{Space}/ /g;
-        
-=item * 
+
+=item *
 
 control characters are removed.
 
     $element =~ s/\p{Cntrl}//g;
 
-=item * 
+=item *
 
 if the length of a list element is greater than the width of the screen the element is cut.
 
@@ -1007,7 +1003,7 @@ if the length of a list element is greater than the width of the screen the elem
 
 =back
 
-All these modifications are made on a copy of the original list so I<choose> returns the chosen elements as they were passed to the function without modifications. 
+All these modifications are made on a copy of the original list so I<choose> returns the chosen elements as they were passed to the function without modifications.
 
 =head3 Options
 
@@ -1017,9 +1013,9 @@ Defaults may change in a future release.
 
 =head4 prompt
 
-If prompt is undefined default prompt-string will be shown.
+If I<prompt> is undefined default prompt-string will be shown.
 
-If prompt is 0 no prompt-line will be shown.
+If I<prompt> is 0 no prompt-line will be shown.
 
 default in list and scalar context: 'Your choice:'
 
@@ -1031,7 +1027,9 @@ default in void context: 'Close with ENTER'
 
 1 - columns are right justified
 
-=head4 layout
+=head4 layout (modified)
+
+From broad to narrow: 0 > 1 > 2 > 3
 
 =over
 
@@ -1064,21 +1062,7 @@ default in void context: 'Close with ENTER'
 
 =item
 
-2 - all in a single column
-
- .----------------------.   .----------------------.   .----------------------.   .----------------------.
- | ..                   |   | ..                   |   | ..                   |   | ..                   |
- | ..                   |   | ..                   |   | ..                   |   | ..                   |
- | ..                   |   | ..                   |   | ..                   |   | ..                   |
- |                      |   | ..                   |   | ..                   |   | ..                   |
- |                      |   |                      |   | ..                   |   | ..                   |
- |                      |   |                      |   |                      |   | ..                   |
- '----------------------'   '----------------------'   '----------------------'   '----------------------'
-
-
-=item
-
-3 - layout "V"
+2 - layout "V"
 
  .----------------------.   .----------------------.   .----------------------.   .----------------------.
  | ..                   |   | .. ..                |   | .. .. ..             |   | .. .. .. .. .. .. .. |
@@ -1089,30 +1073,56 @@ default in void context: 'Close with ENTER'
  | ..                   |   |                      |   |                      |   | .. .. .. .. .. .. .. |
  '----------------------'   '----------------------'   '----------------------'   '----------------------'
 
+=item
+
+3 - all in a single column
+
+ .----------------------.   .----------------------.   .----------------------.   .----------------------.
+ | ..                   |   | ..                   |   | ..                   |   | ..                   |
+ | ..                   |   | ..                   |   | ..                   |   | ..                   |
+ | ..                   |   | ..                   |   | ..                   |   | ..                   |
+ |                      |   | ..                   |   | ..                   |   | ..                   |
+ |                      |   |                      |   | ..                   |   | ..                   |
+ |                      |   |                      |   |                      |   | ..                   |
+ '----------------------'   '----------------------'   '----------------------'   '----------------------'
+
 =back
- 
+
 =head4 screen_width
 
 If set, restricts the screen width to I<screen_width> percentage of the effective screen width.
 
-If not defined all the screen width is used. 
+If not defined all the screen width is used.
 
 Allowed values: 10 - 99
 
 (default: undef)
 
-=head4 vertical_order
+=head4 vertical (replaces I<vertical_order>)
 
 0 - items ordered horizontally
 
 1 - items ordered vertically (default)
+
+=head4 length_longest (new)
+
+If the length of the longest element of the list is known before calling I<choose> it can be passed with this option.
+
+If I<length_longest> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
+
+If I<length_longest> is set to a value less than the length of the longest element, then all elements which a length greater as this value will be cut.
+
+A higher value than the length of the longest element wastes space on the screen.
+
+Allowed values: 1 - 999_999_999
+
+(default: undef)
 
 =head4 clear_screen
 
 0 - off (default)
 
 1 - clears the screen before printing the choices
-
 
 =head4 mouse_mode
 
@@ -1186,7 +1196,7 @@ allowed values: 1 - 999_999_999
 
 =item * If the list referred by the first argument has more than I<max_list> items (default 100_000) I<choose> warns and uses the first I<max_list> list items.
 
-=item * If the (optional) second argument is not a hash reference I<choose> dies. 
+=item * If the (optional) second argument is not a hash reference I<choose> dies.
 
 =item * If an option does not exist I<choose> warns.
 
@@ -1234,12 +1244,12 @@ The Terminal needs to understand the following ANSI escape sequences:
 
     "\e[7m"     Inverse (SGR)
 
-        
+
 If option "hide_cursor" is enabled:
 
     "\e[?25l"   Hide Cursor (DECTCEM)
 
-    "\e[?25h"   Show Cursor (DECTCEM)  
+    "\e[?25h"   Show Cursor (DECTCEM)
 
 If option "clear_screen" is enabled:
 
@@ -1249,13 +1259,13 @@ If option "clear_screen" is enabled:
 
 If option "mouse_mode" is set:
 
-    "\e[6n"     Get Cursor Position (Device Status Report) 
+    "\e[6n"     Get Cursor Position (Device Status Report)
 
-Mouse Tracking: The escape sequences 
+Mouse Tracking: The escape sequences
 
-    "\e[?1003h", "\e[?1005h", "\e[?1006h" 
+    "\e[?1003h", "\e[?1005h", "\e[?1006h"
 
-and 
+and
 
     "\e[?1003l", "\e[?1005l", "\e[?1006l"
 
@@ -1268,9 +1278,9 @@ are used to enable/disable the different mouse modes.
 This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings. Therefore strings with characters that take more or less than one print column will break the layout. Using L<Term::Choose::GC> instead improves the layout in such conditions. It determines the string length by using the I<columns> method from L<Unicode::GCString> module.
 
     use Term::Choose:GC qw(choose);
-    
+
 Usage and options are the same as for L<Term::Choose>.
-    
+
 The use of L<Term::Choose::GC> needs additionally the L<Unicode::GCString> module to be installed.
 
 Known drawbacks:
@@ -1301,6 +1311,4 @@ This library is free software; you can redistribute it and/or modify it under th
 
 =cut
 
-1; # End of Term::Choose
-
-
+# End of Term::Choose

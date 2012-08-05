@@ -1,5 +1,14 @@
 Revision history for Term::Choose
 
+0.7.12  2012-08-05
+        - Code refactoring - "_size_and_layout": don't copy the list.
+        - Added option "length_longest".
+        - Changed "_unicode_cut" and "_unicode_sprintf"
+        - Changed optionname "vertical_order" to "vertical".
+        - Changed the order of the values from the option "layout".
+        - Updated example.
+        - Improved documentation.
+
 0.7.11  2012-07-31
         - "_size_and_layout": back to version 0.7.9.
 
