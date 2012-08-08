@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.13';
+our $VERSION = '0.7.14';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -240,24 +240,24 @@ sub _length_longest {
 }
 
 
-sub _print_firstline {
+sub _print_promptline {
     my ( $arg ) = @_;
     $arg->{prompt} =~ s/\p{Space}/ /g;
     $arg->{prompt} =~ s/\p{Cntrl}//g;
-    $arg->{firstline} = $arg->{prompt};
+    $arg->{prompt_line} = $arg->{prompt};
     if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
         if ( $arg->{prompt} ) {
-            $arg->{firstline} = $arg->{prompt} . '  (multiple choice with spacebar)';
-            $arg->{firstline} = $arg->{prompt} . ' (multiple choice)' if length $arg->{firstline} > $arg->{maxcols};
+            $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)';
+            $arg->{prompt_line} = $arg->{prompt} . ' (multiple choice)' if length $arg->{prompt_line} > $arg->{maxcols};
         }
         else {
-            $arg->{firstline} = '';
+            $arg->{prompt_line} = '';
         }
     }
-    if ( length $arg->{firstline} > $arg->{maxcols} ) {
-        $arg->{firstline} = substr( $arg->{prompt}, 0, $arg->{maxcols} - 3 ) . '...';
+    if ( length $arg->{prompt_line} > $arg->{maxcols} ) {
+        $arg->{prompt_line} = substr( $arg->{prompt}, 0, $arg->{maxcols} - 3 ) . '...';
     }
-    print $arg->{firstline};
+    print $arg->{prompt_line};
     $arg->{head} = 1;
 }
 
@@ -280,7 +280,7 @@ sub _write_first_screen {
     $arg->{marked} = [];
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
-    _print_firstline( $arg )if $arg->{prompt} ne '0';
+    _print_promptline( $arg )if $arg->{prompt} ne '0';
     $arg->{maxrows} = $arg->{maxrows} - $arg->{head};
     _size_and_layout( $arg );
     $arg->{maxrows_index} = $arg->{maxrows} - 1;
@@ -325,7 +325,7 @@ sub _validate_option {
         right_justify    => qr/\A[01]\z/,
         layout           => qr/\A[0123]\z/,
         vertical         => qr/\A[01]\z/,
-        #length_longest   => qr/\A[1-9][0-9]{0,8}\z/,
+        length_longest   => qr/\A[1-9][0-9]{0,8}\z/,
         clear_screen     => qr/\A[01]\z/,
         mouse_mode       => qr/\A[01234]\z/,
         pad              => qr/\A[0-9][0-9]?\z/,
@@ -379,7 +379,7 @@ sub _set_layout {
     $config->{empty_string}     //= '<empty>';
     $config->{undef}            //= '<undef>';
     $config->{max_list}         //= 100_000;
-    $config->{screen_width}     //= undef; # 100
+    #$config->{screen_width}     //= undef;
     $config->{hide_cursor}      //= 1;
     return $config;
 }
@@ -411,7 +411,7 @@ sub choose {
     $arg->{orig_list} = $orig_list;
     $arg->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
     $arg->{list} = _copy_orig_list( $arg );
-    $arg->{length_longest} = _length_longest( $arg->{list} ); # if ! defined $arg->{length_longest};
+    $arg->{length_longest} = _length_longest( $arg->{list} ) if ! defined $arg->{length_longest};
     $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
     $arg->{wantarray} = $wantarray;
     # $arg->{LastEventWasPress} = 0;  # in order to ignore left-over button-ups # orig comment
@@ -678,7 +678,7 @@ sub _wr_screen {
 
 sub _wr_cell {
     my( $arg, $row, $col ) = @_;
-    if ( $#{$arg->{rowcol2list}} == 0 ) {
+    if ( $arg->{all_in_first_row} ) {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
@@ -708,7 +708,7 @@ sub _size_and_layout {
     $arg->{rowcol2list} = [];
     $arg->{all_in_first_row} = 0;
     if ( $arg->{length_longest} > $arg->{maxcols} ) {
-        $arg->{length_longest} = $arg->{maxcols};
+        $arg->{length_longest} = $arg->{maxcols}; # needed for _unicode_sprintf
         $layout = 3;
     }
     ### layout
@@ -860,7 +860,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.13
+Version 0.7.14
 
 =cut
 
@@ -1027,7 +1027,7 @@ default in void context: 'Close with ENTER'
 
 1 - columns are right justified
 
-=head4 layout (modified)
+=head4 layout
 
 From broad to narrow: 0 > 1 > 2 > 3
 
@@ -1098,11 +1098,25 @@ Allowed values: 10 - 99
 
 (default: undef)
 
-=head4 vertical (replaces I<vertical_order>)
+=head4 vertical
 
 0 - items ordered horizontally
 
 1 - items ordered vertically (default)
+
+=head4 length_longest
+
+If the length of the longest element of the list is known before calling I<choose> it can be passed with this option.
+
+If I<length_longest> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
+
+If I<length_longest> is set to a value less than the length of the longest element, then all elements which a length greater than this value will be cut.
+
+A larger value than the length of the longest element wastes space on the screen.
+
+Allowed values: 1 - 999_999_999
+
+(default: undef)
 
 =head4 clear_screen
 

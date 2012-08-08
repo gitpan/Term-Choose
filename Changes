@@ -1,5 +1,10 @@
 Revision history for Term::Choose
 
+0.7.14  2012-08-08
+        - Added option "length_longest".
+        - Updated documentation.
+        - Code refactoring.
+
 0.7.13  2012-08-05
         - Removed option "length_longest". 
 

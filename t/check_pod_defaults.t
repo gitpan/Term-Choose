@@ -9,7 +9,7 @@ unless ( $ENV{RELEASE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 
-my @long = ( qw( pad pad_one_row empty_string undef max_list screen_width ) );# 
+my @long = ( qw( pad pad_one_row empty_string undef length_longest max_list screen_width ) );
 my @simple = ( qw( right_justify layout vertical clear_screen extra_key mouse_mode beep hide_cursor ) ); # prompt
 my @all = ( @long, @simple );
 
@@ -23,7 +23,7 @@ my %option_default;
 open $fh, '<', $file or die $!;
 while ( my $line = readline $fh ) {
     if ( $line =~ /\Asub _set_layout {/ .. $line =~ /\A\s+return\s\$config;/ ) {
-        if ( $line =~ m|\A\s+\$config->{(\w+)}\s+//=\s(.*);| ) {
+        if ( $line =~ m|\A\s+#?\s*\$config->{(\w+)}\s+//=\s(.*);| ) {
             next if $1 eq 'prompt';
             $option_default{$1} = $2;
          }

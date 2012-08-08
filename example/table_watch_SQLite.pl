@@ -3,7 +3,7 @@ use warnings;
 use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
-# Version 0.06
+# Version 0.07
 
 use File::Find qw(find);
 use File::Path qw(make_path);
@@ -33,6 +33,7 @@ sub help {
 Usage:
     table_info.pl [help or options] [directories to be searched]
     
+    If no directories are passed the home directory is searched for databases.
     Options with the parenthesis at the end can be used on the comandline too. 
 
 Options:
@@ -439,10 +440,9 @@ sub print_table {
         my $c = 0;
         my $progress;
         if ( $items > $start ) {
-            $progress = Term::ProgressBar->new( { name => 'Processing', count => $total, remove => 1 } );
+            $progress = Term::ProgressBar->new( { name => 'Computing', count => $total, remove => 1 } );
             $progress->minor( 0 );
         }
-
         my @list;
         for my $row ( @$ref ) {
             my $string;
@@ -458,7 +458,6 @@ sub print_table {
                 $string .= ' ' x $opt->{tab} if not $i == $#$max;
             }
             push @list, $string;
-
             if ( $items > $start ) {
                 my $is_power = 0;
                 for ( my $i = 0; 2 ** $i <= $c; $i++) {
@@ -467,12 +466,9 @@ sub print_table {
                 $next_update = $progress->update( $c ) if $c >= $next_update;
                 ++$c;
             }
-
         }
-
         $progress->update( $total ) if $total >= $next_update and $items > $start;
-
-        choose( \@list, { prompt => 0, layout => 3 } );
+        choose( \@list, { prompt => 0, layout => 3, length_longest => sum( @$max, $opt->{tab} * $#{$max} ) } );
         return;
     }
     my $first_row = '';

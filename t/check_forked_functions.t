@@ -14,7 +14,7 @@ else {
 }
 
 my $Choose_GC = 'lib/Term/Choose/GC.pm';
-my @print_firstline_GC;
+my @print_promptline_GC;
 my @wr_cell_GC;
 my @size_and_layout_GC;
 my @unicode_cut;
@@ -22,8 +22,8 @@ my @unicode_sprintf;
 
 open my $fh, '<', $Choose_GC or die $!;
 while ( readline $fh ) {
-    if ( /\Asub Term::Choose::_print_firstline/ .. /\A\}/ ) {
-        push @print_firstline_GC, $_;
+    if ( /\Asub Term::Choose::_print_promptline/ .. /\A\}/ ) {
+        push @print_promptline_GC, $_;
     }    
     if ( /\Asub Term::Choose::_wr_cell/ .. /\A\}/ ) {
         push @wr_cell_GC, $_;
@@ -42,14 +42,14 @@ close $fh or die $!;
 
 
 my $Choose = 'lib/Term/Choose.pm';
-my @print_firstline;
+my @print_promptline;
 my @wr_cell;
 my @size_and_layout;
 
 open $fh, '<', $Choose or die $!;
 while ( readline $fh ) {
-    if ( /\Asub _print_firstline/ .. /\A\}/ ) {
-        push @print_firstline, $_;
+    if ( /\Asub _print_promptline/ .. /\A\}/ ) {
+        push @print_promptline, $_;
     }    
     if ( /\Asub _wr_cell/ .. /\A\}/ ) {
         push @wr_cell, $_;
@@ -85,24 +85,24 @@ splice( @wr_cell_GC, 15, 1 );
 ok( @wr_cell ~~ @wr_cell_GC, 'frok: wr_cell ok' );
 
 
-### print_firstline
+### print_promptline
 
-splice( @print_firstline, 0, 1 );
-splice( @print_firstline, 7, 1 );
-splice( @print_firstline, 12, 3 );
+splice( @print_promptline, 0, 1 );
+splice( @print_promptline, 7, 1 );
+splice( @print_promptline, 12, 3 );
 
-splice( @print_firstline_GC, 0, 1 );
-splice( @print_firstline_GC, 7, 9 );
-splice( @print_firstline_GC, 12, 12 );
+splice( @print_promptline_GC, 0, 1 );
+splice( @print_promptline_GC, 7, 9 );
+splice( @print_promptline_GC, 12, 12 );
 
-#for my $i ( 0 .. $#print_firstline ) {
-#    if ( $print_firstline[$i] ne $print_firstline_GC[$i] ) {
-#        print "$i no : ", $print_firstline[$i];
-#        print "$i gc : ", $print_firstline_GC[$i];
+#for my $i ( 0 .. $#print_promptline ) {
+#    if ( $print_promptline[$i] ne $print_promptline_GC[$i] ) {
+#        print "$i no : ", $print_promptline[$i];
+#        print "$i gc : ", $print_promptline_GC[$i];
 #    }
 #}
 
-ok( @print_firstline ~~ @print_firstline_GC, 'fork: print_firstline ok' );
+ok( @print_promptline ~~ @print_promptline_GC, 'fork: print_promptline ok' );
 
 ### size_and_layout
 
@@ -112,7 +112,7 @@ splice( @size_and_layout, 29, 3 );
 
 splice( @size_and_layout_GC, 0, 1 );
 splice( @size_and_layout_GC, 17, 9 );
-splice( @size_and_layout_GC, 29, 11 );
+splice( @size_and_layout_GC, 29, 1 );
 
 #for my $i ( 0 .. $#size_and_layout ) {
 #    if ( $size_and_layout[$i] ne $size_and_layout_GC[$i] ) {
@@ -125,7 +125,7 @@ ok( @size_and_layout ~~ @size_and_layout_GC, 'fork: size_and_layout ok' );
 
 ### _unicode_cut
 
-my @c = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ } @unicode_cut[4..20];
-my @s = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ }  @unicode_sprintf[7..23];
+my @c = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ } @unicode_cut[8..27];
+my @s = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ } @unicode_sprintf[7..26];
 
 ok( @c ~~ @s, '_unicode... cut ok' );
