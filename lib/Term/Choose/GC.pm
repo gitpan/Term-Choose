@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '0.7.14';
+our $VERSION = '0.7.15';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -334,7 +334,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 0.7.14
+Version 0.7.15
 
 =cut
 
@@ -376,7 +376,7 @@ While L<Term::Choose> uses the Perl builtin functions I<length> to determine the
 
 =head4 length_longest
 
-If the option I<length_longest> is set, it is needed to calculate the value from the strings length of print columns which can be achieved by using the I<columns> method from L<Unicode::GCString>.
+If the option I<length_longest> is used, it is needed to calculate the value with the length of print columns of the strings which can be achieved by using the I<columns> method from L<Unicode::GCString>.
 
 =head2 REQUIREMENTS
 

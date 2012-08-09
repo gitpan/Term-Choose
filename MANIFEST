@@ -13,6 +13,7 @@ t/00-load.t
 t/boilerplate.t
 t/check_forked_functions.t
 t/check_pod_defaults.t
+t/logging_disabled.t
 t/manifest.t
 t/pod-coverage.t
 t/pod.t

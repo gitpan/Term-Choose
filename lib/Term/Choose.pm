@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.14';
+our $VERSION = '0.7.15';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -67,7 +67,9 @@ use constant {
     KEY_ENTER           => 0x0d,
     KEY_ESC             => 0x1b,
     KEY_SPACE           => 0x20,
+    KEY_d               => 0x64, ###
     KEY_e               => 0x65,
+    KEY_f               => 0x66, ###
     KEY_h               => 0x68,
     KEY_j               => 0x6a,
     KEY_k               => 0x6b,
@@ -81,6 +83,9 @@ use constant {
     KEY_RIGHT           => 0x1b5b43,
     KEY_LEFT            => 0x1b5b44,
     KEY_BTAB            => 0x1b5b5a,
+    KEY_PPAGE           => 0x1b5b35, ###
+    KEY_NPAGE           => 0x1b5b36, ###
+    
 };
 
 
@@ -95,6 +100,8 @@ sub _getch {
         elsif ( $c eq 'C' ) { return KEY_RIGHT; }
         elsif ( $c eq 'D' ) { return KEY_LEFT; }
         elsif ( $c eq 'Z' ) { return KEY_BTAB; }
+        elsif ( $c eq '5' ) { return KEY_PPAGE; } ###
+        elsif ( $c eq '6' ) { return KEY_NPAGE; } ###
         elsif ( $c eq '[' ) {
             my $c = ReadKey 0;
                if ( $c eq 'A' ) { return KEY_UP; }
@@ -102,6 +109,8 @@ sub _getch {
             elsif ( $c eq 'C' ) { return KEY_RIGHT; }
             elsif ( $c eq 'D' ) { return KEY_LEFT; }
             elsif ( $c eq 'Z' ) { return KEY_BTAB; }
+            elsif ( $c eq '5' ) { return KEY_PPAGE; } ###
+			elsif ( $c eq '6' ) { return KEY_NPAGE; } ###
             elsif ( $c eq 'M' && $arg->{mouse_mode} ) {
                 # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
                 # http://leonerds-code.blogspot.co.uk/2012/04/wide-mouse-support-in-libvterm.html
@@ -133,7 +142,7 @@ sub _getch {
                         $abs_curs_Y = 10 * $abs_curs_Y + $c1;
                         $c1 = ReadKey 0;
                     }
-                    my $abs_curs_X = 0;
+                    my $abs_curs_X = 0; # $arg->{abs_curs_X} never used
                     while ( 1 ) {
                         $c1 = ReadKey 0;
                         last if $c1 !~ /\d/;
@@ -145,8 +154,10 @@ sub _getch {
                     }
                     return NEXT_getch;
                 }
-                # elsif ( $c1 eq '~' ) {
-                # }
+                elsif ( $c1 eq '~' ) {
+					   if ( $c eq '5' ) { return KEY_PPAGE; } ###
+					elsif ( $c eq '6' ) { return KEY_NPAGE; } ###
+                }
                 else {
                     return NEXT_getch;
                 }
@@ -304,7 +315,7 @@ sub _copy_orig_list {
             $copy = ( $copy eq '' )     ? $arg->{empty_string}  : $copy;
             $copy =~ s/\p{Space}/ /g;
             $copy =~ s/\p{Cntrl}//g;
-            $copy; # " $copy ";
+            $copy;
         } @{$arg->{orig_list}}[ 0 .. $arg->{max_list} - 1 ] ];
     }
     return [ map {
@@ -313,7 +324,7 @@ sub _copy_orig_list {
         $copy = ( $copy eq '' )     ? $arg->{empty_string}  : $copy;
         $copy =~ s/\p{Space}/ /g;
         $copy =~ s/\p{Cntrl}//g;
-        $copy; # " $copy ";
+        $copy;
     } @{$arg->{orig_list}} ];
 }
 
@@ -441,9 +452,9 @@ sub choose {
         #     0 3 6
         #     1 4 7
         #     2 5
-        # so e.g. to get the second value in the second row: $arg->{list}[ $arg->{rowcol2list}[1][1] ]
-        # $#{$arg->{rowcol2list}} would be the index of the last row of the new list
-        # and the index for the last column in the first row should be $#{$arg->{rowcol2list}[0]}.
+        # So e.g. the second value in the second row of the new list would be $arg->{list}[ $arg->{rowcol2list}[1][1] ].
+        # On the other hand the index of the last row of the new list would be $#{$arg->{rowcol2list}}
+        # or the index of the last column in the first row would be $#{$arg->{rowcol2list}[0]}.
         given ( $c ) {
             when ( $c == KEY_j || $c == KEY_DOWN ) {
                 if ( $#{$arg->{rowcol2list}} == 0 || ! ( $arg->{rowcol2list}[$arg->{this_cell}[ROW]+1] && $arg->{rowcol2list}[$arg->{this_cell}[ROW]+1][$arg->{this_cell}[COL]] ) ) {
@@ -563,6 +574,38 @@ sub choose {
                     _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] );
                 }
             }
+            #################################   page up and down experimental   ####################################
+            when ( $c == KEY_d || $c == KEY_PPAGE ) {  
+                if ( $arg->{begin_page} == 0 ) {
+                    _beep( $arg );
+                }
+                else {
+     				my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) -1 );
+					$arg->{this_cell}[ROW] 	= $page + ( $arg->{this_cell}[ROW] % $arg->{maxrows} );
+					$arg->{page} 		   	= $page;
+					$arg->{begin_page}	   	= $page;
+					$arg->{end_page}		= $arg->{begin_page} + $arg->{maxrows} - 1;
+					_wr_screen( $arg );
+				}
+			}            
+            when ( $c == KEY_f || $c == KEY_NPAGE ) {  
+                if ( $arg->{end_page} >= $#{$arg->{rowcol2list}} ) {
+                    _beep( $arg );
+                }
+                else {
+     				my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
+					$arg->{this_cell}[ROW] 	= $page + $arg->{this_cell}[ROW];
+					my $col_short = 0;
+					$col_short = 1 if $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest};
+					$arg->{this_cell}[ROW]	= $#{$arg->{rowcol2list}} - $col_short if $arg->{this_cell}[ROW] + $col_short > $#{$arg->{rowcol2list}};
+					$arg->{page} 		   	= $page;
+					$arg->{begin_page}	   	= $page;
+					$arg->{end_page}		= $arg->{begin_page} + $arg->{maxrows} - 1;
+					$arg->{end_page}		= $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
+					_wr_screen( $arg );
+				}
+			}
+			########################################################################################################
             when ( $c == KEY_q ) {
                 _end_win( $arg );
                 return;
@@ -592,7 +635,6 @@ sub choose {
                             for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
                                 if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
-                                    #$i //= $row; # ? layout
                                     push @chosen, $arg->{orig_list}[$i];
                                 }
                             }
@@ -603,7 +645,6 @@ sub choose {
                             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
                                 if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
-                                    #$i //= $row; # ? layout
                                     push @chosen, $arg->{orig_list}[$i];
                                 }
                             }
@@ -793,7 +834,7 @@ sub _size_and_layout {
 sub _handle_mouse {
     my ( $x, $y, $button_pressed, $button_drag, $arg ) = @_;
     return NEXT_getch if $button_drag;
-    my $top_row = $arg->{abs_curs_Y}; # $arg->{abs_curs_Y} - $arg->{cursor_row_begin}; # history ?
+    my $top_row = $arg->{abs_curs_Y}; # where on the screen is the cursor (first row) after _write_first_screen
     if ( $button_pressed == 4 ) {
         return KEY_UP;
     }
@@ -860,7 +901,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.14
+Version 0.7.15
 
 =cut
 
@@ -967,6 +1008,8 @@ If the option I<extra_key> is enabled pressing "e" calls I<exit()>.
 
 
 Keys to move around: arrow keys (or hjkl), Tab, BackSpace, Shift-Tab.
+
+Experimental: "Page Up" and Page Down" or "d" and  "f" ("d" and "f" could be changed in a future release with other keys). 
 
 =head3 Modifications for the output
 
@@ -1110,7 +1153,7 @@ If the length of the longest element of the list is known before calling I<choos
 
 If I<length_longest> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
 
-If I<length_longest> is set to a value less than the length of the longest element, then all elements which a length greater than this value will be cut.
+If I<length_longest> is set to a value less than the length of the longest element all elements which a length greater than this value will be cut.
 
 A larger value than the length of the longest element wastes space on the screen.
 
@@ -1168,7 +1211,7 @@ allowed values: 0 - 99
 
 =head4 undef
 
-string displayed on the screen instead a undefined list element
+string displayed on the screen instead an undefined list element
 
 default: '<undef>'
 
