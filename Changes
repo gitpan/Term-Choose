@@ -1,5 +1,10 @@
 Revision history for Term::Choose
 
+1.001  	2012-08-12
+        - $VERSION: switched from dotted-integers to decimal numbers ("0.7.16" -> "1.001").
+        - Changed the maximal allowed value for the option "length_longest" from 999_999_999 to 999.
+        - Updated documentation.
+
 0.7.16  2012-08-12
         - From "$XSIG{WINCH}[4]" (Signals::XSIG) to "local $SIG{WINCH}".
         - Updated "Page Up"/"Page Down".

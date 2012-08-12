@@ -3,17 +3,17 @@ require 5.010001;
 use ExtUtils::MakeMaker;
 WriteMakefile
 (
-  'PL_FILES' => {},
-  'INSTALLDIRS' => 'site',
   'NAME' => 'Term::Choose',
-  'EXE_FILES' => [],
   'VERSION_FROM' => 'lib/Term/Choose.pm',
   'PREREQ_PM' => {
-                   'Test::More' => 0,
-                   'Scalar::Util' => '1.25',
-                   'Unicode::GCString' => '2012.04',
+                   'Carp' => 0,
+                   'Scalar::Util' => 0,
                    'Term::ReadKey' => '2.3',
-                   'Carp' => 0
-                 }
+                   'Test::More' => 0,
+                   'Unicode::GCString' => '2012.04'
+                 },
+  'INSTALLDIRS' => 'site',
+  'EXE_FILES' => [],
+  'PL_FILES' => {}
 )
 ;

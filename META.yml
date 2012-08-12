@@ -1,7 +1,7 @@
 ---
 abstract: 'Choose items from a list.'
 author:
-  - 'Kürbis <kuerbis@server>'
+  - 'Matthäus Kiem <cuer2s@gmail.com>'
 build_requires:
   Test::More: 0
 configure_requires:
@@ -16,16 +16,16 @@ name: Term-Choose
 provides:
   Term::Choose:
     file: lib/Term/Choose.pm
-    version: v0.7.16
+    version: 1.001
   Term::Choose::GC:
     file: lib/Term/Choose/GC.pm
-    version: v0.7.16
+    version: 1.001
 requires:
   Carp: 0
-  Scalar::Util: 1.25
+  Scalar::Util: 0
   Term::ReadKey: 2.3
   Unicode::GCString: 2012.04
   perl: v5.10.1
 resources:
   license: http://dev.perl.org/licenses/
-version: v0.7.16
+version: 1.001

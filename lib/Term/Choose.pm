@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.16';
+our $VERSION = '1.001';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -336,7 +336,7 @@ sub _validate_option {
         right_justify    => qr/\A[01]\z/,
         layout           => qr/\A[0123]\z/,
         vertical         => qr/\A[01]\z/,
-        length_longest   => qr/\A[1-9][0-9]{0,8}\z/,
+        length_longest   => qr/\A[1-9][0-9]{0,2}\z/,
         clear_screen     => qr/\A[01]\z/,
         mouse_mode       => qr/\A[01234]\z/,
         pad              => qr/\A[0-9][0-9]?\z/,
@@ -603,6 +603,7 @@ sub choose {
      				my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
 					$arg->{this_cell}[ROW] = $page;
 					#$arg->{this_cell}[COL] = 0;
+					# if it remains only the last row for the last page and the column in use doesn't exist in the last row, then ...
 					if ( $page == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {
 						$arg->{backup_col}     = $arg->{this_cell}[COL];
 						$arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
@@ -899,7 +900,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.16
+Version 1.001
 
 =cut
 
@@ -1149,7 +1150,9 @@ If I<length_longest> is set to a value less than the length of the longest eleme
 
 A larger value than the length of the longest element wastes space on the screen.
 
-Allowed values: 1 - 999_999_999
+If the value of I<length_longest> is greater than the screen width I<length_longest> will be set to the screen width.
+
+Allowed values: 1 - 999
 
 (default: undef)
 

@@ -3,10 +3,11 @@ use strict;
 use warnings;
 use Module::Build;
 
+
 my $builder = Module::Build->new(
     module_name         => 'Term::Choose',
     license             => 'perl',
-    dist_author         => q{Kürbis <kuerbis@server>},
+    dist_author         => q{Matthäus Kiem <cuer2s@gmail.com>},
     dist_version_from   => 'lib/Term/Choose.pm',
     configure_requires => {
         'Module::Build' => 0,
@@ -17,7 +18,7 @@ my $builder = Module::Build->new(
     requires => {
         'perl'              => '5.10.1',
         'Carp'              => 0,
-        'Scalar::Util'      => 1.25,
+        'Scalar::Util'      => 0,
         'Term::ReadKey'     => 2.30, 
         'Unicode::GCString' => 2012.04
     },
@@ -26,3 +27,6 @@ my $builder = Module::Build->new(
 );
 
 $builder->create_build_script();
+
+
+

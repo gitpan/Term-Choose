@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '0.7.16';
+our $VERSION = '1.001';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -334,7 +334,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 0.7.16
+Version 1.001
 
 =cut
 
