@@ -1,5 +1,10 @@
 Revision history for Term::Choose
 
+0.7.16  2012-08-12
+        - From "$XSIG{WINCH}[4]" (Signals::XSIG) to "local $SIG{WINCH}".
+        - Updated "Page Up"/"Page Down".
+        - Removed option "extra_key".
+        - Updated documentation.
 
 0.7.15  2012-08-09
         - Added "Page Up" and "Page Down" keys (experimental).
@@ -13,7 +18,7 @@ Revision history for Term::Choose
         - Removed option "length_longest". 
 
 0.7.12  2012-08-05
-        - Code refactoring - "_size_and_layout": don't copy the list.
+        - Code refactoring - "_size_and_layout": don't copy the list but use indexes.
         - Added option "length_longest".
         - Changed "_unicode_cut" and "_unicode_sprintf"
         - Changed optionname "vertical_order" to "vertical".

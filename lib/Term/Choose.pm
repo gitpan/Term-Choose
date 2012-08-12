@@ -4,19 +4,17 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '0.7.15';
+our $VERSION = '0.7.16';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
 use Carp;
 use Scalar::Util qw(reftype);
-use Signals::XSIG;
 use Term::ReadKey;
 
 #use warnings FATAL => qw(all);
 #use Log::Log4perl qw(get_logger);
 #my $log = get_logger("Term::Choose");
-
 
 use constant {
     ROW         => 0,
@@ -61,15 +59,17 @@ use constant {
 
 use constant {
     NEXT_getch          => -1,
-
+    CONTROL_b           => 0x02,
     CONTROL_c           => 0x03,
+    CONTROL_f           => 0x06,
+    CONTROL_h           => 0x08,    
     KEY_TAB             => 0x09,
     KEY_ENTER           => 0x0d,
     KEY_ESC             => 0x1b,
     KEY_SPACE           => 0x20,
-    KEY_d               => 0x64, ###
-    KEY_e               => 0x65,
-    KEY_f               => 0x66, ###
+    #KEY_d               => 0x64,
+    #KEY_e               => 0x65,
+    #KEY_f               => 0x66,
     KEY_h               => 0x68,
     KEY_j               => 0x6a,
     KEY_k               => 0x6b,
@@ -83,8 +83,8 @@ use constant {
     KEY_RIGHT           => 0x1b5b43,
     KEY_LEFT            => 0x1b5b44,
     KEY_BTAB            => 0x1b5b5a,
-    KEY_PPAGE           => 0x1b5b35, ###
-    KEY_NPAGE           => 0x1b5b36, ###
+    KEY_PAGE_UP         => 0x1b5b35,
+    KEY_PAGE_DOWN       => 0x1b5b36,
     
 };
 
@@ -100,8 +100,8 @@ sub _getch {
         elsif ( $c eq 'C' ) { return KEY_RIGHT; }
         elsif ( $c eq 'D' ) { return KEY_LEFT; }
         elsif ( $c eq 'Z' ) { return KEY_BTAB; }
-        elsif ( $c eq '5' ) { return KEY_PPAGE; } ###
-        elsif ( $c eq '6' ) { return KEY_NPAGE; } ###
+        elsif ( $c eq '5' ) { return KEY_PAGE_UP; }
+        elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
         elsif ( $c eq '[' ) {
             my $c = ReadKey 0;
                if ( $c eq 'A' ) { return KEY_UP; }
@@ -109,8 +109,8 @@ sub _getch {
             elsif ( $c eq 'C' ) { return KEY_RIGHT; }
             elsif ( $c eq 'D' ) { return KEY_LEFT; }
             elsif ( $c eq 'Z' ) { return KEY_BTAB; }
-            elsif ( $c eq '5' ) { return KEY_PPAGE; } ###
-			elsif ( $c eq '6' ) { return KEY_NPAGE; } ###
+            elsif ( $c eq '5' ) { return KEY_PAGE_UP; }
+			elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
             elsif ( $c eq 'M' && $arg->{mouse_mode} ) {
                 # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
                 # http://leonerds-code.blogspot.co.uk/2012/04/wide-mouse-support-in-libvterm.html
@@ -155,8 +155,8 @@ sub _getch {
                     return NEXT_getch;
                 }
                 elsif ( $c1 eq '~' ) {
-					   if ( $c eq '5' ) { return KEY_PPAGE; } ###
-					elsif ( $c eq '6' ) { return KEY_NPAGE; } ###
+					   if ( $c eq '5' ) { return KEY_PAGE_UP; }
+					elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
                 }
                 else {
                     return NEXT_getch;
@@ -341,7 +341,6 @@ sub _validate_option {
         mouse_mode       => qr/\A[01234]\z/,
         pad              => qr/\A[0-9][0-9]?\z/,
         pad_one_row      => qr/\A[0-9][0-9]?\z/,
-        extra_key        => qr/\A[01]\z/,
         beep             => qr/\A[01]\z/,
         empty_string     => '',
         undef            => '',
@@ -385,7 +384,6 @@ sub _set_layout {
     $config->{mouse_mode}       //= 0;
     $config->{pad}              //= 2;
     $config->{pad_one_row}      //= 3;
-    $config->{extra_key}        //= 1;
     $config->{beep}             //= 0;
     $config->{empty_string}     //= '<empty>';
     $config->{undef}            //= '<undef>';
@@ -432,7 +430,7 @@ sub choose {
     $arg->{this_cell} = [];
     _init_scr( $arg );
     _write_first_screen( $arg );
-    $XSIG{WINCH}[5] = sub { $arg->{size_changed} = 1; };
+    local $SIG{'WINCH'} = sub { $arg->{size_changed} = 1; };
     while ( 1 ) {
         my $c = _getch( $arg );
         next if $c == NEXT_getch;
@@ -482,6 +480,10 @@ sub choose {
                 }
                 else {
                     $arg->{this_cell}[ROW]--;
+					if ( defined $arg->{backup_col} ) {
+						$arg->{this_cell}[COL] = $arg->{backup_col};
+						$arg->{backup_col}     = undef;
+					}
                     if ( $arg->{this_cell}[ROW] >= $arg->{begin_page} ) {
                         _wr_cell( $arg, $arg->{this_cell}[ROW] + 1, $arg->{this_cell}[COL] );
                         _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
@@ -525,7 +527,7 @@ sub choose {
                     }
                 }
             }
-            when ( ( $c == KEY_BSPACE || $c == KEY_BTAB ) && ( $arg->{this_cell} > 0 ) ) {
+            when ( $c == KEY_BSPACE || $c == CONTROL_h || $c == KEY_BTAB ) {
                 if ( $arg->{this_cell}[COL] == 0 && $arg->{this_cell}[ROW] == 0 ) {
                     _beep( $arg );
                 }
@@ -572,52 +574,49 @@ sub choose {
                     $arg->{this_cell}[COL]--;
                     _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] + 1 );
                     _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] );
+                    $arg->{backup_col} = undef if defined $arg->{backup_col}; # don't remember col if col is changed deliberately
                 }
             }
-            #################################   page up and down experimental   ####################################
-            when ( $c == KEY_d || $c == KEY_PPAGE ) {  
-                if ( $arg->{begin_page} == 0 ) {
+            when ( $c == CONTROL_b || $c == KEY_PAGE_UP ) { # $c == KEY_d || 
+                if ( $arg->{begin_page} <= 0 ) {
                     _beep( $arg );
                 }
                 else {
      				my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) -1 );
-					$arg->{this_cell}[ROW] 	= $page + ( $arg->{this_cell}[ROW] % $arg->{maxrows} );
-					$arg->{page} 		   	= $page;
-					$arg->{begin_page}	   	= $page;
-					$arg->{end_page}		= $arg->{begin_page} + $arg->{maxrows} - 1;
+					$arg->{this_cell}[ROW] = $page;
+				    #$arg->{this_cell}[COL] = 0;
+					if ( defined $arg->{backup_col} ) {
+						$arg->{this_cell}[COL] = $arg->{backup_col};
+						$arg->{backup_col}     = undef;
+					}
+					$arg->{page} 	   = $page;
+					$arg->{begin_page} = $page;
+					$arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
 					_wr_screen( $arg );
 				}
 			}            
-            when ( $c == KEY_f || $c == KEY_NPAGE ) {  
+            when ( $c == CONTROL_f || $c == KEY_PAGE_DOWN ) { # $c == KEY_f || 
                 if ( $arg->{end_page} >= $#{$arg->{rowcol2list}} ) {
                     _beep( $arg );
                 }
                 else {
      				my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
-					$arg->{this_cell}[ROW] 	= $page + $arg->{this_cell}[ROW];
-					my $col_short = 0;
-					$col_short = 1 if $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest};
-					$arg->{this_cell}[ROW]	= $#{$arg->{rowcol2list}} - $col_short if $arg->{this_cell}[ROW] + $col_short > $#{$arg->{rowcol2list}};
-					$arg->{page} 		   	= $page;
-					$arg->{begin_page}	   	= $page;
-					$arg->{end_page}		= $arg->{begin_page} + $arg->{maxrows} - 1;
-					$arg->{end_page}		= $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
+					$arg->{this_cell}[ROW] = $page;
+					#$arg->{this_cell}[COL] = 0;
+					if ( $page == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {
+						$arg->{backup_col}     = $arg->{this_cell}[COL];
+						$arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
+					}
+     				$arg->{page} 	   = $page;
+					$arg->{begin_page} = $page;
+					$arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
+					$arg->{end_page}   = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
 					_wr_screen( $arg );
 				}
 			}
-			########################################################################################################
             when ( $c == KEY_q ) {
                 _end_win( $arg );
                 return;
-            }
-            when ( $c == KEY_e ) {
-                if ( $arg->{extra_key} ) {
-                    _end_win( $arg );
-                    exit;
-                }
-                else {
-                    _beep( $arg );
-                }
             }
             when ( $c == CONTROL_c ) {
                 _end_win( $arg );
@@ -834,7 +833,7 @@ sub _size_and_layout {
 sub _handle_mouse {
     my ( $x, $y, $button_pressed, $button_drag, $arg ) = @_;
     return NEXT_getch if $button_drag;
-    my $top_row = $arg->{abs_curs_Y}; # where on the screen is the cursor (first row) after _write_first_screen
+    my $top_row = $arg->{abs_curs_Y}; # on which screen-row is the cursor (first row of the list) after _write_first_screen
     if ( $button_pressed == 4 ) {
         return KEY_UP;
     }
@@ -863,7 +862,6 @@ sub _handle_mouse {
         }
     }
     return NEXT_getch if ! $found;
-    # if xterm doesn't receive a button-up event it thinks it's dragging # orig comment
     my $return_char = '';
     if ( $button_pressed == 1 ) {
         # $arg->{LastEventWasPress} = 1;
@@ -901,7 +899,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 0.7.15
+Version 0.7.16
 
 =cut
 
@@ -1003,13 +1001,7 @@ The "q" key returns I<undef> or an empty list in list context.
 
 With a I<mouse_mode> enabled (and if supported by the terminal) the element can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
-
-If the option I<extra_key> is enabled pressing "e" calls I<exit()>.
-
-
-Keys to move around: arrow keys (or hjkl), Tab, BackSpace, Shift-Tab.
-
-Experimental: "Page Up" and Page Down" or "d" and  "f" ("d" and "f" could be changed in a future release with other keys). 
+Keys to move around: arrow keys (or hjkl), Tab, BackSpace (or Shift-Tab or Ctrl-H), PageUp and PageDown (or Ctrl+B/Ctrl+F). 
 
 =head3 Modifications for the output
 
@@ -1191,12 +1183,6 @@ space between items if we have only one row (default: 3)
 
 allowed values: 0 - 99
 
-=head4 extra_key
-
-0 - off
-
-1 - on: pressing key "e" calls I<exit()> (default)
-
 =head4 beep
 
 0 - off (default)
@@ -1258,10 +1244,6 @@ Requires Perl Version 5.10.1 or greater.
 Used modules not provided as core modules:
 
 =over
-
-=item
-
-L<Signals::XSIG>
 
 =item
 
@@ -1338,7 +1320,7 @@ You can find documentation for this module with the perldoc command.
 
 =head1 AUTHOR
 
-Kürbis cuer2s@gmail.com
+Matthäus Kiem <cuer2s@gmail.com>
 
 =head1 CREDITS
 
@@ -1348,7 +1330,7 @@ Thanks to the L<http://www.perl-community.de> and the people form L<http://stack
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2012 Kürbis.
+Copyright 2012 Matthäus Kiem.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 

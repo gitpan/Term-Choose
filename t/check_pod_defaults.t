@@ -1,6 +1,6 @@
 #!perl -T
 
-use 5.006;
+use 5.10.1;
 use strict;
 use warnings;
 use Test::More;
@@ -10,7 +10,7 @@ unless ( $ENV{RELEASE_TESTING} ) {
 }
 
 my @long = ( qw( pad pad_one_row empty_string undef length_longest max_list screen_width ) );
-my @simple = ( qw( right_justify layout vertical clear_screen extra_key mouse_mode beep hide_cursor ) ); # prompt
+my @simple = ( qw( right_justify layout vertical clear_screen mouse_mode beep hide_cursor ) ); # prompt
 my @all = ( @long, @simple );
 
 plan tests => 2 + scalar @all;

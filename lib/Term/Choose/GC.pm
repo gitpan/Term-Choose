@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '0.7.15';
+our $VERSION = '0.7.16';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -334,7 +334,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 0.7.15
+Version 0.7.16
 
 =cut
 
@@ -390,7 +390,7 @@ You can find documentation for this module with the perldoc command.
 
 =head1 AUTHOR
 
-Kürbis cuer2s@gmail.com
+Matthäus Kiem <cuer2s@gmail.com>
 
 =head1 CREDITS
 
@@ -400,7 +400,7 @@ Thanks to the L<http://www.perl-community.de> and the people form L<http://stack
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2012 Kürbis.
+Copyright 2012 Matthäus Kiem.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 

@@ -13,9 +13,6 @@ else {
     
 }
 
-use Term::Choose;
-use Term::Choose::GC;
-
 
 my $log_1 = 0;
 
@@ -24,10 +21,10 @@ while ( my $line = readline $fh1 ) {
 	if ( $line =~ /\$log\s*->/ ) {
 		$log_1++;
 	}
-    if ( $line =~ /\A\s*my\s*\$log/ ) {
+    if ( $line =~ /(?:\A\s*|\s+)my\s*\$log/ ) {
 		$log_1++;
 	}
-	if ( $line =~ /\A\s*use\s+Log::Log4perl/ ) {
+	if ( $line =~ /(?:\A\s*|\s+)use\s+Log::Log4perl/ ) {
 		$log_1++;
 	}
 }
@@ -43,10 +40,10 @@ while ( my $line = readline $fh2 ) {
 	if ( $line =~ /\$log\s*->/ ) {
 		$log_2++;
 	}
-    if ( $line =~ /\A\s*my\s*\$log/ ) {
+    if ( $line =~ /(?:\A\s*|\s+)my\s*\$log/ ) {
 		$log_2++;
 	}
-	if ( $line =~ /\A\s*use\s+Log::Log4perl/ ) {
+	if ( $line =~ /(?:\A\s*|\s+)use\s+Log::Log4perl/ ) {
 		$log_2++;
 	}
 }

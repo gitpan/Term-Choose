@@ -1,4 +1,4 @@
-use 5.006;
+use 5.10.1;
 use strict;
 use warnings;
 use Module::Build;
@@ -18,7 +18,6 @@ my $builder = Module::Build->new(
         'perl'              => '5.10.1',
         'Carp'              => 0,
         'Scalar::Util'      => 1.25,
-        'Signals::XSIG'     => 0.12,
         'Term::ReadKey'     => 2.30, 
         'Unicode::GCString' => 2012.04
     },

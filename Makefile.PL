@@ -13,7 +13,6 @@ WriteMakefile
                    'Scalar::Util' => '1.25',
                    'Unicode::GCString' => '2012.04',
                    'Term::ReadKey' => '2.3',
-                   'Signals::XSIG' => '0.12',
                    'Carp' => 0
                  }
 )

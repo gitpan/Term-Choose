@@ -16,17 +16,16 @@ name: Term-Choose
 provides:
   Term::Choose:
     file: lib/Term/Choose.pm
-    version: v0.7.15
+    version: v0.7.16
   Term::Choose::GC:
     file: lib/Term/Choose/GC.pm
-    version: v0.7.15
+    version: v0.7.16
 requires:
   Carp: 0
   Scalar::Util: 1.25
-  Signals::XSIG: 0.12
   Term::ReadKey: 2.3
   Unicode::GCString: 2012.04
   perl: v5.10.1
 resources:
   license: http://dev.perl.org/licenses/
-version: v0.7.15
+version: v0.7.16
