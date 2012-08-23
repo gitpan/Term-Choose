@@ -3,13 +3,13 @@ use warnings;
 use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
-# Version 0.07
+# Version 0.08
 
 use File::Find qw(find);
 use File::Path qw(make_path);
 use File::Spec::Functions qw(catfile rel2abs tmpdir);
 use Getopt::Long qw(GetOptions :config bundling);
-use List::Util qw(sum max);
+use List::Util qw(sum);
 use Scalar::Util qw(looks_like_number);
 use Term::ANSIColor;
 
@@ -18,12 +18,17 @@ use Config::Tiny;
 use DBI qw(:sql_types);
 use File::HomeDir qw(my_home); 
 use File::LibMagic;
+use List::MoreUtils qw(first_index);
 use Term::Choose::GC qw(choose);
 use Term::ProgressBar;
 use Term::ReadKey qw(GetTerminalSize);
 use Unicode::GCString;
 
-use constant { GO_TO_TOP_LEFT => "\e[1;1H", CLEAR_EOS => "\e[0J", UP => "\e[A" };
+use constant { 
+	GO_TO_TOP_LEFT 	=> "\e[1;1H", 
+	CLEAR_EOS 		=> "\e[0J", 
+	UP 				=> "\e[A" 
+};
 
 my $home = File::HomeDir->my_home;
 
@@ -34,41 +39,44 @@ Usage:
     table_info.pl [help or options] [directories to be searched]
     
     If no directories are passed the home directory is searched for databases.
-    Options with the parenthesis at the end can be used on the comandline too. 
+    Options with the parenthesis at the end can be used on the comandline too.
+    Customized Table - REGEXP: for case sensitivity prefix pattern with (?-i).
 
 Options:
-    Help         : Show this Info.  (-h|--help)
-    Settings     : Show settings.
-    Cache expire : Days until data expires. The cache holds the names of the found databases.
-    Reset cache  : Reset the cache. (-s|--no-cache)
-    Cache rootdir: Set the cache root directory.   
-    Maxdepth     : Levels to descend at most when searching in directories for databases.  (-m|max-depth) 
-    Limit        : Set the maximum number of rows read from tables.  (-l|--limit)
-    No BLOB      : Do not print columns with the column-type BLOB.
-    Tab          : Set the number of spaces between columns.
-    Min-Width    : Set the width the columns should have at least when printed.
-    Delete       : Enable the option "delete table" and "delete database".  (-d|--delete)
-    Undef        : Set the string, that will be shown instead of undefined table values when printed.
-    Table colors : Set the colors for the columns.
-    Head colors  : Set the fore- and background color for the table-head.
+    Help          : Show this Info.  (-h|--help)
+    Settings      : Show settings.
+    Cache expire  : Days until data expires. The cache holds the names of the found databases.
+    Reset cache   : Reset the cache. (-s|--no-cache)
+    Cache rootdir : Set the cache root directory.   
+    Maxdepth      : Levels to descend at most when searching in directories for databases.  (-m|max-depth) 
+    Limit         : Set the maximum number of table rows read in one time.  (-l|--limit)
+    No BLOB       : Do not print columns with the column-type BLOB.
+    Tab           : Set the number of spaces between columns.
+    Min-Width     : Set the width the columns should have at least when printed.
+    Delete        : Enable the option "delete table" and "delete database".  (-d|--delete)
+    Undef         : Set the string, that will be shown instead of undefined table values when printed.
+    Table colors  : Set the colors for the columns.
+    Head colors   : Set the fore- and background color for the table-head.
+    Cut col names : When should column names be cut.
     
 HELP
 }
 
 my $opt = {
-    cache_expire  => '7d',
-    reset_cache   => 0,
-    cache_rootdir => tmpdir(),
-    max_depth     => undef,
-    limit         => 5_000,
-    no_blob       => 1,
-    tab           => 2,
-    min_width     => 30,
-    delete        => 0,
-    undef         => '',
+    cache_expire   => '7d',
+    reset_cache    => 0,
+    cache_rootdir  => tmpdir(),
+    max_depth      => undef,
+    limit          => 10_000,
+    no_blob        => 1,
+    tab            => 2,
+    min_width      => 30,
+    delete         => 0,
+    undef          => '',
     # colors on a terminal with green font and black background:
-    table_colors  => [ 'cyan', 'default', 'magenta', 'white', 'green', 'blue', 'yellow', 'red' ],
-    head_colors   => 'white reverse',
+    table_colors   => [ 'cyan', 'default', 'magenta', 'white', 'green', 'blue', 'yellow', 'red' ],
+    head_colors    => 'white reverse',
+    cut_col_names  => -1,
 };
 
 my $help;
@@ -80,10 +88,30 @@ GetOptions (
     'd|delete'      => \$opt->{delete},
 );
 
-$opt = options( $opt, catfile $home, '.table_info.conf' ) if $help;
+my $config_file = catfile $home, '.table_info.conf';
 
-my @dirs = @ARGV;
-@dirs = ( $home ) if not @dirs;
+if ( not -e $config_file ) {
+	open my $fh, '>', $config_file or warn $!;
+	close $fh or warn $!;
+}
+
+if ( -e $config_file ) {
+    my $section = 'sqlite';
+    my $ini = Config::Tiny->new;
+    $ini = Config::Tiny->read( $config_file );
+    for my $key ( keys %{$ini->{$section}} ) {
+        if ( $key eq 'table_colors' ) {
+            $opt->{$key} = [ split / /, $ini->{$section}{$key} ];
+        }
+        else {
+            $opt->{$key} = $ini->{$section}{$key};
+        }
+    }
+}
+
+$opt = options( $opt, $config_file ) if $help;
+
+my @dirs = @ARGV ? @ARGV : ( $home );
 
 my $key = join ' ', @dirs, '|', $opt->{max_depth} // '';
 my $cached = ' (cached)';
@@ -144,49 +172,37 @@ my $back = 'BACK';
 my %lyt = ( layout => 3, clear_screen => 1 );
 
 my %auswahl = ( 
-    color_with_col_names => '° table', 
-    color_cut_col_names  => '° table cut col_names', 
-    color_choose_columns => '° choose columns',
-    
-    row_with_col_names => '* table', 
-    row_cut_col_names  => '* table cut col_names', 
-    row_choose_columns => '* choose columns',
-    
-    count_rows     => '  count rows',
-    delete_table   => '  delete table',
+    color_auto 		=> '° table auto', 
+    color_customize => '° table customized',
+    row_auto 		=> '* table auto', 
+    row_customize 	=> '* table customized',
+    count_rows     	=> '  count rows',
+    delete_table   	=> '  delete table',
 );
 
-my @aw_keys = ( qw( 
-    color_with_col_names
-    color_cut_col_names
-    color_choose_columns
-    count_rows    
-    row_with_col_names
-    row_cut_col_names
-    row_choose_columns
-) );
+my @aw_keys = ( qw( color_auto color_customize count_rows row_auto row_customize ) );
 push @aw_keys, 'delete_table' if $opt->{delete}; 
 
 DATABASES: while ( 1 ) {
     my $db = choose( [ undef, @databases ], { prompt => 'Choose Database' . $cached, %lyt, undef => $quit } );
     last DATABASES if not defined $db;
-    my $dbh;
-    eval {
-        $dbh = DBI->connect( "DBI:SQLite:dbname=$db", '', '', { 
-            RaiseError => 1, 
-            PrintError => 0, 
-            AutoCommit => 1, 
-            sqlite_unicode => 1 
-        } ) or die DBI->errstr;
-        $dbh->do("PRAGMA cache_size = 400000");
-        $dbh->do("PRAGMA synchronous = OFF");
-    };
-    if ( $@ ) {
-        print $@, '  ';
+	my $dbh;
+	eval {
+		$dbh = DBI->connect( "DBI:SQLite:dbname=$db", '', '', { 
+			RaiseError => 1, 
+			PrintError => 0, 
+			AutoCommit => 1, 
+			sqlite_unicode => 1,
+		} ) or die DBI->errstr;
+		$dbh->sqlite_busy_timeout( 3000 );
+		$dbh->do( "PRAGMA cache_size = 400000" );
+		$dbh->do( "PRAGMA synchronous = OFF" );   
+	};
+	if ( $@ ) {
+		print $@, '  ';
         choose( [ 'Press ENTER to continue' ], { prompt => 0 } ); 
         next DATABASES;
-    }
-
+	}
     TABLES: while ( 1 ) {
         my %tables;
         my( $master, $temp_master );
@@ -234,50 +250,62 @@ DATABASES: while ( 1 ) {
                 when ( not defined ) {
                     last CHOOSE;
                 }
-                when ( $auswahl{color_with_col_names} ) {
-                    my $str = '*';
+                when ( $auswahl{color_auto} ) {
                     my $type = 'color';
-                    my $cut = 0;
-                    print_table( $dbh, $table, $str, $type, $cut );
+                    my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM [$table]" );
+                    my $select = "SELECT * FROM [$table]";
+                    my $arguments;
+                    PRINT: while ( 1 ) {
+						my ( $begin, $end, $last ) = choose_table_range( $rows );
+						last PRINT if $last == 1;	
+						my ( $ref, $col_types ) = read_db_table( $dbh, $begin, $end, $select, $arguments );
+						last PRINT if not defined $ref;
+						print_table( $ref, $col_types, $type );
+						last PRINT if $last == 2;
+					}
                 }
-                when ( $auswahl{color_cut_col_names} ) {
-                    my $str = '*';
+                when ( $auswahl{color_customize} ) {
                     my $type = 'color';
-                    my $cut = 1;
-                    print_table( $dbh, $table, $str, $type, $cut );
+                    my ( $rows, $select, $arguments ) = prepare_read_table( $dbh, $table );
+                    next CHOOSE if not defined $rows;
+                    PRINT: while ( 1 ) {
+						my ( $begin, $end, $last ) = choose_table_range( $rows );
+						last PRINT if $last == 1;	
+						my ( $ref, $col_types ) = read_db_table( $dbh, $begin, $end, $select, $arguments );
+						last PRINT if not defined $ref;
+						print_table( $ref, $col_types, $type );
+						last PRINT if $last == 2;
+					}
                 }
-                when ( $auswahl{color_choose_columns} ) {
-                    my $sth = $dbh->prepare( "SELECT * FROM $table" );
-                    my $col_names = $sth->{NAME};
-                    my @choice_col = choose( $col_names, { prompt => 'Choose Columns', %lyt } );
-                    my $str = join ', ', @choice_col;
-                    my $type = 'color';
-                    my $cut = 0;
-                    print_table( $dbh, $table, $str, $type, $cut );                    
-                }
-                when ( $auswahl{row_with_col_names} ) {
-                    my $str = '*';
+                when ( $auswahl{row_auto} ) {
                     my $type = 'row';
-                    my $cut = 0;
-                    print_table( $dbh, $table, $str, $type, $cut );
+                    my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM [$table]" );
+                    my $select = "SELECT * FROM [$table]";
+                    my $arguments;
+                    PRINT: while ( 1 ) {
+						my ( $begin, $end, $last ) = choose_table_range( $rows );
+						last PRINT if $last == 1;	
+						my ( $ref, $col_types ) = read_db_table( $dbh, $begin, $end, $select, $arguments );
+						last PRINT if not defined $ref;
+						print_table( $ref, $col_types, $type );
+						last PRINT if $last == 2;
+					}
                 }
-                when ( $auswahl{row_cut_col_names} ) {
-                    my $str = '*';
+                when ( $auswahl{row_customize} ) {
                     my $type = 'row';
-                    my $cut = 1;
-                    print_table( $dbh, $table, $str, $type, $cut );
-                }
-                when ( $auswahl{row_choose_columns} ) {
-                    my $sth = $dbh->prepare( "SELECT * FROM $table" );
-                    my $col_names = $sth->{NAME};
-                    my @choice_col = choose( $col_names, { prompt => 'Choose Columns', %lyt } );
-                    my $str = join ', ', @choice_col;
-                    my $type = 'row';
-                    my $cut = 0;
-                    print_table( $dbh, $table, $str, $type, $cut );                    
+                    my ( $rows, $select, $arguments ) = prepare_read_table( $dbh, $table );
+                    next CHOOSE if not defined $rows;
+                    PRINT: while ( 1 ) {
+						my ( $begin, $end, $last ) = choose_table_range( $rows );	
+						last PRINT if $last == 1;
+						my ( $ref, $col_types ) = read_db_table( $dbh, $begin, $end, $select, $arguments );
+						last PRINT if not defined $ref;
+						print_table( $ref, $col_types, $type );
+						last PRINT if $last == 2;
+					}
                 }
                 when ( $auswahl{count_rows} ) {
-                    my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM $table" );
+                    my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM [$table]" );
                     $rows =~ s/(\d)(?=(?:\d{3})+\b)/$1_/g;
                     say "\n$db";
                     say "\nTable \"$table\":  $rows Rows\n"; 
@@ -288,7 +316,7 @@ DATABASES: while ( 1 ) {
                     say "\nRealy delete table ", colored( "\"$table\"", 'red' ), "?\n";
                     my $c = choose( [ ' No ', ' Yes ' ], { prompt => 0, pad_one_row => 1 } );
                     if ( $c eq ' Yes ' ) {
-                        eval { $dbh->do( "DROP TABLE $table" ) };
+                        eval { $dbh->do( "DROP TABLE [$table]" ) };
                         if ( $@ ) {
                             say "Could not drop table \"$table\"";
                             print $@;
@@ -310,13 +338,44 @@ DATABASES: while ( 1 ) {
     
 ############################################################################################################
 
+sub choose_table_range {
+	my ( $rows ) = @_;
+	my $last = 0;
+	my $begin = 1;
+	my $end = $opt->{limit};    
+    if ( $rows > $opt->{limit} ) {
+		my @choices;
+		my $lr = length $rows;
+		push @choices, sprintf "%${lr}d - %${lr}d", $begin, $end;
+		$rows -= $opt->{limit};
+		while ( $rows > 0 ) {
+			$begin += $opt->{limit};
+			$end   += ( $rows > $opt->{limit} ) ? $opt->{limit} : $rows;
+			push @choices, sprintf "%${lr}d - %${lr}d", $begin, $end;
+			$rows -= $opt->{limit};
+		}
+		my $choice = choose( [ undef, @choices ], { layout => 3, undef => $back } );
+		if ( defined $choice ) {
+			( $begin, $end ) = split /\s*-\s*/, $choice;
+			$begin =~ s/\A\s+//;
+		}
+		else { 
+			$last = 1; 
+		}
+    }
+    else { 
+		$last = 2;
+	}
+    return $begin, $end, $last;
+}
+
 
 sub read_db_table {
-    my ( $dbh, $table, $str ) = @_;
+    my ( $dbh, $begin, $end, $select, $arguments ) = @_;
     my ( $ref, $col_types );
     eval {
-        my $sth = $dbh->prepare( "SELECT $str FROM $table LIMIT ?" );
-        $sth->execute( $opt->{limit} );
+        my $sth = $dbh->prepare( $select . " LIMIT ?, ?" );
+        $sth->execute( defined $arguments ? @$arguments : (), $begin, $end );
         my $col_names = $sth->{NAME};
         $col_types = $sth->{TYPE};
         $ref = $sth->fetchall_arrayref();
@@ -331,6 +390,118 @@ sub read_db_table {
 }
 
 
+sub print_select {
+	my ( $table, $columns, $chosen_columns, $cols_order_by_tmp, $cols_regexp_tmp, $hash_regexp ) = @_;
+	print GO_TO_TOP_LEFT;
+	print CLEAR_EOS;
+	$chosen_columns = @$chosen_columns ? $chosen_columns : $columns;
+	my ( @cols_regexp, @cols_order_by );
+	@cols_order_by = grep { $_ ~~ @$chosen_columns } @$cols_order_by_tmp if @$cols_order_by_tmp;
+	@cols_regexp   = grep { $_ ~~ @$chosen_columns } @$cols_regexp_tmp   if @$cols_regexp_tmp;
+	say "SELECT ", ( @$chosen_columns ~~ @$columns ) ? '*' : join( ', ', @$chosen_columns );
+	say " FROM $table";
+	say " WHERE ", join " AND ", map { "$_ REGEXP $hash_regexp->{$_}" } @cols_regexp if @cols_regexp;
+	say " ODER BY ", join ', ', @cols_order_by	if @cols_order_by;
+	say "";
+}
+
+
+sub prepare_read_table {
+	my ( $dbh, $table ) = @_;
+	$dbh->func( 'regexp', 2, sub { my ( $regex, $string ) = @_; $string //= ''; return $string =~ m/$regex/ism }, 'create_function' );
+	my $continue = ' OK ';
+	my @keys = ( qw( print_table columns order_by regexp ) );
+	my %customize = ( print_table => 'Print TABLE', columns => '- Columns', order_by => '- Order by', regexp => '- Regexp' ); 
+	my $sth = $dbh->prepare( "SELECT * FROM [$table]" );
+	my $columns	= $sth->{NAME};
+	my $chosen_columns    = [];
+	my $cols_order_by_tmp = [];
+	my $cols_regexp_tmp   = [];	
+	my $hash_regexp       = {};	
+	
+	CUSTOMIZE: while ( 1 ) {
+		print_select( $table, $columns, $chosen_columns, $cols_order_by_tmp, $cols_regexp_tmp, $hash_regexp );
+		my $custom = choose( [ undef, @customize{@keys} ], { prompt => "Customize:", layout => 3, undef => $back } );
+		for ( $custom ) {
+			when ( not defined ) {
+				last CUSTOMIZE;	
+			}
+			when( $customize{columns} ) {
+				my @cols = @$columns;
+				$chosen_columns = [];
+				while ( @cols ) {
+					print_select( $table, $columns, $chosen_columns, $cols_order_by_tmp, $cols_regexp_tmp, $hash_regexp );
+					my $col = choose( [ $continue, @cols ], { prompt => "Choose: ", pad_one_row => 2 } );
+					last if $col eq $continue;
+					push @$chosen_columns, $col;
+					my $idx = first_index { $_ eq $col } @cols;
+					splice @cols, $idx, 1;
+				}
+				if ( not @$chosen_columns ) {
+					@$chosen_columns = @$columns;
+				}
+			}
+			when( $customize{order_by} ) {
+				my @cols = @$chosen_columns ? @$chosen_columns : @$columns;
+				$cols_order_by_tmp = [];
+				while ( @cols ) {
+					print_select( $table, $columns, $chosen_columns, $cols_order_by_tmp, $cols_regexp_tmp, $hash_regexp );
+					my $col = choose( [ $continue, @cols ], { prompt => "Choose: ", pad_one_row => 2 } );
+					last if $col eq $continue;
+					push @$cols_order_by_tmp, $col;
+					my $idx = first_index { $_ eq $col } @cols;
+					splice @cols, $idx, 1;
+				}
+			}
+			when ( $customize{regexp} ) {
+				my @cols = @$chosen_columns ? @$chosen_columns : @$columns;
+				$hash_regexp = {};
+				$cols_regexp_tmp = [];
+				while ( @cols ) {
+					print_select( $table, $columns, $chosen_columns, $cols_order_by_tmp, $cols_regexp_tmp, $hash_regexp );
+					my $col = choose( [ $continue, @cols ], { prompt => "Choose: ", pad_one_row => 2 } );
+					last if $col eq $continue;
+					print "$col: ";
+					my $regex = <>;
+					chomp $regex;
+					$hash_regexp->{$col} = $regex;
+					push @$cols_regexp_tmp, $col;
+					my $idx = first_index { $_ eq $col } @cols;
+					splice @cols, $idx, 1;
+				}
+			}
+			when( $customize{print_table} ) {
+				my $order_by_str = '';
+				$chosen_columns = @$chosen_columns ? $chosen_columns : $columns;
+				my @cols_order_by;
+				@cols_order_by = grep { $_ ~~ @$chosen_columns } @$cols_order_by_tmp if @$cols_order_by_tmp;
+				$order_by_str = ' ORDER BY ' . '[' . join( '], [', @cols_order_by ) . ']' if @cols_order_by;
+				my $regexp_str = '';
+				my @cols_regexp;
+				@cols_regexp = grep { $_ ~~ @$chosen_columns } @$cols_regexp_tmp if @$cols_regexp_tmp;
+				if ( @cols_regexp ) {
+					my $n;
+					for my $col ( @cols_regexp ) {
+						++$n;
+						$regexp_str = " WHERE [$col] REGEXP ?" if $n == 1;
+						$regexp_str .= " AND [$col] REGEXP ?"  if $n > 1;
+					}
+				}
+				my $str = '[' . join( '], [', @$chosen_columns ? @$chosen_columns : @$columns ) . ']';
+				my $select = "SELECT $str FROM [$table]" . $regexp_str . $order_by_str;
+				my @arguments = ( @$hash_regexp{@cols_regexp} );
+				my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM [$table]" . $regexp_str, {}, @$hash_regexp{@cols_regexp} );
+				return $rows, $select, \@arguments;
+			}
+			default {
+				say "Something is wrong!";
+			}
+		}
+	}
+	return;
+}
+
+
 sub calc_widths {
     my ( $ref, $col_types, $cut ) = @_; 
     my ( $max, $not_a_number );
@@ -341,8 +512,8 @@ sub calc_widths {
             $row->[$i] = 'Blob' if $col_types->[$i] eq 'BLOB' and $count > 1 and $opt->{no_blob};
             $max->[$i] //= 0;
             next if not defined $row->[$i];
-            $row->[$i] =~ s/\p{Space}/ /g; #
-            $row->[$i] =~ s/\p{Cntrl}//g;  #
+            $row->[$i] =~ s/\p{Space}/ /g;
+            $row->[$i] =~ s/\p{Cntrl}//g;
             next if $cut and $count == 1;
             eval {
                 my $gcstring = Unicode::GCString->new( $row->[$i] );
@@ -365,7 +536,16 @@ sub minus_x_percent {
 }
 
 sub recalc_widths {
-    my ( $maxcols, $ref, $col_types, $cut ) = @_;
+    my ( $maxcols, $ref, $col_types ) = @_;
+    my $cut = $opt->{cut_col_names};
+    if ( $cut == -1 ) {
+		my $head_sum = 0;
+		for my $i ( 0 .. $#{$ref->[0]} ) {
+			$head_sum += length( $ref->[0][$i] // '' );
+			$head_sum += $opt->{tab} if $i != $#{$ref->[0]};
+		}
+		$cut = ( $head_sum > $maxcols ) ? 1 : 0;
+	}
     my ( $max, $not_a_number );
     eval {
         ( $max, $not_a_number ) = calc_widths( $ref, $col_types, $cut );
@@ -425,14 +605,14 @@ sub recalc_widths {
 
             
 sub print_table {
-    my ( $dbh, $table, $str, $type, $cut ) = @_;
-    my ( $ref, $col_types ) = read_db_table ( $dbh, $table, $str );
+    my ( $ref, $col_types, $type ) = @_;
     my ( $maxcols, $maxrows ) = GetTerminalSize( *STDOUT );
     return if not defined $ref;
-    my ( $max, $not_a_number ) = recalc_widths( $maxcols, $ref, $col_types, $cut );
+    my ( $max, $not_a_number ) = recalc_widths( $maxcols, $ref, $col_types );
     return if not defined $max;
+    print GO_TO_TOP_LEFT;
+    print CLEAR_EOS;
     if ( $type eq 'row' ) {
-
         my $items = @$ref * @{$ref->[0]};
         my $start = 8_000;
         my $total = $#{$ref};
@@ -602,17 +782,6 @@ sub unicode_sprintf {
 
 sub options {
     my ( $opt, $config_file ) = @_;
-    my $section = 'sqlite';
-    my $ini = Config::Tiny->new;
-    $ini = Config::Tiny->read( $config_file ) if -e $config_file;
-    for my $key ( keys %{$ini->{$section}} ) {
-        if ( $key eq 'table_colors' ) {
-            $opt->{$key} = [ split / /, $ini->{$section}{$key} ];
-        }
-        else {
-            $opt->{$key} = $ini->{$section}{$key};
-        }
-    }
     my $oh = {
         cache_rootdir   => '- Cache rootdir', 
         cache_expire    => '- Cache expire', 
@@ -626,8 +795,9 @@ sub options {
         undef           => '- Undef', 
         table_colors    => '- Table colors', 
         head_colors     => '- Head colors',
+        cut_col_names   => '- Cut col names',
     };
-    my @keys = ( qw( cache_rootdir cache_expire reset_cache max_depth limit delete no_blob min_width tab undef table_colors head_colors ) );
+    my @keys = ( qw( cache_rootdir cache_expire reset_cache max_depth limit delete no_blob min_width tab undef table_colors head_colors cut_col_names ) );
     my $change;
     
     OPTIONS: while ( 1 ) {
@@ -659,11 +829,16 @@ sub options {
                     elsif ( $key eq 'reset_cache' or $key eq 'delete' or $key eq 'no_blob' ) {
                         $value = $opt->{$key} ? 'true' : 'false';
                     }
+                    elsif ( $key eq 'cut_col_names' ) {
+                        $value = "auto"    if $opt->{$key} == -1;
+                        $value = "no cut"  if $opt->{$key} ==  0;
+                        $value = "cut col" if $opt->{$key} ==  1; 
+                    }                    
                     else {
                         $value = $opt->{$key};
                     }
                     ( my $name = $oh->{$key} ) =~ s/\A..//;
-                    printf "%-15s : %s\n", "  $name", $value;
+                    printf "%-16s : %s\n", "  $name", $value;
                 }
                 say "";
                 choose( [ '  Close with ENTER  ' ], { prompt => 0 } )
@@ -756,7 +931,18 @@ sub options {
                 break if not defined $color_fg;
                 $opt->{head_colors} = "$color_fg $color_bg";
                 $change++;
-            }            
+            }
+            when ( $oh->{cut_col_names} ) {
+				my $default = 'Auto: cut column names if the sum of length of column names is greater than screen width.';
+				my $cut_col = 'Cut the column names to the length of the longest column value.';
+				my $no_cut  = 'Do not cut column names deliberately, instead treat column names as normal column valules.';
+                my $cut = choose( [ $default, $cut_col, $no_cut, undef ], { prompt => 'Column names:', undef => $back } );
+                break if not defined $cut;
+				if    ( $cut eq $cut_col ) { $opt->{cut_col_names} =  1 }
+				elsif ( $cut eq $no_cut )  { $opt->{cut_col_names} =  0 }
+				else                       { $opt->{cut_col_names} = -1 }
+				$change++;
+			}
             default { die "Something is wrong $!"; }
         }
     }
@@ -764,7 +950,9 @@ sub options {
         my ( $true, $false ) = ( ' Make changes permanent ', ' Use changes only this time ' );
         my $permanent = choose( [ $false, $true ], { prompt => 0, layout => 3, pad_one_row => 1 } );
         exit if not defined $permanent;
-        if ( $permanent eq $true ) {
+        if ( $permanent eq $true and -e $config_file ) {
+            my $section = 'sqlite';
+			my $ini = Config::Tiny->new;
             for my $key ( keys %$opt ) {
                 if ( $key eq 'table_colors' ) {
                     $ini->{$section}->{$key} = "@{$opt->{table_colors}}";

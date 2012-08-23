@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.001';
+our $VERSION = '1.002';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -62,14 +62,11 @@ use constant {
     CONTROL_b           => 0x02,
     CONTROL_c           => 0x03,
     CONTROL_f           => 0x06,
-    CONTROL_h           => 0x08,    
+    CONTROL_h           => 0x08,
     KEY_TAB             => 0x09,
     KEY_ENTER           => 0x0d,
     KEY_ESC             => 0x1b,
     KEY_SPACE           => 0x20,
-    #KEY_d               => 0x64,
-    #KEY_e               => 0x65,
-    #KEY_f               => 0x66,
     KEY_h               => 0x68,
     KEY_j               => 0x6a,
     KEY_k               => 0x6b,
@@ -85,7 +82,7 @@ use constant {
     KEY_BTAB            => 0x1b5b5a,
     KEY_PAGE_UP         => 0x1b5b35,
     KEY_PAGE_DOWN       => 0x1b5b36,
-    
+
 };
 
 
@@ -423,7 +420,6 @@ sub choose {
     $arg->{length_longest} = _length_longest( $arg->{list} ) if ! defined $arg->{length_longest};
     $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
     $arg->{wantarray} = $wantarray;
-    # $arg->{LastEventWasPress} = 0;  # in order to ignore left-over button-ups # orig comment
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
     $arg->{screen_row} = 0;
@@ -577,7 +573,7 @@ sub choose {
                     $arg->{backup_col} = undef if defined $arg->{backup_col}; # don't remember col if col is changed deliberately
                 }
             }
-            when ( $c == CONTROL_b || $c == KEY_PAGE_UP ) { # $c == KEY_d || 
+            when ( $c == CONTROL_b || $c == KEY_PAGE_UP ) {
                 if ( $arg->{begin_page} <= 0 ) {
                     _beep( $arg );
                 }
@@ -594,8 +590,8 @@ sub choose {
 					$arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
 					_wr_screen( $arg );
 				}
-			}            
-            when ( $c == CONTROL_f || $c == KEY_PAGE_DOWN ) { # $c == KEY_f || 
+			}
+            when ( $c == CONTROL_f || $c == KEY_PAGE_DOWN ) {
                 if ( $arg->{end_page} >= $#{$arg->{rowcol2list}} ) {
                     _beep( $arg );
                 }
@@ -820,7 +816,8 @@ sub _size_and_layout {
         else {
             my $begin = 0;
             my $end = $cols_per_row - 1;
-            while ( @{$arg->{list}}[$begin..$end] ) { ###
+            #while ( @{$arg->{list}}[$begin..$end] ) {
+            while ( $begin <= $#{$arg->{list}} ) {
                 push @{$arg->{rowcol2list}}, [ $begin .. $end ];
                 $begin = $end + 1;
                 $end = $begin + $cols_per_row - 1;
@@ -841,10 +838,6 @@ sub _handle_mouse {
     elsif ( $button_pressed == 5 ) {
         return KEY_DOWN;
     }
-#    if ( $arg->{LastEventWasPress} ) {
-#        $arg->{LastEventWasPress} = 0;
-#        return NEXT_getch;
-#    }
     return NEXT_getch if $y < $top_row;
     my $mouse_row = $y - $top_row;
     my $mouse_col = $x;
@@ -865,11 +858,9 @@ sub _handle_mouse {
     return NEXT_getch if ! $found;
     my $return_char = '';
     if ( $button_pressed == 1 ) {
-        # $arg->{LastEventWasPress} = 1;
         $return_char = KEY_ENTER;
     }
     elsif ( $button_pressed == 3  ) {
-        # $arg->{LastEventWasPress} = 1;
         $return_char = KEY_SPACE;
     }
     else {
@@ -900,7 +891,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.001
+Version 1.002
 
 =cut
 
@@ -1002,7 +993,7 @@ The "q" key returns I<undef> or an empty list in list context.
 
 With a I<mouse_mode> enabled (and if supported by the terminal) the element can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
-Keys to move around: arrow keys (or hjkl), Tab, BackSpace (or Shift-Tab or Ctrl-H), PageUp and PageDown (or Ctrl+B/Ctrl+F). 
+Keys to move around: arrow keys (or hjkl), Tab, BackSpace (or Shift-Tab or Ctrl-H), PageUp and PageDown (or Ctrl+B/Ctrl+F).
 
 =head3 Modifications for the output
 
@@ -1298,6 +1289,11 @@ and
     "\e[?1003l", "\e[?1005l", "\e[?1006l"
 
 are used to enable/disable the different mouse modes.
+
+
+=head2 Monospaced font
+
+It is needed a terminal that uses a monospaced font.
 
 =head1 BUGS AND LIMITATIONS
 
