@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '1.002';
+our $VERSION = '1.003';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -73,7 +73,6 @@ sub Term::Choose::_print_promptline {
             $arg->{prompt_line} = '';
         }
     }
-    $arg->{step} = 10; # _unicode_cut, _unicode_sprintf
     my $prompt_length;
     eval {
 		my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
@@ -204,7 +203,6 @@ sub Term::Choose::_size_and_layout {
         else {
             my $begin = 0;
             my $end = $cols_per_row - 1;
-            #while ( @{$arg->{list}}[$begin..$end] ) {
             while ( $begin <= $#{$arg->{list}} ) {
                 push @{$arg->{rowcol2list}}, [ $begin .. $end ];
                 $begin = $end + 1;
@@ -236,7 +234,7 @@ sub _unicode_cut {
 					$unicode = $tmp;
 					last;
 				}
-				$max_length += $arg->{step};
+				$max_length += 10;
 			}
 			while ( $colwidth > $length ) {
 				$unicode =~ s/\X\z//;
@@ -280,7 +278,7 @@ sub _unicode_sprintf {
 					$unicode = $tmp;
 					last;
 				}
-				$max_length += $arg->{step};
+				$max_length += 10;
 			}
 			while ( $colwidth > $arg->{length_longest} ) {
 				$unicode =~ s/\X\z//;
@@ -335,7 +333,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 1.002
+Version 1.003
 
 =cut
 

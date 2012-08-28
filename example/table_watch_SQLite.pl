@@ -3,7 +3,7 @@ use warnings;
 use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
-# Version 0.08
+# Version 0.09
 
 use File::Find qw(find);
 use File::Path qw(make_path);
@@ -37,7 +37,8 @@ sub help {
 
 Usage:
     table_info.pl [help or options] [directories to be searched]
-    
+    say rel2abs( $0 );
+<>;
     If no directories are passed the home directory is searched for databases.
     Options with the parenthesis at the end can be used on the comandline too.
     Customized Table - REGEXP: for case sensitivity prefix pattern with (?-i).
@@ -95,7 +96,7 @@ if ( not -e $config_file ) {
 	close $fh or warn $!;
 }
 
-if ( -e $config_file ) {
+if ( -e $config_file and -s $config_file ) {
     my $section = 'sqlite';
     my $ini = Config::Tiny->new;
     $ini = Config::Tiny->read( $config_file );
@@ -104,7 +105,15 @@ if ( -e $config_file ) {
             $opt->{$key} = [ split / /, $ini->{$section}{$key} ];
         }
         else {
-            $opt->{$key} = $ini->{$section}{$key};
+            if ( $ini->{$section}{$key} eq '' ) {
+                $ini->{$section}{$key} = undef;
+            }
+            elsif ( $ini->{$section}{$key} eq "''" ) {
+                $ini->{$section}{$key} = '';
+            }
+            else {
+                $opt->{$key} = $ini->{$section}{$key};
+            }
         }
     }
 }
@@ -114,19 +123,21 @@ $opt = options( $opt, $config_file ) if $help;
 my @dirs = @ARGV ? @ARGV : ( $home );
 
 my $key = join ' ', @dirs, '|', $opt->{max_depth} // '';
+
 my $cached = ' (cached)';
 
 my $cache = CHI->new ( 
-    namespace => rel2abs( $0 ), 
+    namespace => 'table_watch_SQLite', 
     driver => 'File', 
     root_dir => $opt->{cache_rootdir},  
     expires_in => $opt->{cache_expire}, 
-    expires_variance => 0.25 
+    expires_variance => 0.25, 
 );
 
 $cache->remove( $key ) if $opt->{reset_cache};
+
 my @databases = $cache->compute( $key, $opt->{cache_expire}, sub { return search_databases->( @dirs ) } );
-    
+
 sub search_databases {
     my @dirs = @_;
     my @databases;
@@ -171,16 +182,24 @@ my $quit = 'QUIT';
 my $back = 'BACK';
 my %lyt = ( layout => 3, clear_screen => 1 );
 
-my %auswahl = ( 
-    color_auto 		=> '° table auto', 
-    color_customize => '° table customized',
-    row_auto 		=> '* table auto', 
-    row_customize 	=> '* table customized',
-    count_rows     	=> '  count rows',
-    delete_table   	=> '  delete table',
-);
+#my %auswahl = ( 
+#    color_customize => '°°° table °°°',
+#    row_customize 	=> '*** table ***',
+#    count_rows     	=> 'count rows',
+#    delete_table   	=> 'delete table',
+#);
+#my @aw_keys = ( qw( color_customize row_customize count_rows ) );
 
+my %auswahl = ( 
+    color_auto      => '°° table auto', 
+    color_customize => '°° table customized',
+    row_auto        => '** table auto', 
+    row_customize   => '** table customized',
+    count_rows      => '   count rows',
+    delete_table    => '   delete table',
+);
 my @aw_keys = ( qw( color_auto color_customize count_rows row_auto row_customize ) );
+
 push @aw_keys, 'delete_table' if $opt->{delete}; 
 
 DATABASES: while ( 1 ) {
@@ -422,6 +441,7 @@ sub prepare_read_table {
 	CUSTOMIZE: while ( 1 ) {
 		print_select( $table, $columns, $chosen_columns, $cols_order_by_tmp, $cols_regexp_tmp, $hash_regexp );
 		my $custom = choose( [ undef, @customize{@keys} ], { prompt => "Customize:", layout => 3, undef => $back } );
+        #my $custom = choose( [ @customize{@keys}, undef ], { prompt => "Customize:", layout => 3, undef => $back } );		
 		for ( $custom ) {
 			when ( not defined ) {
 				last CUSTOMIZE;	
@@ -503,8 +523,8 @@ sub prepare_read_table {
 
 
 sub calc_widths {
-    my ( $ref, $col_types, $cut ) = @_; 
-    my ( $max, $not_a_number );
+    my ( $ref, $col_types, $cut, $maxcols ) = @_; 
+    my ( $max_head, $max, $not_a_number );
     my $count = 0;
     for my $row ( @$ref ) {
         $count++;
@@ -514,7 +534,21 @@ sub calc_widths {
             next if not defined $row->[$i];
             $row->[$i] =~ s/\p{Space}/ /g;
             $row->[$i] =~ s/\p{Cntrl}//g;
-            next if $cut and $count == 1;
+            if ( $count == 1 and $#$ref > 0 ) {
+                if ( $cut == 1 ) {
+                    next ;
+                }
+                elsif ( $cut == -1 ) {
+                    eval {
+                        my $gcstring = Unicode::GCString->new( $row->[$i] );
+                        $max_head->[$i] = $gcstring->columns();
+                    }; 
+                    if ( $@ ) { 
+                        $max_head->[$i] = length $row->[$i];
+                    }
+                    next;
+                }
+            }
             eval {
                 my $gcstring = Unicode::GCString->new( $row->[$i] );
                 $max->[$i] = $gcstring->columns() if $gcstring->columns() > $max->[$i];
@@ -524,6 +558,11 @@ sub calc_widths {
             }
             next if $count == 1;
             ++$not_a_number->[$i] if not looks_like_number $row->[$i];
+        }
+    }
+    if ( $#$ref > 0 and $cut == -1 and sum( @$max ) < $maxcols and sum( @$max_head ) < $maxcols ) {
+        for my $i ( 0 .. $#$max_head ) {
+            $max->[$i] = ( $max->[$i] >= $max_head->[$i] ) ? $max->[$i] : $max_head->[$i];
         }
     }
     return $max, $not_a_number;    
@@ -538,68 +577,60 @@ sub minus_x_percent {
 sub recalc_widths {
     my ( $maxcols, $ref, $col_types ) = @_;
     my $cut = $opt->{cut_col_names};
-    if ( $cut == -1 ) {
-		my $head_sum = 0;
-		for my $i ( 0 .. $#{$ref->[0]} ) {
-			$head_sum += length( $ref->[0][$i] // '' );
-			$head_sum += $opt->{tab} if $i != $#{$ref->[0]};
-		}
-		$cut = ( $head_sum > $maxcols ) ? 1 : 0;
-	}
     my ( $max, $not_a_number );
     eval {
-        ( $max, $not_a_number ) = calc_widths( $ref, $col_types, $cut );
+        ( $max, $not_a_number ) = calc_widths( $ref, $col_types, $cut, $maxcols );
     };
     if ( $@ ) {
         print $@, '  ';
         choose( [ 'Press ENTER to continue' ], { prompt => 0 } ); 
         return;    
     }
-    if ( $max and @$max ) {
-        my $sum = sum( @$max ) + $opt->{tab} * @$max; 
+    return if not defined $max;
+    return if not @$max;
+    my $sum = sum( @$max ) + $opt->{tab} * @$max; 
+    $sum -= $opt->{tab};
+    my @max_tmp = @$max;
+    my $percent = 0;
+    my $min_width_tmp = $opt->{min_width};
+    while ( $sum > $maxcols ) {
+        $percent += 0.5;
+        if ( $percent > 99 ) {
+            say "Terminal window is not wide enough to print this table.";
+            choose( [ 'Press ENTER to show the column names' ], { prompt => 0 } );
+            choose( $ref->[0], { prompt => "Column names (close with ENTER):", layout => 0 } );
+            return;
+        }
+        my $count = 0;
+        for my $i ( 0 .. $#max_tmp ) {
+            next if $min_width_tmp >= $max_tmp[$i];
+            if ( $min_width_tmp >= minus_x_percent( $max_tmp[$i], $percent ) ) {
+                $max_tmp[$i] = $min_width_tmp;
+            }
+            else {
+                $max_tmp[$i] = minus_x_percent( $max_tmp[$i], $percent );
+            }
+            $count++;
+            last if $sum <= $maxcols;   
+        }
+        $min_width_tmp-- if $count == 0 and $min_width_tmp > 1;
+        $sum = sum( @max_tmp ) + $opt->{tab} * @max_tmp; 
         $sum -= $opt->{tab};
-        my @max_tmp = @$max;
-        my $percent = 0;
-        my $min_width_tmp = $opt->{min_width};
-        while ( $sum > $maxcols ) {
-            $percent += 0.5;
-            if ( $percent > 99 ) {
-                say "Terminal window is not wide enough to print this table.";
-                choose( [ 'Press ENTER to show the column names' ], { prompt => 0 } );
-                choose( $ref->[0], { prompt => "Column names (close with ENTER):", layout => 0 } );
-                return;
-            }
-            my $count = 0;
-            for my $i ( 0 .. $#max_tmp ) {
-                next if $min_width_tmp >= $max_tmp[$i];
-                if ( $min_width_tmp >= minus_x_percent( $max_tmp[$i], $percent ) ) {
-                    $max_tmp[$i] = $min_width_tmp;
-                }
-                else {
-                    $max_tmp[$i] = minus_x_percent( $max_tmp[$i], $percent );
-                }
+    }
+    my $rest = $maxcols - $sum;
+    while ( $rest > 0 ) {
+        my $count = 0;
+        for my $i ( 0 .. $#max_tmp ) {
+            if ( $max_tmp[$i] < $max->[$i] ) {
+                $max_tmp[$i]++;
+                $rest--;
                 $count++;
-                last if $sum <= $maxcols;   
+                last if $rest < 1;
             }
-            $min_width_tmp-- if $count == 0 and $min_width_tmp > 1;
-            $sum = sum( @max_tmp ) + $opt->{tab} * @max_tmp; 
-            $sum -= $opt->{tab};
-        }
-        my $rest = $maxcols - $sum;
-        while ( $rest > 0 ) {
-            my $count = 0;
-            for my $i ( 0 .. $#max_tmp ) {
-                if ( $max_tmp[$i] < $max->[$i] ) {
-                    $max_tmp[$i]++;
-                    $rest--;
-                    $count++;
-                    last if $rest < 1;
-                }
-            } 
-            last if $count == 0;
-        }
-        $max = [ @max_tmp ] if @max_tmp;
-    } 
+        } 
+        last if $count == 0;
+    }
+    $max = [ @max_tmp ] if @max_tmp;
     return $max, $not_a_number;
 }
 
@@ -612,6 +643,7 @@ sub print_table {
     return if not defined $max;
     print GO_TO_TOP_LEFT;
     print CLEAR_EOS;
+#################################################################################
     if ( $type eq 'row' ) {
         my $items = @$ref * @{$ref->[0]};
         my $start = 8_000;
@@ -648,9 +680,10 @@ sub print_table {
             }
         }
         $progress->update( $total ) if $total >= $next_update and $items > $start;
-        choose( \@list, { prompt => 0, layout => 3, length_longest => sum( @$max, $opt->{tab} * $#{$max} ) } );
+        choose( \@list, { prompt => 0, layout => 3, length_longest => sum( @$max, $opt->{tab} * $#{$max} ), max_list => $opt->{limit} + 1 } );
         return;
     }
+    ########################################################################################
     my $first_row = '';
     my $f_row = shift @$ref;
     for my $i ( 0 .. $#$max ) {
@@ -958,7 +991,15 @@ sub options {
                     $ini->{$section}->{$key} = "@{$opt->{table_colors}}";
                 }
                 else {
-                    $ini->{$section}->{$key} = $opt->{$key};
+                    if ( not defined $opt->{$key} ) {
+                        $ini->{$section}->{$key} = '';
+                    }
+                    elsif ( $opt->{$key} eq '' ) {
+                        $ini->{$section}->{$key} = "''";
+                    }
+                    else {
+                        $ini->{$section}->{$key} = $opt->{$key};
+                    }
                 }
             }
             $ini->write( $config_file );
@@ -1041,3 +1082,4 @@ sub set_dir {
 
 
 __DATA__
+

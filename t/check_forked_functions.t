@@ -93,7 +93,7 @@ splice( @print_promptline, 12, 3 );
 
 splice( @print_promptline_GC, 0, 1 );
 splice( @print_promptline_GC, 7, 9 );
-splice( @print_promptline_GC, 12, 12 );
+splice( @print_promptline_GC, 12, 11 );
 
 #for my $i ( 0 .. $#print_promptline ) {
 #    if ( $print_promptline[$i] ne $print_promptline_GC[$i] ) {

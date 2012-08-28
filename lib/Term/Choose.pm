@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.002';
+our $VERSION = '1.003';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -152,8 +152,8 @@ sub _getch {
                     return NEXT_getch;
                 }
                 elsif ( $c1 eq '~' ) {
-					   if ( $c eq '5' ) { return KEY_PAGE_UP; }
-					elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
+                       if ( $c eq '5' ) { return KEY_PAGE_UP; }
+                    elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
                 }
                 else {
                     return NEXT_getch;
@@ -286,11 +286,12 @@ sub _write_first_screen {
     }
     $arg->{head} = 0;
     $arg->{marked} = [];
+    _size_and_layout( $arg );
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
     _print_promptline( $arg )if $arg->{prompt} ne '0';
     $arg->{maxrows} = $arg->{maxrows} - $arg->{head};
-    _size_and_layout( $arg );
+    #_size_and_layout( $arg );
     $arg->{maxrows_index} = $arg->{maxrows} - 1;
     $arg->{maxrows_index} = 0 if $arg->{maxrows_index} < 0;
     $arg->{begin_page} = 0;
@@ -376,7 +377,7 @@ sub _set_layout {
     $config->{right_justify}    //= 0;
     $config->{layout}           //= 1;
     $config->{vertical}         //= 1;
-    #$config->{length_longest}   //= undef;
+    #$config->{length_longest}  //= undef;
     $config->{clear_screen}     //= 0;
     $config->{mouse_mode}       //= 0;
     $config->{pad}              //= 2;
@@ -385,7 +386,7 @@ sub _set_layout {
     $config->{empty_string}     //= '<empty>';
     $config->{undef}            //= '<undef>';
     $config->{max_list}         //= 100_000;
-    #$config->{screen_width}     //= undef;
+    #$config->{screen_width}    //= undef;
     $config->{hide_cursor}      //= 1;
     return $config;
 }
@@ -426,7 +427,12 @@ sub choose {
     $arg->{this_cell} = [];
     _init_scr( $arg );
     _write_first_screen( $arg );
-    local $SIG{'WINCH'} = sub { $arg->{size_changed} = 1; };
+    # local $SIG{'WINCH'} = sub { $arg->{size_changed} = 1; };
+    my $orig_sigwinch = $SIG{'WINCH'};
+    local $SIG{'WINCH'} = sub {
+        $orig_sigwinch->() if $orig_sigwinch && ref $orig_sigwinch eq 'CODE';
+        $arg->{size_changed} = 1;
+    };
     while ( 1 ) {
         my $c = _getch( $arg );
         next if $c == NEXT_getch;
@@ -580,11 +586,11 @@ sub choose {
                 else {
      				my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) -1 );
 					$arg->{this_cell}[ROW] = $page;
-				    #$arg->{this_cell}[COL] = 0;
 					if ( defined $arg->{backup_col} ) {
 						$arg->{this_cell}[COL] = $arg->{backup_col};
 						$arg->{backup_col}     = undef;
 					}
+					#$arg->{this_cell}[COL] = 0;
 					$arg->{page} 	   = $page;
 					$arg->{begin_page} = $page;
 					$arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
@@ -597,13 +603,14 @@ sub choose {
                 }
                 else {
      				my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
-					$arg->{this_cell}[ROW] = $page;
-					#$arg->{this_cell}[COL] = 0;
-					# if it remains only the last row for the last page and the column in use doesn't exist in the last row, then ...
+					$arg->{this_cell}[ROW] = $page; # first row on the page
+					# if it remains only the last row (which is then also the first row) for the last page 
+					# and the column in use doesn't exist in the last row, then ...
 					if ( $page == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {
 						$arg->{backup_col}     = $arg->{this_cell}[COL];
 						$arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
 					}
+					#$arg->{this_cell}[COL] = 0;
      				$arg->{page} 	   = $page;
 					$arg->{begin_page} = $page;
 					$arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
@@ -701,7 +708,7 @@ sub _goto {
 
 
 sub _wr_screen {
-    my $arg = shift;
+    my ( $arg ) = @_;
     _goto( $arg, $arg->{head}, 0 );
     _clear_to_end_of_screen( $arg );
     for my $row ( $arg->{begin_page} .. $arg->{end_page} ) {
@@ -816,7 +823,6 @@ sub _size_and_layout {
         else {
             my $begin = 0;
             my $end = $cols_per_row - 1;
-            #while ( @{$arg->{list}}[$begin..$end] ) {
             while ( $begin <= $#{$arg->{list}} ) {
                 push @{$arg->{rowcol2list}}, [ $begin .. $end ];
                 $begin = $end + 1;
@@ -891,7 +897,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.002
+Version 1.003
 
 =cut
 
@@ -917,29 +923,7 @@ Choose from a list of elements.
 
 Requires Perl Version 5.10.1 or greater.
 
-Based on the I<choose> function from L<Term::Clui> module.
-
-Differences between L<Term::Clui> and L<Term::Choose>:
-
-L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).
-
-The reason for writing L<Term::Choose> was to get a nicer output. If the list does not fit in one row, I<choose> from L<Term::Clui> puts the elements on the screen without ordering the items in columns. L<Term::Choose> arranges the elements in columns which makes it easier for me to find elements and easier to navigate on the screen.
-
-Another difference is how lists which don't find on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
-
-Strings where the number of characters are not equal to the number of columns on the screen break the output from L<Term::Clui> and L<Term::Choose>. L<Term::Choose::GC> tries to get along with such situations - see L</"BUGS AND LIMITATIONS">.
-
-L<Term::Clui>'s I<choose> prints and returns the chosen items, while I<choose> from L<Term::Choose> only returns the chosen items.
-
-L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> is set to I<off>. In L<Term::Choose> the mouse mode is set with the option I<mouse_mode>.
-
-Only in L<Term::Clui>:
-
-L<Term::Clui> provides a speaking interface, offers a bundle of functions and has a fallback to work when only Perl core modules are available.
-
-The I<choose> function from L<Term::Clui> can remember choices made in scalar context and allows multiline question - the first line is put on the top, the subsequent lines are displayed below the list.
-
-These differences refer to L<Term::Clui> version 1.65. For a more precise description of L<Term::Clui> consult its own documentation.
+Based on the I<choose> function from L<Term::Clui> module - for more details see L</MOTIVATION>.
 
 =head1 EXPORT
 
@@ -1295,6 +1279,10 @@ are used to enable/disable the different mouse modes.
 
 It is needed a terminal that uses a monospaced font.
 
+=head2 SIGWINCH
+
+L<Term::Choose> uses the Perl signal handling model as described in L<perlipc/Signals|http://search.cpan.org/perldoc?perlipc#Signals>. It is needed an operating system which knows the WINCH signal. I<choose> uses SIGWINCH to check if the windows size has changed.
+
 =head1 BUGS AND LIMITATIONS
 
 =head2 Unicode
@@ -1310,6 +1298,34 @@ The use of L<Term::Choose::GC> needs additionally the L<Unicode::GCString> modul
 Known drawbacks:
 
 L<Term::Choose::GC>'s I<choose> is probably slower than I<choose> from L<Term::Choose>.
+
+=head1 MOTIVATION
+
+The reason for writing L<Term::Choose> was to get something like L<Term::Clui::choose|http://search.cpan.org/perldoc?Term%3A%3AClui#SUBROUTINES> but with a nicer output in the case the list doesn't fit in one row. 
+
+If the list does not fit in one row, I<choose> from L<Term::Clui> puts the elements on the screen without ordering the items in columns. L<Term::Choose> arranges the elements in columns which makes it easier for me to find elements and easier to navigate on the screen.
+
+=head2 Differences between L<Term::Clui> and L<Term::Choose>
+
+L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).
+
+As mentioned above I<choose> from L<Term::Clui> doesn't order the elements in columns if there is more than one row on the screen while L<Term::Choose> in such situations arranges the elements in columns.
+
+Another difference is how lists which don't find on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
+
+Strings where the number of characters are not equal to the number of columns on the screen break the output from L<Term::Clui> and L<Term::Choose>. L<Term::Choose::GC> tries to get along with such situations - see L</"BUGS AND LIMITATIONS">.
+
+L<Term::Clui>'s I<choose> prints and returns the chosen items, while I<choose> from L<Term::Choose> only returns the chosen items.
+
+L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> is set to I<off>. In L<Term::Choose> the mouse mode is set with the option I<mouse_mode>.
+
+=head2 Only in L<Term::Clui>
+
+L<Term::Clui> provides a speaking interface, offers a bundle of functions and has a fallback to work when only Perl core modules are available.
+
+The I<choose> function from L<Term::Clui> can remember choices made in scalar context and allows multiline question - the first line is put on the top, the subsequent lines are displayed below the list.
+
+These differences refer to L<Term::Clui> version 1.65. For a more precise description of L<Term::Clui> consult its own documentation.
 
 =head1 SUPPORT
 

@@ -1,5 +1,12 @@
 Revision history for Term::Choose
 
+1.003   2012-08-28
+        - Check for existing SIGWINCH handler.
+        - Code refactoring.
+        - Removed $arg->{step} from "_print_promptline" (GC) ("_print_promptline" not available if $arg->{prompt} == 0).
+        - Updated example.
+        - Improved documentation.
+
 1.002  	2012-08-23
         - Updated Example.
         - Code refactoring.
