@@ -1,5 +1,10 @@
 Revision history for Term::Choose
 
+1.004   2012-08-29
+        - "_size_and_layout" back to the old position after "_print_promptline";
+        - Code refactoring.
+        - Improved documentation.
+        
 1.003   2012-08-28
         - Check for existing SIGWINCH handler.
         - Code refactoring.

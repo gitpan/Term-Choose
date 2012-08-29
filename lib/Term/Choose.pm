@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.003';
+our $VERSION = '1.004';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -248,62 +248,6 @@ sub _length_longest {
 }
 
 
-sub _print_promptline {
-    my ( $arg ) = @_;
-    $arg->{prompt} =~ s/\p{Space}/ /g;
-    $arg->{prompt} =~ s/\p{Cntrl}//g;
-    $arg->{prompt_line} = $arg->{prompt};
-    if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
-        if ( $arg->{prompt} ) {
-            $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)';
-            $arg->{prompt_line} = $arg->{prompt} . ' (multiple choice)' if length $arg->{prompt_line} > $arg->{maxcols};
-        }
-        else {
-            $arg->{prompt_line} = '';
-        }
-    }
-    if ( length $arg->{prompt_line} > $arg->{maxcols} ) {
-        $arg->{prompt_line} = substr( $arg->{prompt}, 0, $arg->{maxcols} - 3 ) . '...';
-    }
-    print $arg->{prompt_line};
-    $arg->{head} = 1;
-}
-
-
-sub _write_first_screen {
-    my ( $arg ) = @_;
-    if ( $arg->{clear_screen} ) {
-        print CLEAR_SCREEN;
-        print GO_TO_TOP_LEFT;
-    }
-    ( $arg->{maxcols}, $arg->{maxrows} ) = GetTerminalSize( $arg->{handle_out} );
-    if ( $arg->{screen_width} ) {
-        $arg->{maxcols} = int( ( $arg->{maxcols} / 100 ) * $arg->{screen_width} );
-    }
-    if ( $arg->{mouse_mode} == 2 ) {
-	$arg->{maxcols} = MAX_MOUSE_1003_COL if $arg->{maxcols} > MAX_MOUSE_1003_COL;
-        $arg->{maxrows} = MAX_MOUSE_1003_ROW if $arg->{maxrows} > MAX_MOUSE_1003_ROW;
-    }
-    $arg->{head} = 0;
-    $arg->{marked} = [];
-    _size_and_layout( $arg );
-    _goto( $arg, $arg->{head}, 0 );
-    _clear_to_end_of_screen( $arg );
-    _print_promptline( $arg )if $arg->{prompt} ne '0';
-    $arg->{maxrows} = $arg->{maxrows} - $arg->{head};
-    #_size_and_layout( $arg );
-    $arg->{maxrows_index} = $arg->{maxrows} - 1;
-    $arg->{maxrows_index} = 0 if $arg->{maxrows_index} < 0;
-    $arg->{begin_page} = 0;
-    $arg->{end_page} = $arg->{maxrows_index};
-    $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{maxrows_index} > $#{$arg->{rowcol2list}};
-    $arg->{page} = 0;
-    _wr_screen( $arg );
-    print GET_CURSOR_POSITION if $arg->{mouse_mode};  # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
-    $arg->{size_changed} = 0;
-}
-
-
 sub _copy_orig_list {
     my ( $arg ) = @_;
     if ( defined $arg->{list_to_long} && $arg->{list_to_long} ) {
@@ -392,6 +336,61 @@ sub _set_layout {
 }
 
 
+sub _print_promptline {
+    my ( $arg ) = @_;
+    $arg->{prompt} =~ s/\p{Space}/ /g;
+    $arg->{prompt} =~ s/\p{Cntrl}//g;
+    $arg->{prompt_line} = $arg->{prompt};
+    if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
+        if ( $arg->{prompt} ) {
+            $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)';
+            $arg->{prompt_line} = $arg->{prompt} . ' (multiple choice)' if length $arg->{prompt_line} > $arg->{maxcols};
+        }
+        else {
+            $arg->{prompt_line} = '';
+        }
+    }
+    if ( length $arg->{prompt_line} > $arg->{maxcols} ) {
+        $arg->{prompt_line} = substr( $arg->{prompt}, 0, $arg->{maxcols} - 3 ) . '...';
+    }
+    print $arg->{prompt_line};
+    $arg->{head} = 1;
+}
+
+
+sub _write_first_screen {
+    my ( $arg ) = @_;
+    if ( $arg->{clear_screen} ) {
+        print CLEAR_SCREEN;
+        print GO_TO_TOP_LEFT;
+    }
+    ( $arg->{maxcols}, $arg->{maxrows} ) = GetTerminalSize( $arg->{handle_out} );
+    if ( $arg->{screen_width} ) {
+        $arg->{maxcols} = int( ( $arg->{maxcols} / 100 ) * $arg->{screen_width} );
+    }
+    if ( $arg->{mouse_mode} == 2 ) {
+    $arg->{maxcols} = MAX_MOUSE_1003_COL if $arg->{maxcols} > MAX_MOUSE_1003_COL;
+        $arg->{maxrows} = MAX_MOUSE_1003_ROW if $arg->{maxrows} > MAX_MOUSE_1003_ROW;
+    }
+    $arg->{head} = 0;
+    $arg->{marked} = [];
+    _goto( $arg, $arg->{head}, 0 );
+    _clear_to_end_of_screen( $arg );
+    _print_promptline( $arg )if $arg->{prompt} ne '0';
+    $arg->{maxrows} = $arg->{maxrows} - $arg->{head};
+    _size_and_layout( $arg );
+    $arg->{maxrows_index} = $arg->{maxrows} - 1;
+    $arg->{maxrows_index} = 0 if $arg->{maxrows_index} < 0;
+    $arg->{begin_page} = 0;
+    $arg->{end_page} = $arg->{maxrows_index};
+    $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{maxrows_index} > $#{$arg->{rowcol2list}};
+    $arg->{page} = 0;
+    _wr_screen( $arg );
+    print GET_CURSOR_POSITION if $arg->{mouse_mode};  # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
+    $arg->{size_changed} = 0;
+}
+
+
 sub choose {
     my ( $orig_list, $config ) = @_;
     croak "choose: First argument is not a ARRAY reference" if ! defined $orig_list;
@@ -427,7 +426,6 @@ sub choose {
     $arg->{this_cell} = [];
     _init_scr( $arg );
     _write_first_screen( $arg );
-    # local $SIG{'WINCH'} = sub { $arg->{size_changed} = 1; };
     my $orig_sigwinch = $SIG{'WINCH'};
     local $SIG{'WINCH'} = sub {
         $orig_sigwinch->() if $orig_sigwinch && ref $orig_sigwinch eq 'CODE';
@@ -584,40 +582,40 @@ sub choose {
                     _beep( $arg );
                 }
                 else {
-     				my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) -1 );
-					$arg->{this_cell}[ROW] = $page;
-					if ( defined $arg->{backup_col} ) {
-						$arg->{this_cell}[COL] = $arg->{backup_col};
-						$arg->{backup_col}     = undef;
-					}
-					#$arg->{this_cell}[COL] = 0;
-					$arg->{page} 	   = $page;
-					$arg->{begin_page} = $page;
-					$arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
-					_wr_screen( $arg );
-				}
-			}
+                    my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) -1 );
+                    $arg->{this_cell}[ROW] = $page;
+                    if ( defined $arg->{backup_col} ) {
+                        $arg->{this_cell}[COL] = $arg->{backup_col};
+                        $arg->{backup_col}     = undef;
+                    }
+                    #$arg->{this_cell}[COL] = 0;
+                    $arg->{page} 	   = $page;
+                    $arg->{begin_page} = $page;
+                    $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
+                    _wr_screen( $arg );
+                }
+            }
             when ( $c == CONTROL_f || $c == KEY_PAGE_DOWN ) {
                 if ( $arg->{end_page} >= $#{$arg->{rowcol2list}} ) {
                     _beep( $arg );
                 }
                 else {
-     				my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
-					$arg->{this_cell}[ROW] = $page; # first row on the page
-					# if it remains only the last row (which is then also the first row) for the last page 
-					# and the column in use doesn't exist in the last row, then ...
-					if ( $page == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {
-						$arg->{backup_col}     = $arg->{this_cell}[COL];
-						$arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
-					}
-					#$arg->{this_cell}[COL] = 0;
-     				$arg->{page} 	   = $page;
-					$arg->{begin_page} = $page;
-					$arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
-					$arg->{end_page}   = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
-					_wr_screen( $arg );
-				}
-			}
+                    my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
+                    $arg->{this_cell}[ROW] = $page; # first row on the page
+                    # if it remains only the last row (which is then also the first row) for the last page 
+                    # and the column in use doesn't exist in the last row, then ...
+                    if ( $page == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {
+                        $arg->{backup_col}     = $arg->{this_cell}[COL];
+                        $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
+                    }
+                    #$arg->{this_cell}[COL] = 0;
+                    $arg->{page} 	   = $page;
+                    $arg->{begin_page} = $page;
+                    $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
+                    $arg->{end_page}   = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
+                    _wr_screen( $arg );
+                }
+            }
             when ( $c == KEY_q ) {
                 _end_win( $arg );
                 return;
@@ -897,7 +895,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.003
+Version 1.004
 
 =cut
 
@@ -923,7 +921,7 @@ Choose from a list of elements.
 
 Requires Perl Version 5.10.1 or greater.
 
-Based on the I<choose> function from L<Term::Clui> module - for more details see L</MOTIVATION>.
+Based on the I<choose> function from the L<Term::Clui> module - for more details see L</MOTIVATION>.
 
 =head1 EXPORT
 
@@ -931,7 +929,7 @@ Nothing by default.
 
     use Term::Choose qw(choose);
 
-=head1 SUBROUTINES/METHODS
+=head1 SUBROUTINES
 
 =head2 choose
 
@@ -1305,25 +1303,29 @@ The reason for writing L<Term::Choose> was to get something like L<Term::Clui::c
 
 If the list does not fit in one row, I<choose> from L<Term::Clui> puts the elements on the screen without ordering the items in columns. L<Term::Choose> arranges the elements in columns which makes it easier for me to find elements and easier to navigate on the screen.
 
-=head2 Differences between L<Term::Clui> and L<Term::Choose>
+=over
+
+=item Differences between L<Term::Clui> and L<Term::Choose>
 
 L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).
 
-As mentioned above I<choose> from L<Term::Clui> doesn't order the elements in columns if there is more than one row on the screen while L<Term::Choose> in such situations arranges the elements in columns.
+As mentioned above I<choose> from L<Term::Clui> does not order the elements in columns if there is more than one row on the screen while L<Term::Choose> in such situations arranges the elements in columns.
 
-Another difference is how lists which don't find on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
+Another difference is how lists which don't fit on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
 
 Strings where the number of characters are not equal to the number of columns on the screen break the output from L<Term::Clui> and L<Term::Choose>. L<Term::Choose::GC> tries to get along with such situations - see L</"BUGS AND LIMITATIONS">.
 
-L<Term::Clui>'s I<choose> prints and returns the chosen items, while I<choose> from L<Term::Choose> only returns the chosen items.
+L<Term::Clui>'s I<choose> prints and returns the chosen items while I<choose> from L<Term::Choose> only returns the chosen items.
 
 L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> is set to I<off>. In L<Term::Choose> the mouse mode is set with the option I<mouse_mode>.
 
-=head2 Only in L<Term::Clui>
+=item Only in L<Term::Clui>
 
 L<Term::Clui> provides a speaking interface, offers a bundle of functions and has a fallback to work when only Perl core modules are available.
 
 The I<choose> function from L<Term::Clui> can remember choices made in scalar context and allows multiline question - the first line is put on the top, the subsequent lines are displayed below the list.
+
+=back
 
 These differences refer to L<Term::Clui> version 1.65. For a more precise description of L<Term::Clui> consult its own documentation.
 
