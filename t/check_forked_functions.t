@@ -107,12 +107,12 @@ ok( @print_promptline ~~ @print_promptline_GC, 'fork: print_promptline ok' );
 ### size_and_layout
 
 splice( @size_and_layout, 0, 1 );
-splice( @size_and_layout, 17, 1 );
-splice( @size_and_layout, 29, 3 );
+splice( @size_and_layout, 16, 1 );
+splice( @size_and_layout, 28, 3 );
 
 splice( @size_and_layout_GC, 0, 1 );
-splice( @size_and_layout_GC, 17, 9 );
-splice( @size_and_layout_GC, 29, 1 );
+splice( @size_and_layout_GC, 16, 9 );
+splice( @size_and_layout_GC, 28, 1 );
 
 #for my $i ( 0 .. $#size_and_layout ) {
 #    if ( $size_and_layout[$i] ne $size_and_layout_GC[$i] ) {

@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.004';
+our $VERSION = '1.005';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -59,6 +59,7 @@ use constant {
 
 use constant {
     NEXT_getch          => -1,
+    
     CONTROL_b           => 0x02,
     CONTROL_c           => 0x03,
     CONTROL_f           => 0x06,
@@ -82,7 +83,6 @@ use constant {
     KEY_BTAB            => 0x1b5b5a,
     KEY_PAGE_UP         => 0x1b5b35,
     KEY_PAGE_DOWN       => 0x1b5b36,
-
 };
 
 
@@ -106,6 +106,36 @@ sub _getch {
             elsif ( $c eq 'C' ) { return KEY_RIGHT; }
             elsif ( $c eq 'D' ) { return KEY_LEFT; }
             elsif ( $c eq 'Z' ) { return KEY_BTAB; }
+            elsif ( $c =~ /\d/ ) {
+                my $c1 = ReadKey 0;
+                if ( $c1 eq '~' ) {
+                       if ( $c eq '5' ) { return KEY_PAGE_UP; }
+                    elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
+                }
+                elsif ( $c1 =~ /[;\d]/ ) {   # cursor-position report, response to \e[6n
+                    my $abs_curs_Y = 0 + $c;
+                    while ( 1 ) {
+                        last if $c1 eq ';';
+                        $abs_curs_Y = 10 * $abs_curs_Y + $c1;
+                        $c1 = ReadKey 0;
+                    }
+                    my $abs_curs_X = 0; # $arg->{abs_curs_X} never used
+                    while ( 1 ) {
+                        $c1 = ReadKey 0;
+                        last if $c1 !~ /\d/;
+                        $abs_curs_X = 10 * $abs_curs_X + $c1;
+                    }
+                    if ( $c1 eq 'R' ) {
+                        $arg->{abs_curs_Y} = $abs_curs_Y;
+                        $arg->{abs_curs_X} = $abs_curs_X;
+                    }
+
+                    return NEXT_getch;
+                }
+                else {
+                    return NEXT_getch;
+                }
+            }
             elsif ( $c eq '5' ) { return KEY_PAGE_UP; }
 			elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
             elsif ( $c eq 'M' && $arg->{mouse_mode} ) {
@@ -129,35 +159,6 @@ sub _getch {
                     }
                 }
                 return _handle_mouse( $x, $y, $button_pressed, $button_drag, $arg );
-            }
-            elsif ( $c =~ /\d/ ) {
-                my $c1 = ReadKey 0;
-                if ( $c1 =~ /[;\d]/ ) {   # cursor-position report, response to \e[6n
-                    my $abs_curs_Y = 0 + $c;
-                    while ( 1 ) {
-                        last if $c1 eq ';';
-                        $abs_curs_Y = 10 * $abs_curs_Y + $c1;
-                        $c1 = ReadKey 0;
-                    }
-                    my $abs_curs_X = 0; # $arg->{abs_curs_X} never used
-                    while ( 1 ) {
-                        $c1 = ReadKey 0;
-                        last if $c1 !~ /\d/;
-                        $abs_curs_X = 10 * $abs_curs_X + $c1;
-                    }
-                    if ( $c1 eq 'R' ) {
-                        $arg->{abs_curs_Y} = $abs_curs_Y;
-                        $arg->{abs_curs_X} = $abs_curs_X;
-                    }
-                    return NEXT_getch;
-                }
-                elsif ( $c1 eq '~' ) {
-                       if ( $c eq '5' ) { return KEY_PAGE_UP; }
-                    elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
-                }
-                else {
-                    return NEXT_getch;
-                }
             }
             else {
                 return NEXT_getch;
@@ -274,21 +275,22 @@ sub _copy_orig_list {
 sub _validate_option {
     my ( $config ) = @_;
     my %validate = (
-        prompt           => '',
-        right_justify    => qr/\A[01]\z/,
-        layout           => qr/\A[0123]\z/,
-        vertical         => qr/\A[01]\z/,
-        length_longest   => qr/\A[1-9][0-9]{0,2}\z/,
-        clear_screen     => qr/\A[01]\z/,
-        mouse_mode       => qr/\A[01234]\z/,
-        pad              => qr/\A[0-9][0-9]?\z/,
-        pad_one_row      => qr/\A[0-9][0-9]?\z/,
-        beep             => qr/\A[01]\z/,
-        empty_string     => '',
-        undef            => '',
-        max_list         => qr/\A[1-9][0-9]{0,8}\z/,
-        screen_width     => qr/\A[1-9][0-9]\z/,
-        hide_cursor      => qr/\A[01]\z/,
+        prompt          => '',
+        right_justify   => qr/\A[01]\z/,
+        layout          => qr/\A[0123]\z/,
+        vertical        => qr/\A[01]\z/,
+        length_longest  => qr/\A[1-9][0-9]{0,2}\z/,
+        clear_screen    => qr/\A[01]\z/,
+        mouse_mode      => qr/\A[01234]\z/,
+        pad             => qr/\A[0-9][0-9]?\z/,
+        pad_one_row     => qr/\A[0-9][0-9]?\z/,
+        beep            => qr/\A[01]\z/,
+        empty_string    => '',
+        undef           => '',
+        max_list        => qr/\A[1-9][0-9]{0,8}\z/,
+        screen_width    => qr/\A[1-9][0-9]\z/,
+        hide_cursor     => qr/\A[01]\z/,
+        cursor          => qr/\A[0-9]{0,9}\z/,
     );
     my $warn = 0;
     for my $key ( keys %$config ) {
@@ -332,7 +334,33 @@ sub _set_layout {
     $config->{max_list}         //= 100_000;
     #$config->{screen_width}    //= undef;
     $config->{hide_cursor}      //= 1;
+    #$config->{cursor}          //= undef;
     return $config;
+}
+
+
+sub _set_this_cell {
+    my ( $arg ) = @_;
+    $arg->{tmp_this_cell} = [ 0, 0 ];
+    LOOP: for my $i ( 0 .. $#{$arg->{rowcol2list}} ) {
+        if ( $arg->{cursor} ~~ @{$arg->{rowcol2list}[$i]} ) {
+            for my $j ( 0 .. $#{$arg->{rowcol2list}[$i]} ) {
+                if ( $arg->{cursor} == $arg->{rowcol2list}[$i][$j] ) {
+                    $arg->{tmp_this_cell} = [ $i, $j ]; 
+                    last LOOP;
+                }
+            }
+        }
+    }
+    while ( $arg->{tmp_this_cell}[ROW] > $arg->{end_page} ) {
+        my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
+        $arg->{this_cell}[ROW]  = $page;
+        $arg->{page}            = $page;
+        $arg->{begin_page}      = $page;
+        $arg->{end_page}        = $arg->{begin_page} + $arg->{maxrows} - 1;
+        $arg->{end_page}        = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
+    }
+    $arg->{this_cell} = $arg->{tmp_this_cell};
 }
 
 
@@ -385,8 +413,11 @@ sub _write_first_screen {
     $arg->{end_page} = $arg->{maxrows_index};
     $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{maxrows_index} > $#{$arg->{rowcol2list}};
     $arg->{page} = 0;
+    $arg->{this_cell} = [ 0, 0 ];
+    _set_this_cell( $arg ) if defined $arg->{cursor} and $arg->{cursor} < $arg->{list};
     _wr_screen( $arg );
-    print GET_CURSOR_POSITION if $arg->{mouse_mode};  # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
+    print GET_CURSOR_POSITION if $arg->{mouse_mode};        # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
+    $arg->{cursor_row} = $arg->{screen_row} - $arg->{head}; # needed by handle_mouse 
     $arg->{size_changed} = 0;
 }
 
@@ -423,7 +454,6 @@ sub choose {
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
     $arg->{screen_row} = 0;
-    $arg->{this_cell} = [];
     _init_scr( $arg );
     _write_first_screen( $arg );
     my $orig_sigwinch = $SIG{'WINCH'};
@@ -754,7 +784,6 @@ sub _size_and_layout {
         $layout = 3;
     }
     ### layout
-    $arg->{this_cell} = [ 0, 0 ];
     my $all_in_first_row;
     if ( $layout == 2 ) {
         $layout = 3 if scalar @{$arg->{list}} <= $arg->{maxrows};
@@ -835,7 +864,10 @@ sub _size_and_layout {
 sub _handle_mouse {
     my ( $x, $y, $button_pressed, $button_drag, $arg ) = @_;
     return NEXT_getch if $button_drag;
-    my $top_row = $arg->{abs_curs_Y}; # on which screen-row is the cursor (first row of the list) after _write_first_screen
+    my $top_row = $arg->{abs_curs_Y} - $arg->{cursor_row};
+    # abs_curs_Y: on which row (one  based index) on the            screen is the cursor after _write_first_screen
+    # cursor_row: on which row (zero based index) of the printed list rows is the cursor after _write_first_screen
+    # top_row   : which mouse row corresponds to the first list row of the printed list rows
     if ( $button_pressed == 4 ) {
         return KEY_UP;
     }
@@ -847,8 +879,8 @@ sub _handle_mouse {
     my $mouse_col = $x;
     my( $found_row, $found_col );
     my $found = 0;
-    for my $row ( 0 .. @{$arg->{list}} ) {
-	if ( $row == $mouse_row ) {
+    for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {    
+        if ( $row == $mouse_row ) {
             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
                 if ( ( $col * $arg->{col_width} < $mouse_col ) && ( ( $col + 1 ) * $arg->{col_width} >= $mouse_col ) ) {
                     $found = 1;
@@ -895,7 +927,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.004
+Version 1.005
 
 =cut
 
@@ -1134,6 +1166,18 @@ Allowed values: 1 - 999
 0 - off (default)
 
 1 - clears the screen before printing the choices
+
+=head4 cursor
+
+With the option I<cursor> can be selected a list item, which will be highlighted as the default instead of the first item.
+
+I<cursor> expects a zero indexed value, so e.g. to highlight the second item the value would be I<1>.
+
+If the passed value is greater than the last list index the first item is highlighted.
+
+Allowed values: as max_list
+
+(default: undef)
 
 =head4 mouse_mode
 

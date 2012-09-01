@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '1.004';
+our $VERSION = '1.005';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -130,7 +130,6 @@ sub Term::Choose::_size_and_layout {
         $layout = 3;
     }
     ### layout
-    $arg->{this_cell} = [ 0, 0 ];
     my $all_in_first_row;
     if ( $layout == 2 ) {
         $layout = 3 if scalar @{$arg->{list}} <= $arg->{maxrows};
@@ -333,7 +332,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 1.004
+Version 1.005
 
 =cut
 

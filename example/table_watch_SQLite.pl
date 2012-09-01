@@ -3,7 +3,7 @@ use warnings;
 use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
-# Version 0.09
+# Version 0.10
 
 use File::Find qw(find);
 use File::Path qw(make_path);
@@ -711,6 +711,7 @@ sub print_table {
     }
     my $begin = 0;
     my $end = $text_rows;
+    my $cursor = 0;
     SCROLL: while ( 1 ) { 
         print GO_TO_TOP_LEFT;
         my $string = $first_row;
@@ -735,24 +736,23 @@ sub print_table {
         }        
         print $string;
         # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        my $choice = choose( $options, { prompt => $prompt } );
+        my $choice = choose( $options, { prompt => $prompt, cursor => $cursor } );
         if ( $choice eq $weiter ) {
             $begin += $text_rows + 1 if $begin + $text_rows + 1 < $#$ref; #
             $end = $begin + $text_rows;
             $end = $#$ref if $end > $#$ref;
-            $options = [ $weiter, $zurück, $quit ];
         }
         elsif ( $choice eq $zurück ) {
             $begin -= $text_rows + 1;
             $begin = 0 if $begin < 0;
             $end = $begin + $text_rows;
-            $options = [ $zurück, $weiter, $quit ];
         }  
         else {
             print GO_TO_TOP_LEFT;
             print CLEAR_EOS;
             last SCROLL;
         }
+        $cursor = first_index { $choice eq $_ } @$options;
     }
     return;
 }

@@ -1,7 +1,12 @@
 Revision history for Term::Choose
 
+1.005   2012-09-01
+        - Added option "cursor".
+        - Fixed mouse_mode bugs.
+        - Updated documentation.
+
 1.004   2012-08-29
-        - "_size_and_layout" back to the old position after "_print_promptline";
+        - "_size_and_layout" back to the old position after "_print_promptline".
         - Code refactoring.
         - Improved documentation.
         
