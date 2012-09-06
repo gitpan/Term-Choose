@@ -1,5 +1,11 @@
 Revision history for Term::Choose
 
+1.006   2012-09-06
+        - Added option "page".
+        - Code refactoring.
+        - Fixed bug/updated example.
+        - Updated documentation.
+
 1.005   2012-09-01
         - Added option "cursor".
         - Fixed mouse_mode bugs.

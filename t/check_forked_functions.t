@@ -14,7 +14,7 @@ else {
 }
 
 my $Choose_GC = 'lib/Term/Choose/GC.pm';
-my @print_promptline_GC;
+my @prepare_promptline_GC;
 my @wr_cell_GC;
 my @size_and_layout_GC;
 my @unicode_cut;
@@ -22,8 +22,8 @@ my @unicode_sprintf;
 
 open my $fh, '<', $Choose_GC or die $!;
 while ( readline $fh ) {
-    if ( /\Asub Term::Choose::_print_promptline/ .. /\A\}/ ) {
-        push @print_promptline_GC, $_;
+    if ( /\Asub Term::Choose::_prepare_promptline/ .. /\A\}/ ) {
+        push @prepare_promptline_GC, $_;
     }    
     if ( /\Asub Term::Choose::_wr_cell/ .. /\A\}/ ) {
         push @wr_cell_GC, $_;
@@ -42,14 +42,14 @@ close $fh or die $!;
 
 
 my $Choose = 'lib/Term/Choose.pm';
-my @print_promptline;
+my @prepare_promptline;
 my @wr_cell;
 my @size_and_layout;
 
 open $fh, '<', $Choose or die $!;
 while ( readline $fh ) {
-    if ( /\Asub _print_promptline/ .. /\A\}/ ) {
-        push @print_promptline, $_;
+    if ( /\Asub _prepare_promptline/ .. /\A\}/ ) {
+        push @prepare_promptline, $_;
     }    
     if ( /\Asub _wr_cell/ .. /\A\}/ ) {
         push @wr_cell, $_;
@@ -85,24 +85,24 @@ splice( @wr_cell_GC, 15, 1 );
 ok( @wr_cell ~~ @wr_cell_GC, 'frok: wr_cell ok' );
 
 
-### print_promptline
+### prepare_promptline
 
-splice( @print_promptline, 0, 1 );
-splice( @print_promptline, 7, 1 );
-splice( @print_promptline, 12, 3 );
+splice( @prepare_promptline, 0, 1 );
+splice( @prepare_promptline, 7, 1 );
+splice( @prepare_promptline, 12, 3 );
 
-splice( @print_promptline_GC, 0, 1 );
-splice( @print_promptline_GC, 7, 9 );
-splice( @print_promptline_GC, 12, 11 );
+splice( @prepare_promptline_GC, 0, 1 );
+splice( @prepare_promptline_GC, 7, 9 );
+splice( @prepare_promptline_GC, 12, 11 );
 
-#for my $i ( 0 .. $#print_promptline ) {
-#    if ( $print_promptline[$i] ne $print_promptline_GC[$i] ) {
-#        print "$i no : ", $print_promptline[$i];
-#        print "$i gc : ", $print_promptline_GC[$i];
+#for my $i ( 0 .. $#prepare_promptline ) {
+#    if ( $prepare_promptline[$i] ne $prepare_promptline_GC[$i] ) {
+#        print "$i no : ", $prepare_promptline[$i];
+#        print "$i gc : ", $prepare_promptline_GC[$i];
 #    }
 #}
 
-ok( @print_promptline ~~ @print_promptline_GC, 'fork: print_promptline ok' );
+ok( @prepare_promptline ~~ @prepare_promptline_GC, 'fork: prepare_promptline ok' );
 
 ### size_and_layout
 

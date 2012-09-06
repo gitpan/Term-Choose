@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.005';
+our $VERSION = '1.006';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -59,7 +59,7 @@ use constant {
 
 use constant {
     NEXT_getch          => -1,
-    
+
     CONTROL_b           => 0x02,
     CONTROL_c           => 0x03,
     CONTROL_f           => 0x06,
@@ -137,7 +137,7 @@ sub _getch {
                 }
             }
             elsif ( $c eq '5' ) { return KEY_PAGE_UP; }
-			elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
+            elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
             elsif ( $c eq 'M' && $arg->{mouse_mode} ) {
                 # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
                 # http://leonerds-code.blogspot.co.uk/2012/04/wide-mouse-support-in-libvterm.html
@@ -227,8 +227,8 @@ sub _end_win {
     print RESET;
     if ( $arg->{mouse_mode} ) {
         binmode STDIN, ':encoding(UTF-8)' or warn "binmode STDIN, :encoding(UTF-8): $!\n";
-        print UNSET_EXT_MODE_MOUSE_1005         if $arg->{mouse_mode} == 3;
-        print UNSET_SGR_EXT_MODE_MOUSE_1006     if $arg->{mouse_mode} == 4;
+        print UNSET_EXT_MODE_MOUSE_1005     if $arg->{mouse_mode} == 3;
+        print UNSET_SGR_EXT_MODE_MOUSE_1006 if $arg->{mouse_mode} == 4;
         print UNSET_ANY_EVENT_MOUSE_1003;
     }
     Term::ReadKey::ReadMode 'restore';
@@ -254,8 +254,8 @@ sub _copy_orig_list {
     if ( defined $arg->{list_to_long} && $arg->{list_to_long} ) {
         return [ map {
             my $copy = $_;
-            $copy = ( ! defined $copy ) ? $arg->{undef}         : $copy;
-            $copy = ( $copy eq '' )     ? $arg->{empty_string}  : $copy;
+            $copy = ( ! defined $copy ) ? $arg->{undef}        : $copy;
+            $copy = ( $copy eq '' )     ? $arg->{empty_string} : $copy;
             $copy =~ s/\p{Space}/ /g;
             $copy =~ s/\p{Cntrl}//g;
             $copy;
@@ -263,8 +263,8 @@ sub _copy_orig_list {
     }
     return [ map {
         my $copy = $_;
-        $copy = ( ! defined $copy ) ? $arg->{undef}         : $copy;
-        $copy = ( $copy eq '' )     ? $arg->{empty_string}  : $copy;
+        $copy = ( ! defined $copy ) ? $arg->{undef}        : $copy;
+        $copy = ( $copy eq '' )     ? $arg->{empty_string} : $copy;
         $copy =~ s/\p{Space}/ /g;
         $copy =~ s/\p{Cntrl}//g;
         $copy;
@@ -291,6 +291,7 @@ sub _validate_option {
         screen_width    => qr/\A[1-9][0-9]\z/,
         hide_cursor     => qr/\A[01]\z/,
         cursor          => qr/\A[0-9]{0,9}\z/,
+        page            => qr/\A[1-9][0-9]{0,8}\z/,
     );
     my $warn = 0;
     for my $key ( keys %$config ) {
@@ -335,6 +336,7 @@ sub _set_layout {
     #$config->{screen_width}    //= undef;
     $config->{hide_cursor}      //= 1;
     #$config->{cursor}          //= undef;
+    $config->{page}             //= 0;
     return $config;
 }
 
@@ -353,10 +355,9 @@ sub _set_this_cell {
         }
     }
     while ( $arg->{tmp_this_cell}[ROW] > $arg->{end_page} ) {
-        my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
-        $arg->{this_cell}[ROW]  = $page;
-        $arg->{page}            = $page;
-        $arg->{begin_page}      = $page;
+        $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
+        $arg->{this_cell}[ROW]  = $arg->{top_listrow};        
+        $arg->{begin_page}      = $arg->{top_listrow};
         $arg->{end_page}        = $arg->{begin_page} + $arg->{maxrows} - 1;
         $arg->{end_page}        = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
     }
@@ -364,7 +365,31 @@ sub _set_this_cell {
 }
 
 
-sub _print_promptline {
+sub _prepare_page_number {
+    my ( $arg ) = @_;
+    $arg->{total_pages} = int( $#{$arg->{rowcol2list}} / ( $arg->{maxrows} + $arg->{tail} ) ) + 1;
+    if ( $arg->{total_pages} > 1 ) { 
+        $arg->{total_pages} = int( $#{$arg->{rowcol2list}} / ( $arg->{maxrows} ) ) + 1;
+        $arg->{length_total_pages} = length $arg->{total_pages};
+        $arg->{prompt_printf_template} = "--- Page %0*d/%d ---";
+        $arg->{prompt_arguments} = 0;
+        if ( length sprintf( $arg->{prompt_printf_template}, $arg->{length_total_pages}, $arg->{total_pages}, $arg->{total_pages} )  > $arg->{maxcols} ) {
+            $arg->{prompt_printf_template} = "%0*d/%d";
+            if ( length sprintf( $arg->{prompt_printf_template}, $arg->{length_total_pages}, $arg->{total_pages}, $arg->{total_pages} )  > $arg->{maxcols} ) {
+                $arg->{length_total_pages} = ( $arg->{length_total_pages} > $arg->{maxcols} ) ? $arg->{maxcols} : $arg->{length_total_pages};
+                $arg->{prompt_printf_template} = "%0*.*s";
+                $arg->{prompt_arguments} = 1;
+            }
+        }
+    }
+    else {
+        $arg->{maxrows} += $arg->{tail};
+        $arg->{tail} = 0;
+    }
+}
+
+
+sub _prepare_promptline {
     my ( $arg ) = @_;
     $arg->{prompt} =~ s/\p{Space}/ /g;
     $arg->{prompt} =~ s/\p{Cntrl}//g;
@@ -381,8 +406,6 @@ sub _print_promptline {
     if ( length $arg->{prompt_line} > $arg->{maxcols} ) {
         $arg->{prompt_line} = substr( $arg->{prompt}, 0, $arg->{maxcols} - 3 ) . '...';
     }
-    print $arg->{prompt_line};
-    $arg->{head} = 1;
 }
 
 
@@ -397,28 +420,32 @@ sub _write_first_screen {
         $arg->{maxcols} = int( ( $arg->{maxcols} / 100 ) * $arg->{screen_width} );
     }
     if ( $arg->{mouse_mode} == 2 ) {
-    $arg->{maxcols} = MAX_MOUSE_1003_COL if $arg->{maxcols} > MAX_MOUSE_1003_COL;
+        $arg->{maxcols} = MAX_MOUSE_1003_COL if $arg->{maxcols} > MAX_MOUSE_1003_COL;
         $arg->{maxrows} = MAX_MOUSE_1003_ROW if $arg->{maxrows} > MAX_MOUSE_1003_ROW;
     }
     $arg->{head} = 0;
-    $arg->{marked} = [];
-    _goto( $arg, $arg->{head}, 0 );
-    _clear_to_end_of_screen( $arg );
-    _print_promptline( $arg )if $arg->{prompt} ne '0';
-    $arg->{maxrows} = $arg->{maxrows} - $arg->{head};
+    $arg->{tail} = 0;
+    $arg->{head} = 1 if $arg->{prompt} ne '0';
+    $arg->{tail} = 1 if $arg->{page};
+    $arg->{maxrows} -= $arg->{head} + $arg->{tail};
     _size_and_layout( $arg );
+    _prepare_promptline( $arg ) if $arg->{prompt} ne '0';
+    _prepare_page_number( $arg ) if $arg->{page};
     $arg->{maxrows_index} = $arg->{maxrows} - 1;
     $arg->{maxrows_index} = 0 if $arg->{maxrows_index} < 0;
     $arg->{begin_page} = 0;
     $arg->{end_page} = $arg->{maxrows_index};
     $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{maxrows_index} > $#{$arg->{rowcol2list}};
-    $arg->{page} = 0;
+    $arg->{top_listrow} = 0;
+    $arg->{marked} = [];
+    $arg->{screen_row} = 0;
     $arg->{this_cell} = [ 0, 0 ];
     _set_this_cell( $arg ) if defined $arg->{cursor} and $arg->{cursor} < $arg->{list};
     _wr_screen( $arg );
+    $arg->{abs_curs_X} = 0;
+    $arg->{abs_curs_Y} = 0;
     print GET_CURSOR_POSITION if $arg->{mouse_mode};        # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
     $arg->{cursor_row} = $arg->{screen_row} - $arg->{head}; # needed by handle_mouse 
-    $arg->{size_changed} = 0;
 }
 
 
@@ -451,16 +478,15 @@ sub choose {
     $arg->{length_longest} = _length_longest( $arg->{list} ) if ! defined $arg->{length_longest};
     $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
     $arg->{wantarray} = $wantarray;
-    $arg->{abs_curs_X} = 0;
-    $arg->{abs_curs_Y} = 0;
-    $arg->{screen_row} = 0;
     _init_scr( $arg );
-    _write_first_screen( $arg );
+    $arg->{size_changed} = 0;
     my $orig_sigwinch = $SIG{'WINCH'};
     local $SIG{'WINCH'} = sub {
         $orig_sigwinch->() if $orig_sigwinch && ref $orig_sigwinch eq 'CODE';
         $arg->{size_changed} = 1;
     };
+    _write_first_screen( $arg );
+
     while ( 1 ) {
         my $c = _getch( $arg );
         next if $c == NEXT_getch;
@@ -468,6 +494,7 @@ sub choose {
         if ( $arg->{size_changed} ) {
             $arg->{list} = _copy_orig_list( $arg );
             _write_first_screen( $arg );
+            $arg->{size_changed} = 0;
             next;
         }
         # $arg->{rowcol2list} holds the new list (AoA) formated in "_size_and_layout" appropirate to the choosen layout.
@@ -495,7 +522,7 @@ sub choose {
                         _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                     }
                     else {
-                        $arg->{page} = $arg->{this_cell}[ROW];
+                        $arg->{top_listrow} = $arg->{this_cell}[ROW];
                         $arg->{end_page}++;
                         $arg->{begin_page} = $arg->{end_page};
                         $arg->{end_page} = $arg->{end_page} + $arg->{maxrows_index};
@@ -510,16 +537,16 @@ sub choose {
                 }
                 else {
                     $arg->{this_cell}[ROW]--;
-					if ( defined $arg->{backup_col} ) {
-						$arg->{this_cell}[COL] = $arg->{backup_col};
-						$arg->{backup_col}     = undef;
-					}
+                    if ( defined $arg->{backup_col} ) {
+                        $arg->{this_cell}[COL] = $arg->{backup_col};
+                        $arg->{backup_col}     = undef;
+                    }
                     if ( $arg->{this_cell}[ROW] >= $arg->{begin_page} ) {
                         _wr_cell( $arg, $arg->{this_cell}[ROW] + 1, $arg->{this_cell}[COL] );
                         _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                     }
                     else {
-                        $arg->{page} = $arg->{this_cell}[ROW] - $arg->{maxrows_index};
+                        $arg->{top_listrow} = $arg->{this_cell}[ROW] - $arg->{maxrows_index};
                         $arg->{begin_page}--;
                         $arg->{end_page} = $arg->{begin_page};
                         $arg->{begin_page} = $arg->{begin_page} - $arg->{maxrows_index};
@@ -546,7 +573,7 @@ sub choose {
                             _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                         }
                         else {
-                            $arg->{page} = $arg->{this_cell}[ROW];
+                            $arg->{top_listrow} = $arg->{this_cell}[ROW];
                             $arg->{end_page}++;
                             $arg->{begin_page} = $arg->{end_page};
                             $arg->{end_page} = $arg->{end_page} + $arg->{maxrows_index};
@@ -575,7 +602,7 @@ sub choose {
                             _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                         }
                         else {
-                            $arg->{page} = $arg->{this_cell}[ROW] - $arg->{maxrows_index};
+                            $arg->{top_listrow} = $arg->{this_cell}[ROW] - $arg->{maxrows_index};
                             $arg->{begin_page}--;
                             $arg->{end_page} = $arg->{begin_page};
                             $arg->{begin_page} = $arg->{begin_page} - $arg->{maxrows_index};
@@ -612,15 +639,14 @@ sub choose {
                     _beep( $arg );
                 }
                 else {
-                    my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) -1 );
-                    $arg->{this_cell}[ROW] = $page;
+                    $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) -1 );
+                    $arg->{this_cell}[ROW] = $arg->{top_listrow};
                     if ( defined $arg->{backup_col} ) {
                         $arg->{this_cell}[COL] = $arg->{backup_col};
                         $arg->{backup_col}     = undef;
                     }
                     #$arg->{this_cell}[COL] = 0;
-                    $arg->{page} 	   = $page;
-                    $arg->{begin_page} = $page;
+                    $arg->{begin_page} = $arg->{top_listrow};
                     $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
                     _wr_screen( $arg );
                 }
@@ -630,17 +656,16 @@ sub choose {
                     _beep( $arg );
                 }
                 else {
-                    my $page = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
-                    $arg->{this_cell}[ROW] = $page; # first row on the page
+                    $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
+                    $arg->{this_cell}[ROW] = $arg->{top_listrow};
                     # if it remains only the last row (which is then also the first row) for the last page 
                     # and the column in use doesn't exist in the last row, then ...
-                    if ( $page == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {
+                    if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {                    
                         $arg->{backup_col}     = $arg->{this_cell}[COL];
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                     }
                     #$arg->{this_cell}[COL] = 0;
-                    $arg->{page} 	   = $page;
-                    $arg->{begin_page} = $page;
+                    $arg->{begin_page} = $arg->{top_listrow};
                     $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
                     $arg->{end_page}   = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
                     _wr_screen( $arg );
@@ -737,8 +762,21 @@ sub _goto {
 
 sub _wr_screen {
     my ( $arg ) = @_;
-    _goto( $arg, $arg->{head}, 0 );
+    _goto( $arg, 0, 0 );
     _clear_to_end_of_screen( $arg );
+    if ( $arg->{prompt} ne '0' ) {
+        print $arg->{prompt_line};
+        _goto( $arg, $arg->{head}, 0 );
+    }
+    if ( $arg->{page} && $arg->{total_pages} > 1 ) {
+        _goto( $arg, $arg->{maxrows_index} + $arg->{head} + $arg->{tail}, 0 );
+        if ( $arg->{prompt_arguments} == 0 ) {
+            printf $arg->{prompt_printf_template}, $arg->{length_total_pages}, int($arg->{top_listrow} / $arg->{maxrows}) + 1, $arg->{total_pages};
+        }
+        elsif ( $arg->{prompt_arguments} == 1 ) {
+            printf $arg->{prompt_printf_template}, $arg->{length_total_pages}, $arg->{length_total_pages}, int($arg->{top_listrow} / $arg->{maxrows}) + 1;
+        }
+     }
     for my $row ( $arg->{begin_page} .. $arg->{end_page} ) {
         for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
             _wr_cell( $arg, $row, $col ); # unless [ $row, $col ] ~~ $this_cell;
@@ -758,13 +796,13 @@ sub _wr_cell {
                 $lngth += $arg->{pad_one_row} // 0;
             }
         }
-        _goto( $arg, $row + $arg->{head} - $arg->{page}, $lngth );
+        _goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $lngth );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
         print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
         print $arg->{list}[$arg->{rowcol2list}[$row][$col]];
     }
     else {
-        _goto( $arg, $row + $arg->{head} - $arg->{page}, $col * $arg->{col_width} );
+        _goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $col * $arg->{col_width} );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
         print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
         printf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$arg->{rowcol2list}[$row][$col]] if   $arg->{right_justify};
@@ -884,7 +922,7 @@ sub _handle_mouse {
             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
                 if ( ( $col * $arg->{col_width} < $mouse_col ) && ( ( $col + 1 ) * $arg->{col_width} >= $mouse_col ) ) {
                     $found = 1;
-                    $found_row = $row + $arg->{page};
+                    $found_row = $row + $arg->{top_listrow};
                     $found_col = $col;
                     last;
                 }
@@ -927,7 +965,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.005
+Version 1.006
 
 =cut
 
@@ -1178,6 +1216,12 @@ If the passed value is greater than the last list index the first item is highli
 Allowed values: as max_list
 
 (default: undef)
+
+=head4 page
+
+0 - off (default)
+
+1 - print the page number on the bottom of the screen if there is more then one page.
 
 =head4 mouse_mode
 

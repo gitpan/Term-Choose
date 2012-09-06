@@ -3,7 +3,7 @@ use warnings;
 use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
-# Version 0.10
+# Version 0.11
 
 use File::Find qw(find);
 use File::Path qw(make_path);
@@ -59,6 +59,7 @@ Options:
     Table colors  : Set the colors for the columns.
     Head colors   : Set the fore- and background color for the table-head.
     Cut col names : When should column names be cut.
+    Thousands sep : Choose the thousands separator.
     
 HELP
 }
@@ -78,6 +79,7 @@ my $opt = {
     table_colors   => [ 'cyan', 'default', 'magenta', 'white', 'green', 'blue', 'yellow', 'red' ],
     head_colors    => 'white reverse',
     cut_col_names  => -1,
+    thousands_sep   => ',',
 };
 
 my $help;
@@ -159,7 +161,8 @@ sub search_databases {
                     return @_ if $depth < $max_depth;
                     return grep { not -d } @_ if $depth == $max_depth;
                     return;
-                } else {
+                } 
+                else {
                     return @_;
                 }
             },
@@ -182,23 +185,15 @@ my $quit = 'QUIT';
 my $back = 'BACK';
 my %lyt = ( layout => 3, clear_screen => 1 );
 
-#my %auswahl = ( 
-#    color_customize => '°°° table °°°',
-#    row_customize 	=> '*** table ***',
-#    count_rows     	=> 'count rows',
-#    delete_table   	=> 'delete table',
-#);
-#my @aw_keys = ( qw( color_customize row_customize count_rows ) );
-
 my %auswahl = ( 
     color_auto      => '°° table auto', 
     color_customize => '°° table customized',
-    row_auto        => '** table auto', 
-    row_customize   => '** table customized',
+    row_auto        => '== table auto', 
+    row_customize   => '== table customized',
     count_rows      => '   count rows',
     delete_table    => '   delete table',
 );
-my @aw_keys = ( qw( color_auto color_customize count_rows row_auto row_customize ) );
+my @aw_keys = ( qw( row_auto color_auto row_customize color_customize count_rows ) );
 
 push @aw_keys, 'delete_table' if $opt->{delete}; 
 
@@ -275,9 +270,9 @@ DATABASES: while ( 1 ) {
                     my $select = "SELECT * FROM [$table]";
                     my $arguments;
                     PRINT: while ( 1 ) {
-						my ( $begin, $end, $last ) = choose_table_range( $rows );
+						my ( $offset, $last ) = choose_table_range( $rows );
 						last PRINT if $last == 1;	
-						my ( $ref, $col_types ) = read_db_table( $dbh, $begin, $end, $select, $arguments );
+						my ( $ref, $col_types ) = read_db_table( $dbh, $offset, $select, $arguments );
 						last PRINT if not defined $ref;
 						print_table( $ref, $col_types, $type );
 						last PRINT if $last == 2;
@@ -288,9 +283,9 @@ DATABASES: while ( 1 ) {
                     my ( $rows, $select, $arguments ) = prepare_read_table( $dbh, $table );
                     next CHOOSE if not defined $rows;
                     PRINT: while ( 1 ) {
-						my ( $begin, $end, $last ) = choose_table_range( $rows );
+						my ( $offset, $last ) = choose_table_range( $rows );
 						last PRINT if $last == 1;	
-						my ( $ref, $col_types ) = read_db_table( $dbh, $begin, $end, $select, $arguments );
+						my ( $ref, $col_types ) = read_db_table( $dbh, $offset, $select, $arguments );
 						last PRINT if not defined $ref;
 						print_table( $ref, $col_types, $type );
 						last PRINT if $last == 2;
@@ -302,9 +297,9 @@ DATABASES: while ( 1 ) {
                     my $select = "SELECT * FROM [$table]";
                     my $arguments;
                     PRINT: while ( 1 ) {
-						my ( $begin, $end, $last ) = choose_table_range( $rows );
+						my ( $offset, $last ) = choose_table_range( $rows );
 						last PRINT if $last == 1;	
-						my ( $ref, $col_types ) = read_db_table( $dbh, $begin, $end, $select, $arguments );
+						my ( $ref, $col_types ) = read_db_table( $dbh, $offset, $select, $arguments );
 						last PRINT if not defined $ref;
 						print_table( $ref, $col_types, $type );
 						last PRINT if $last == 2;
@@ -315,9 +310,9 @@ DATABASES: while ( 1 ) {
                     my ( $rows, $select, $arguments ) = prepare_read_table( $dbh, $table );
                     next CHOOSE if not defined $rows;
                     PRINT: while ( 1 ) {
-						my ( $begin, $end, $last ) = choose_table_range( $rows );	
+						my ( $offset, $last ) = choose_table_range( $rows );	
 						last PRINT if $last == 1;
-						my ( $ref, $col_types ) = read_db_table( $dbh, $begin, $end, $select, $arguments );
+						my ( $ref, $col_types ) = read_db_table( $dbh, $offset, $select, $arguments );
 						last PRINT if not defined $ref;
 						print_table( $ref, $col_types, $type );
 						last PRINT if $last == 2;
@@ -325,10 +320,8 @@ DATABASES: while ( 1 ) {
                 }
                 when ( $auswahl{count_rows} ) {
                     my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM [$table]" );
-                    $rows =~ s/(\d)(?=(?:\d{3})+\b)/$1_/g;
-                    say "\n$db";
-                    say "\nTable \"$table\":  $rows Rows\n"; 
-                    choose( [ 'Press ENTER to continue' ], { prompt => 0 } ); 
+                    $rows =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{thousands_sep}/g;
+                    choose( [ "  Table \"$table\":  $rows Rows  ", '  Press ENTER to continue  ' ], { prompt => $db, layout => 3 } ); 
                 }
                 when ( $auswahl{delete_table} ) {
                     say "\n$db";
@@ -359,9 +352,10 @@ DATABASES: while ( 1 ) {
 
 sub choose_table_range {
 	my ( $rows ) = @_;
+	my $offset = 0;
 	my $last = 0;
-	my $begin = 1;
-	my $end = $opt->{limit};    
+	my $begin = 0;
+	my $end = $opt->{limit} - 1;    
     if ( $rows > $opt->{limit} ) {
 		my @choices;
 		my $lr = length $rows;
@@ -375,8 +369,8 @@ sub choose_table_range {
 		}
 		my $choice = choose( [ undef, @choices ], { layout => 3, undef => $back } );
 		if ( defined $choice ) {
-			( $begin, $end ) = split /\s*-\s*/, $choice;
-			$begin =~ s/\A\s+//;
+			$offset = ( split /\s*-\s*/, $choice )[0];
+			$offset =~ s/\A\s+//;
 		}
 		else { 
 			$last = 1; 
@@ -385,16 +379,16 @@ sub choose_table_range {
     else { 
 		$last = 2;
 	}
-    return $begin, $end, $last;
+    return $offset, $last;
 }
 
 
 sub read_db_table {
-    my ( $dbh, $begin, $end, $select, $arguments ) = @_;
+    my ( $dbh, $offset, $select, $arguments ) = @_;
     my ( $ref, $col_types );
     eval {
-        my $sth = $dbh->prepare( $select . " LIMIT ?, ?" );
-        $sth->execute( defined $arguments ? @$arguments : (), $begin, $end );
+        my $sth = $dbh->prepare( $select . " LIMIT ? OFFSET ?" );
+        $sth->execute( defined $arguments ? @$arguments : (), $opt->{limit}, $offset );
         my $col_names = $sth->{NAME};
         $col_types = $sth->{TYPE};
         $ref = $sth->fetchall_arrayref();
@@ -441,7 +435,6 @@ sub prepare_read_table {
 	CUSTOMIZE: while ( 1 ) {
 		print_select( $table, $columns, $chosen_columns, $cols_order_by_tmp, $cols_regexp_tmp, $hash_regexp );
 		my $custom = choose( [ undef, @customize{@keys} ], { prompt => "Customize:", layout => 3, undef => $back } );
-        #my $custom = choose( [ @customize{@keys}, undef ], { prompt => "Customize:", layout => 3, undef => $back } );		
 		for ( $custom ) {
 			when ( not defined ) {
 				last CUSTOMIZE;	
@@ -680,7 +673,7 @@ sub print_table {
             }
         }
         $progress->update( $total ) if $total >= $next_update and $items > $start;
-        choose( \@list, { prompt => 0, layout => 3, length_longest => sum( @$max, $opt->{tab} * $#{$max} ), max_list => $opt->{limit} + 1 } );
+        choose( \@list, { page => 1, prompt => 0, layout => 3, length_longest => sum( @$max, $opt->{tab} * $#{$max} ), max_list => $opt->{limit} + 1 } );
         return;
     }
     ########################################################################################
@@ -829,8 +822,9 @@ sub options {
         table_colors    => '- Table colors', 
         head_colors     => '- Head colors',
         cut_col_names   => '- Cut col names',
+        thousands_sep   => '- Thousands sep',
     };
-    my @keys = ( qw( cache_rootdir cache_expire reset_cache max_depth limit delete no_blob min_width tab undef table_colors head_colors cut_col_names ) );
+    my @keys = ( qw( cache_rootdir cache_expire reset_cache max_depth limit delete no_blob min_width tab thousands_sep undef table_colors head_colors cut_col_names ) );
     my $change;
     
     OPTIONS: while ( 1 ) {
@@ -855,6 +849,12 @@ sub options {
                     } 
                     elsif ( $key eq 'undef' && $opt->{$key} eq '' ) {
                         $value = "''";
+                    }
+                    elsif ( $key eq 'thousands_sep' ) {
+                        $value = "space: \" \""     if $opt->{$key} eq ' ';
+                        $value = "none"             if $opt->{$key} eq '';
+                        $value = "full stop: \".\"" if $opt->{$key} eq '.';
+                        $value = "comma: \",\""     if $opt->{$key} eq ',';   
                     }
                     elsif ( $key eq 'table_colors' ) {
                         $value = "@{$opt->{$key}}";
@@ -899,6 +899,15 @@ sub options {
                 my $number = choose( [ 0 .. 99, undef ], { prompt => 'Tab width',  %number_lyt } );
                 break if not defined $number;
                 $opt->{tab} = $number;
+                $change++;
+            }
+            when ( $oh->{thousands_sep} ) {
+                my %sep_h;
+                my ( $comma, $full_stop, $space, $none ) = ( ' comma ', ' full stop ', ' space ', ' none ' );
+                @sep_h{ $comma, $full_stop, $space, $none } = ( ',', '.', ' ', '' );
+                my $sep = choose( [ $comma, $full_stop, $space, $none, undef ], { prompt => 'Thousands separator',  %bol } );
+                break if not defined $sep;
+                $opt->{thousands_sep} = $sep_h{$sep};
                 $change++;
             }
             when ( $oh->{min_width} ) { 
