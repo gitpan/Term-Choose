@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '1.006';
+our $VERSION = '1.007';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -135,6 +135,7 @@ sub Term::Choose::_size_and_layout {
     elsif ( $layout < 2 ) {
         for my $idx ( 0 .. $#{$arg->{list}} ) {
             $all_in_first_row .= $arg->{list}[$idx];
+            $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
             my $length_first_row;
             eval {
                 my $gcs = Unicode::GCString->new( $all_in_first_row );
@@ -147,7 +148,6 @@ sub Term::Choose::_size_and_layout {
                 $all_in_first_row = '';
                 last;
             }
-            $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
         }
     }
     if ( $all_in_first_row ) {
@@ -200,11 +200,14 @@ sub Term::Choose::_size_and_layout {
         else {
             my $begin = 0;
             my $end = $cols_per_row - 1;
-            while ( $begin <= $#{$arg->{list}} ) {
-                push @{$arg->{rowcol2list}}, [ $begin .. $end ];
-                $begin = $end + 1;
-                $end = $begin + $cols_per_row - 1;
+            $end = $#{$arg->{list}} if $end > $#{$arg->{list}};
+            push @{$arg->{rowcol2list}}, [ $begin .. $end ];            
+            while ( $end < $#{$arg->{list}} ) {
+                $begin += $cols_per_row;
+                $end   += $cols_per_row;
                 $end = $#{$arg->{list}} if $end > $#{$arg->{list}};
+                push @{$arg->{rowcol2list}}, [ $begin .. $end ];
+
             }
         }
     }
@@ -330,7 +333,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 1.006
+Version 1.007
 
 =cut
 

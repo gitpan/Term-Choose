@@ -1,9 +1,17 @@
 Revision history for Term::Choose
 
+1.007   2012-09-07
+        - Fixed bug in "_size_and_layout" (if "vertical" == 0).
+        - Fixed bug in "_write_first_screen" (condition for calling "_set_this_cell").
+        - Code refactoring.
+        - Some changes of the allowed option values.
+        - Updated example.
+        - Updated documentation.
+
 1.006   2012-09-06
         - Added option "page".
         - Code refactoring.
-        - Fixed bug/updated example.
+        - Fixed bugs and updated example.
         - Updated documentation.
 
 1.005   2012-09-01

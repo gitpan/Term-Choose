@@ -3,7 +3,7 @@ use warnings;
 use 5.10.1;
 use utf8;
 binmode STDOUT, ':utf8';
-# Version 0.11
+# Version 0.12
 
 use File::Find qw(find);
 use File::Path qw(make_path);
@@ -60,6 +60,7 @@ Options:
     Head colors   : Set the fore- and background color for the table-head.
     Cut col names : When should column names be cut.
     Thousands sep : Choose the thousands separator.
+    Print options : Which output types should be offered ( "line", "color" or "line and color" ).
     
 HELP
 }
@@ -79,7 +80,8 @@ my $opt = {
     table_colors   => [ 'cyan', 'default', 'magenta', 'white', 'green', 'blue', 'yellow', 'red' ],
     head_colors    => 'white reverse',
     cut_col_names  => -1,
-    thousands_sep   => ',',
+    thousands_sep  => ',',
+    print_type     => 3,
 };
 
 my $help;
@@ -123,11 +125,8 @@ if ( -e $config_file and -s $config_file ) {
 $opt = options( $opt, $config_file ) if $help;
 
 my @dirs = @ARGV ? @ARGV : ( $home );
-
 my $key = join ' ', @dirs, '|', $opt->{max_depth} // '';
-
 my $cached = ' (cached)';
-
 my $cache = CHI->new ( 
     namespace => 'table_watch_SQLite', 
     driver => 'File', 
@@ -155,7 +154,7 @@ sub search_databases {
             $max_depth--;
         }
         find( {
-            preprocess  =>  sub {
+            preprocess => sub {
                 if ( defined $max_depth ) {
                     my $depth = $File::Find::dir =~ tr[/][];
                     return @_ if $depth < $max_depth;
@@ -166,12 +165,12 @@ sub search_databases {
                     return @_;
                 }
             },
-            wanted      =>  sub {
+            wanted     => sub {
                 my $file = $File::Find::name;
                 return if not -f $file;
                 push @databases, $file if $flm->describe_filename( $file ) =~ /\ASQLite/; 
             },
-            no_chdir    =>  1, 
+            no_chdir   => 1, 
         }, 
         $dir );
     }
@@ -193,8 +192,10 @@ my %auswahl = (
     count_rows      => '   count rows',
     delete_table    => '   delete table',
 );
-my @aw_keys = ( qw( row_auto color_auto row_customize color_customize count_rows ) );
-
+my @aw_keys;
+@aw_keys = ( qw( row_auto row_customize count_rows ) )                              if $opt->{print_type} == 1;
+@aw_keys = ( qw( color_auto color_customize count_rows ) )                          if $opt->{print_type} == 2;
+@aw_keys = ( qw( row_auto color_auto row_customize color_customize count_rows ) )   if $opt->{print_type} == 3;
 push @aw_keys, 'delete_table' if $opt->{delete}; 
 
 DATABASES: while ( 1 ) {
@@ -823,8 +824,9 @@ sub options {
         head_colors     => '- Head colors',
         cut_col_names   => '- Cut col names',
         thousands_sep   => '- Thousands sep',
+        print_type      => '- Print options',
     };
-    my @keys = ( qw( cache_rootdir cache_expire reset_cache max_depth limit delete no_blob min_width tab thousands_sep undef table_colors head_colors cut_col_names ) );
+    my @keys = ( qw( cache_rootdir cache_expire reset_cache max_depth limit delete no_blob min_width tab thousands_sep print_type undef table_colors head_colors cut_col_names ) );
     my $change;
     
     OPTIONS: while ( 1 ) {
@@ -855,6 +857,11 @@ sub options {
                         $value = "none"             if $opt->{$key} eq '';
                         $value = "full stop: \".\"" if $opt->{$key} eq '.';
                         $value = "comma: \",\""     if $opt->{$key} eq ',';   
+                    }
+                    elsif ( $key eq 'print_type' ) {
+                        $value = "line"           if $opt->{$key} == 1;
+                        $value = "color"          if $opt->{$key} == 2;
+                        $value = "line and color" if $opt->{$key} == 3;   
                     }
                     elsif ( $key eq 'table_colors' ) {
                         $value = "@{$opt->{$key}}";
@@ -950,6 +957,15 @@ sub options {
                 $opt->{cache_rootdir} = $cache_rootdir;
                 $change++;
             }
+            when ( $oh->{print_type} ) {
+                my ( $line, $color, $line_and_color ) = ( '  line  ', '  color  ', ' line and color ' );
+                my $type = choose( [ $line, $color, $line_and_color, undef ], { prompt => 'Offered output types:',  %bol } );
+                break if not defined $type;
+                $opt->{print_type} = 1 if $type eq $line;
+                $opt->{print_type} = 2 if $type eq $color; 
+                $opt->{print_type} = 3 if $type eq $line_and_color;
+                $change++;
+            }            
             when ( $oh->{table_colors} ) {
                 my $columns = [];
                 my $c = 0;

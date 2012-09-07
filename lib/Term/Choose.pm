@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.006';
+our $VERSION = '1.007';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -17,72 +17,75 @@ use Term::ReadKey;
 #my $log = get_logger("Term::Choose");
 
 use constant {
-    ROW         => 0,
-    COL         => 1,
+    ROW     => 0,
+    COL     => 1,
+    
+    MIN     => 0,
+    MAX     => 1,
 };
 
 use constant {
-    UP                                 => "\e[A",
-    DOWN                               => "\n",
-    RIGHT                              => "\e[C",
-    CR                                 => "\r",
-    GET_CURSOR_POSITION                => "\e[6n",
+    UP                              => "\e[A",
+    DOWN                            => "\n",
+    RIGHT                           => "\e[C",
+    CR                              => "\r",
+    GET_CURSOR_POSITION             => "\e[6n",
 
-    HIDE_CURSOR                        => "\e[?25l",
-    SHOW_CURSOR                        => "\e[?25h",
+    HIDE_CURSOR                     => "\e[?25l",
+    SHOW_CURSOR                     => "\e[?25h",
 
-    SET_ANY_EVENT_MOUSE_1003           => "\e[?1003h",
-    SET_EXT_MODE_MOUSE_1005            => "\e[?1005h",
-    SET_SGR_EXT_MODE_MOUSE_1006        => "\e[?1006h",
-    UNSET_ANY_EVENT_MOUSE_1003         => "\e[?1003l",
-    UNSET_EXT_MODE_MOUSE_1005          => "\e[?1005l",
-    UNSET_SGR_EXT_MODE_MOUSE_1006      => "\e[?1006l",
+    SET_ANY_EVENT_MOUSE_1003        => "\e[?1003h",
+    SET_EXT_MODE_MOUSE_1005         => "\e[?1005h",
+    SET_SGR_EXT_MODE_MOUSE_1006     => "\e[?1006h",
+    UNSET_ANY_EVENT_MOUSE_1003      => "\e[?1003l",
+    UNSET_EXT_MODE_MOUSE_1005       => "\e[?1005l",
+    UNSET_SGR_EXT_MODE_MOUSE_1006   => "\e[?1006l",
 
-    MAX_MOUSE_1003_ROW                 => 224,
-    MAX_MOUSE_1003_COL                 => 224,
+    MAX_MOUSE_1003_ROW              => 224,
+    MAX_MOUSE_1003_COL              => 224,
 
-    BEEP                               => "\07",
-    CLEAR_SCREEN                       => "\e[2J",
-    GO_TO_TOP_LEFT                     => "\e[1;1H",
-    CLEAR_EOS                          => "\e[0J",
-    RESET                              => "\e[0m",
-    UNDERLINE                          => "\e[4m",
-    REVERSE                            => "\e[7m",
-    BOLD                               => "\e[1m",
+    BEEP                            => "\07",
+    CLEAR_SCREEN                    => "\e[2J",
+    GO_TO_TOP_LEFT                  => "\e[1;1H",
+    CLEAR_EOS                       => "\e[0J",
+    RESET                           => "\e[0m",
+    UNDERLINE                       => "\e[4m",
+    REVERSE                         => "\e[7m",
+    BOLD                            => "\e[1m",
 };
 
 use constant {
-    BIT_MASK_xxxxxx11    => 0x03,
-    BIT_MASK_xx1xxxxx    => 0x20,
-    BIT_MASK_x1xxxxxx    => 0x40,
+    BIT_MASK_xxxxxx11   => 0x03,
+    BIT_MASK_xx1xxxxx   => 0x20,
+    BIT_MASK_x1xxxxxx   => 0x40,
 };
 
 use constant {
-    NEXT_getch          => -1,
+    NEXT_getch      => -1,
 
-    CONTROL_b           => 0x02,
-    CONTROL_c           => 0x03,
-    CONTROL_f           => 0x06,
-    CONTROL_h           => 0x08,
-    KEY_TAB             => 0x09,
-    KEY_ENTER           => 0x0d,
-    KEY_ESC             => 0x1b,
-    KEY_SPACE           => 0x20,
-    KEY_h               => 0x68,
-    KEY_j               => 0x6a,
-    KEY_k               => 0x6b,
-    KEY_l               => 0x6c,
-    KEY_q               => 0x71,
-    KEY_Tilde           => 0x7e,
-    KEY_BSPACE          => 0x7f,
+    CONTROL_b       => 0x02,
+    CONTROL_c       => 0x03,
+    CONTROL_f       => 0x06,
+    CONTROL_h       => 0x08,
+    KEY_TAB         => 0x09,
+    KEY_ENTER       => 0x0d,
+    KEY_ESC         => 0x1b,
+    KEY_SPACE       => 0x20,
+    KEY_h           => 0x68,
+    KEY_j           => 0x6a,
+    KEY_k           => 0x6b,
+    KEY_l           => 0x6c,
+    KEY_q           => 0x71,
+    KEY_Tilde       => 0x7e,
+    KEY_BSPACE      => 0x7f,
 
-    KEY_UP              => 0x1b5b41,
-    KEY_DOWN            => 0x1b5b42,
-    KEY_RIGHT           => 0x1b5b43,
-    KEY_LEFT            => 0x1b5b44,
-    KEY_BTAB            => 0x1b5b5a,
-    KEY_PAGE_UP         => 0x1b5b35,
-    KEY_PAGE_DOWN       => 0x1b5b36,
+    KEY_UP          => 0x1b5b41,
+    KEY_DOWN        => 0x1b5b42,
+    KEY_RIGHT       => 0x1b5b43,
+    KEY_LEFT        => 0x1b5b44,
+    KEY_BTAB        => 0x1b5b5a,
+    KEY_PAGE_UP     => 0x1b5b35,
+    KEY_PAGE_DOWN   => 0x1b5b36,
 };
 
 
@@ -271,38 +274,38 @@ sub _copy_orig_list {
     } @{$arg->{orig_list}} ];
 }
 
-
 sub _validate_option {
     my ( $config ) = @_;
-    my %validate = (
-        prompt          => '',
-        right_justify   => qr/\A[01]\z/,
-        layout          => qr/\A[0123]\z/,
-        vertical        => qr/\A[01]\z/,
-        length_longest  => qr/\A[1-9][0-9]{0,2}\z/,
-        clear_screen    => qr/\A[01]\z/,
-        mouse_mode      => qr/\A[01234]\z/,
-        pad             => qr/\A[0-9][0-9]?\z/,
-        pad_one_row     => qr/\A[0-9][0-9]?\z/,
-        beep            => qr/\A[01]\z/,
+    my $limit = 1_000_000_000;
+    my $validate = {    #   min      max
+        beep            => [ 0,       1 ],
+        clear_screen    => [ 0,       1 ],
+        cursor          => [ 0,  $limit ],
         empty_string    => '',
+        hide_cursor     => [ 0,       1 ],
+        layout          => [ 0,       3 ],
+        length_longest  => [ 1,  $limit ],
+        max_list        => [ 1,  $limit ],
+        mouse_mode      => [ 0,       4 ],
+        pad             => [ 0,  $limit ],
+        pad_one_row     => [ 0,  $limit ],     
+        page            => [ 0,       1 ],
+        prompt          => '',
+        right_justify   => [ 0,       1 ],
+        screen_width    => [ 1 ,    100 ],
         undef           => '',
-        max_list        => qr/\A[1-9][0-9]{0,8}\z/,
-        screen_width    => qr/\A[1-9][0-9]\z/,
-        hide_cursor     => qr/\A[01]\z/,
-        cursor          => qr/\A[0-9]{0,9}\z/,
-        page            => qr/\A[1-9][0-9]{0,8}\z/,
-    );
+        vertical        => [ 0,       1 ],
+    };
     my $warn = 0;
     for my $key ( keys %$config ) {
-        if ( $validate{$key} ) {
-            if ( defined $config->{$key} && $config->{$key} !~ $validate{$key} ) {
+        if ( $validate->{$key} ) {
+            if ( defined $config->{$key} && ( $config->{$key} !~ m/\A\d+\z/ || $config->{$key} < $validate->{$key}[MIN] || $config->{$key} > $validate->{$key}[MAX] ) ) {
                 carp "choose: \"$config->{$key}\" not a valid value for option \"$key\". Falling back to default value.";
                 $config->{$key} = undef;
                 ++$warn;
             }
         }
-        elsif ( ! exists $validate{$key} ) {
+        elsif ( ! exists $validate->{$key} ) {
             carp "choose: \"$key\": no such option";
             delete $config->{$key};
             ++$warn;
@@ -320,23 +323,23 @@ sub _set_layout {
     my ( $wantarray, $config ) = @_;
     my $prompt = ( defined $wantarray ) ? 'Your choice:' : 'Close with ENTER';
     $config = _validate_option( $config // {} );
-    $config->{prompt}           //= $prompt;
-    $config->{right_justify}    //= 0;
-    $config->{layout}           //= 1;
-    $config->{vertical}         //= 1;
-    #$config->{length_longest}  //= undef;
+    $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
+    #$config->{cursor}          //= undef;
+    $config->{empty_string}     //= '<empty>';
+    $config->{hide_cursor}      //= 1;
+    $config->{layout}           //= 1;
+    #$config->{length_longest}  //= undef;
+    $config->{max_list}         //= 100_000;
     $config->{mouse_mode}       //= 0;
     $config->{pad}              //= 2;
     $config->{pad_one_row}      //= 3;
-    $config->{beep}             //= 0;
-    $config->{empty_string}     //= '<empty>';
-    $config->{undef}            //= '<undef>';
-    $config->{max_list}         //= 100_000;
-    #$config->{screen_width}    //= undef;
-    $config->{hide_cursor}      //= 1;
-    #$config->{cursor}          //= undef;
     $config->{page}             //= 0;
+    $config->{prompt}           //= $prompt;
+    $config->{right_justify}    //= 0;
+    #$config->{screen_width}    //= undef;
+    $config->{undef}            //= '<undef>';
+    $config->{vertical}         //= 1;
     return $config;
 }
 
@@ -356,10 +359,10 @@ sub _set_this_cell {
     }
     while ( $arg->{tmp_this_cell}[ROW] > $arg->{end_page} ) {
         $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
-        $arg->{this_cell}[ROW]  = $arg->{top_listrow};        
-        $arg->{begin_page}      = $arg->{top_listrow};
-        $arg->{end_page}        = $arg->{begin_page} + $arg->{maxrows} - 1;
-        $arg->{end_page}        = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
+        $arg->{this_cell}[ROW] = $arg->{top_listrow};        
+        $arg->{begin_page} = $arg->{top_listrow};
+        $arg->{end_page} = $arg->{begin_page} + $arg->{maxrows} - 1;
+        $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
     }
     $arg->{this_cell} = $arg->{tmp_this_cell};
 }
@@ -418,6 +421,7 @@ sub _write_first_screen {
     ( $arg->{maxcols}, $arg->{maxrows} ) = GetTerminalSize( $arg->{handle_out} );
     if ( $arg->{screen_width} ) {
         $arg->{maxcols} = int( ( $arg->{maxcols} / 100 ) * $arg->{screen_width} );
+        $arg->{maxcols} = 1 if $arg->{maxcols} == 0;
     }
     if ( $arg->{mouse_mode} == 2 ) {
         $arg->{maxcols} = MAX_MOUSE_1003_COL if $arg->{maxcols} > MAX_MOUSE_1003_COL;
@@ -440,7 +444,7 @@ sub _write_first_screen {
     $arg->{marked} = [];
     $arg->{screen_row} = 0;
     $arg->{this_cell} = [ 0, 0 ];
-    _set_this_cell( $arg ) if defined $arg->{cursor} and $arg->{cursor} < $arg->{list};
+    _set_this_cell( $arg ) if defined $arg->{cursor} && $arg->{cursor} <= $#{$arg->{list}};
     _wr_screen( $arg );
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
@@ -829,11 +833,11 @@ sub _size_and_layout {
     elsif ( $layout < 2 ) {
         for my $idx ( 0 .. $#{$arg->{list}} ) {
             $all_in_first_row .= $arg->{list}[$idx];
+            $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
             if ( length $all_in_first_row > $arg->{maxcols} ) {
                 $all_in_first_row = '';
                 last;
             }
-            $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
         }
     }
     if ( $all_in_first_row ) {
@@ -888,11 +892,14 @@ sub _size_and_layout {
         else {
             my $begin = 0;
             my $end = $cols_per_row - 1;
-            while ( $begin <= $#{$arg->{list}} ) {
-                push @{$arg->{rowcol2list}}, [ $begin .. $end ];
-                $begin = $end + 1;
-                $end = $begin + $cols_per_row - 1;
+            $end = $#{$arg->{list}} if $end > $#{$arg->{list}};
+            push @{$arg->{rowcol2list}}, [ $begin .. $end ];            
+            while ( $end < $#{$arg->{list}} ) {
+                $begin += $cols_per_row;
+                $end   += $cols_per_row;
                 $end = $#{$arg->{list}} if $end > $#{$arg->{list}};
+                push @{$arg->{rowcol2list}}, [ $begin .. $end ];
+
             }
         }
     }
@@ -965,7 +972,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.006
+Version 1.007
 
 =cut
 
@@ -1090,6 +1097,10 @@ All options are optional.
 
 Defaults may change in a future release.
 
+All options which expect a number expect integers.
+
+There is a general upper limit of 1_000_000_000 for options which expect a number and where no upper limit is mentioned.
+
 =head4 prompt
 
 If I<prompt> is undefined default prompt-string will be shown.
@@ -1099,12 +1110,6 @@ If I<prompt> is 0 no prompt-line will be shown.
 default in list and scalar context: 'Your choice:'
 
 default in void context: 'Close with ENTER'
-
-=head4 right_justify
-
-0 - columns are left justified (default)
-
-1 - columns are right justified
 
 =head4 layout
 
@@ -1169,11 +1174,13 @@ From broad to narrow: 0 > 1 > 2 > 3
 
 =head4 screen_width
 
-If set, restricts the screen width to I<screen_width> percentage of the effective screen width.
+If set, restricts the screen width to the integer value of I<screen_width> percentage of the effective screen width.
+
+If int I<screen_width> percentage is less than one column the screen width is one column.
 
 If not defined all the screen width is used.
 
-Allowed values: 10 - 99
+Allowed values: from 1 to 100
 
 (default: undef)
 
@@ -1182,6 +1189,30 @@ Allowed values: 10 - 99
 0 - items ordered horizontally
 
 1 - items ordered vertically (default)
+
+=head4 right_justify
+
+0 - columns are left justified (default)
+
+1 - columns are right justified
+
+=head4 pad
+
+space between columns (default: 2)
+
+allowed values:  0 or greater
+
+=head4 pad_one_row
+
+space between items if we have only one row (default: 3)
+
+allowed values:  0 or greater
+
+=head4 clear_screen
+
+0 - off (default)
+
+1 - clears the screen before printing the choices
 
 =head4 length_longest
 
@@ -1195,15 +1226,9 @@ A larger value than the length of the longest element wastes space on the screen
 
 If the value of I<length_longest> is greater than the screen width I<length_longest> will be set to the screen width.
 
-Allowed values: 1 - 999
+Allowed values: 1 or greater
 
 (default: undef)
-
-=head4 clear_screen
-
-0 - off (default)
-
-1 - clears the screen before printing the choices
 
 =head4 cursor
 
@@ -1211,9 +1236,9 @@ With the option I<cursor> can be selected a list item, which will be highlighted
 
 I<cursor> expects a zero indexed value, so e.g. to highlight the second item the value would be I<1>.
 
-If the passed value is greater than the last list index the first item is highlighted.
+If the passed value is greater than the index of the last listelement the first item is highlighted.
 
-Allowed values: as max_list
+Allowed values:  0 or greater
 
 (default: undef)
 
@@ -1235,17 +1260,17 @@ Allowed values: as max_list
 
 4 - extended SGR mouse mode (1006); mouse mode 1003 if mouse mode 1006 is not supported
 
-=head4 pad
+=head4 undef
 
-space between columns (default: 2)
+string displayed on the screen instead an undefined list element
 
-allowed values: 0 - 99
+default: '<undef>'
 
-=head4 pad_one_row
+=head4 empty_string
 
-space between items if we have only one row (default: 3)
+string displayed on the screen instead an empty string
 
-allowed values: 0 - 99
+default: '<empty>'
 
 =head4 beep
 
@@ -1259,23 +1284,11 @@ allowed values: 0 - 99
 
 1 - on (default)
 
-=head4 undef
-
-string displayed on the screen instead an undefined list element
-
-default: '<undef>'
-
-=head4 empty_string
-
-string displayed on the screen instead an empty string
-
-default: '<empty>'
-
 =head4 max_list
 
 maximal allowed length of the list referred by the first argument (default: 100_000)
 
-allowed values: 1 - 999_999_999
+allowed values:  1 or greater
 
 =head3 Error handling
 
