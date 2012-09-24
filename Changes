@@ -1,5 +1,12 @@
 Revision history for Term::Choose
 
+1.008   2012-09-24
+        - Option "page" now enabled by default.
+        - Option "cursor" is now called "default".
+        - Option "max_list" is now called "limit".
+        - Improved documentation.
+        - Updated example.
+
 1.007   2012-09-07
         - Fixed bug in "_size_and_layout" (if "vertical" == 0).
         - Fixed bug in "_write_first_screen" (condition for calling "_set_this_cell").

@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.007';
+our $VERSION = '1.008';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -262,7 +262,7 @@ sub _copy_orig_list {
             $copy =~ s/\p{Space}/ /g;
             $copy =~ s/\p{Cntrl}//g;
             $copy;
-        } @{$arg->{orig_list}}[ 0 .. $arg->{max_list} - 1 ] ];
+        } @{$arg->{orig_list}}[ 0 .. $arg->{limit} - 1 ] ];
     }
     return [ map {
         my $copy = $_;
@@ -274,18 +274,34 @@ sub _copy_orig_list {
     } @{$arg->{orig_list}} ];
 }
 
+
 sub _validate_option {
     my ( $config ) = @_;
     my $limit = 1_000_000_000;
+    
+    ##########################################################
+    ####################    deprecated    ####################
+    ##########################################################
+    if ( defined $config->{max_list} && ! defined $config->{limit} ) {
+        $config->{limit} = $config->{max_list};
+        delete $config->{max_list};
+    }
+    if ( defined $config->{cursor} && ! defined $config->{default} ) {
+        $config->{default} = $config->{cursor};
+        delete $config->{cursor};
+    }
+    ##########################################################
+    ##########################################################
+    
     my $validate = {    #   min      max
         beep            => [ 0,       1 ],
         clear_screen    => [ 0,       1 ],
-        cursor          => [ 0,  $limit ],
+        default         => [ 0,  $limit ],  # replaces cursor
         empty_string    => '',
         hide_cursor     => [ 0,       1 ],
         layout          => [ 0,       3 ],
         length_longest  => [ 1,  $limit ],
-        max_list        => [ 1,  $limit ],
+        limit           => [ 1,  $limit ],  # replaces max_list
         mouse_mode      => [ 0,       4 ],
         pad             => [ 0,  $limit ],
         pad_one_row     => [ 0,  $limit ],     
@@ -325,16 +341,16 @@ sub _set_layout {
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
-    #$config->{cursor}          //= undef;
+    #$config->{default}          //= undef;
     $config->{empty_string}     //= '<empty>';
     $config->{hide_cursor}      //= 1;
     $config->{layout}           //= 1;
     #$config->{length_longest}  //= undef;
-    $config->{max_list}         //= 100_000;
+    $config->{limit}         //= 100_000;
     $config->{mouse_mode}       //= 0;
     $config->{pad}              //= 2;
     $config->{pad_one_row}      //= 3;
-    $config->{page}             //= 0;
+    $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
     $config->{right_justify}    //= 0;
     #$config->{screen_width}    //= undef;
@@ -348,9 +364,9 @@ sub _set_this_cell {
     my ( $arg ) = @_;
     $arg->{tmp_this_cell} = [ 0, 0 ];
     LOOP: for my $i ( 0 .. $#{$arg->{rowcol2list}} ) {
-        if ( $arg->{cursor} ~~ @{$arg->{rowcol2list}[$i]} ) {
+        if ( $arg->{default} ~~ @{$arg->{rowcol2list}[$i]} ) {
             for my $j ( 0 .. $#{$arg->{rowcol2list}[$i]} ) {
-                if ( $arg->{cursor} == $arg->{rowcol2list}[$i][$j] ) {
+                if ( $arg->{default} == $arg->{rowcol2list}[$i][$j] ) {
                     $arg->{tmp_this_cell} = [ $i, $j ]; 
                     last LOOP;
                 }
@@ -444,7 +460,7 @@ sub _write_first_screen {
     $arg->{marked} = [];
     $arg->{screen_row} = 0;
     $arg->{this_cell} = [ 0, 0 ];
-    _set_this_cell( $arg ) if defined $arg->{cursor} && $arg->{cursor} <= $#{$arg->{list}};
+    _set_this_cell( $arg ) if defined $arg->{default} && $arg->{default} <= $#{$arg->{list}};
     _wr_screen( $arg );
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
@@ -469,9 +485,9 @@ sub choose {
     my $wantarray;
     $wantarray = wantarray ? 1 : 0 if defined wantarray;
     my $arg = _set_layout( $wantarray, $config );
-    if ( @$orig_list > $arg->{max_list} ) {
+    if ( @$orig_list > $arg->{limit} ) {
         my $list_length = scalar @$orig_list;
-        carp "choose: List has $list_length items.\nchoose: \"max_list\" is set to $arg->{max_list} items!\nchoose: The first $arg->{max_list} itmes are used by choose.";
+        carp "choose: List has $list_length items.\nchoose: \"limit\" is set to $arg->{limit} items!\nchoose: The first $arg->{limit} itmes are used by choose.";
         $arg->{list_to_long} = 1;
         print "Press a key to continue";
         my $dummy = <STDIN>;
@@ -962,6 +978,7 @@ sub _handle_mouse {
 __END__
 
 
+
 =pod
 
 =encoding utf8
@@ -972,7 +989,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.007
+Version 1.008
 
 =cut
 
@@ -1026,7 +1043,7 @@ Options can be passed with a hash reference as a second (optional) argument.
 
 =item
 
-If I<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and "Return".
+If I<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and confirming with "Return".
 
 I<choose> then returns the chosen item.
 
@@ -1034,7 +1051,7 @@ I<choose> then returns the chosen item.
 
 If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar".
 
-I<choose> then returns the list of marked items, (including the item highlight when "Return" was pressed).
+I<choose> then returns the list of marked items, including the item highlight when "Return" was pressed.
 
 =item
 
@@ -1044,7 +1061,7 @@ Called in void context I<choose> returns nothing.
 
 =back
 
-If the items of the list don't fit in the screen, the user can scroll to the next (previous) page(s).
+If the items of the list don't fit on the screen, the user can scroll to the next (previous) page(s).
 
 If the window size is changed, then as soon as the user enters a keystroke I<choose> rewrites the screen. In list context marked items are reset.
 
@@ -1097,13 +1114,13 @@ All options are optional.
 
 Defaults may change in a future release.
 
-All options which expect a number expect integers.
+Options which expect a number as their value expect integers.
 
-There is a general upper limit of 1_000_000_000 for options which expect a number and where no upper limit is mentioned.
+There is a general upper limit of 1_000_000_000 for options which expect a number as their value and where no upper limit is mentioned.
 
 =head4 prompt
 
-If I<prompt> is undefined default prompt-string will be shown.
+If I<prompt> is undefined a default prompt-string will be shown.
 
 If I<prompt> is 0 no prompt-line will be shown.
 
@@ -1176,7 +1193,7 @@ From broad to narrow: 0 > 1 > 2 > 3
 
 If set, restricts the screen width to the integer value of I<screen_width> percentage of the effective screen width.
 
-If int I<screen_width> percentage is less than one column the screen width is one column.
+If the result of int I<screen_width> percentage of the screen width is zero the virtual screen width is set to one screen column.
 
 If not defined all the screen width is used.
 
@@ -1186,27 +1203,27 @@ Allowed values: from 1 to 100
 
 =head4 vertical
 
-0 - items ordered horizontally
+0 - items are ordered horizontally
 
-1 - items ordered vertically (default)
+1 - items are ordered vertically (default)
 
 =head4 right_justify
 
-0 - columns are left justified (default)
+0 - items ordered in columns are left justified (default)
 
-1 - columns are right justified
+1 - items ordered in columns are right justified
 
 =head4 pad
 
-space between columns (default: 2)
+Sets the number of whitespaces between columns. (default: 2)
 
-allowed values:  0 or greater
+Allowed values:  0 or greater
 
 =head4 pad_one_row
 
-space between items if we have only one row (default: 3)
+Sets the number of whitespaces between items if we have only one row. (default: 3)
 
-allowed values:  0 or greater
+Allowed values:  0 or greater
 
 =head4 clear_screen
 
@@ -1230,11 +1247,17 @@ Allowed values: 1 or greater
 
 (default: undef)
 
-=head4 cursor
+=head4 cursor (DEPRECATED)
 
-With the option I<cursor> can be selected a list item, which will be highlighted as the default instead of the first item.
+The option I<cursor> is now called  I<default>.
 
-I<cursor> expects a zero indexed value, so e.g. to highlight the second item the value would be I<1>.
+Will be removed with the next release.
+
+=head4 default
+
+With the option I<default> can be selected a list item, which will be highlighted as the default instead of the first item.
+
+I<default> expects a zero indexed value, so e.g. to highlight the third item the value would be I<2>.
 
 If the passed value is greater than the index of the last listelement the first item is highlighted.
 
@@ -1244,9 +1267,9 @@ Allowed values:  0 or greater
 
 =head4 page
 
-0 - off (default)
+0 - off
 
-1 - print the page number on the bottom of the screen if there is more then one page.
+1 - print the page number on the bottom of the screen if there is more then one page. (default)
 
 =head4 mouse_mode
 
@@ -1262,13 +1285,13 @@ Allowed values:  0 or greater
 
 =head4 undef
 
-string displayed on the screen instead an undefined list element
+Sets the string displayed on the screen instead an undefined list element.
 
 default: '<undef>'
 
 =head4 empty_string
 
-string displayed on the screen instead an empty string
+Sets the string displayed on the screen instead an empty string.
 
 default: '<empty>'
 
@@ -1280,15 +1303,21 @@ default: '<empty>'
 
 =head4 hide_cursor
 
-0 - off
+0 - keep the terminals highlighting of the cursor position
 
-1 - on (default)
+1 - hide the terminals highlighting of the cursor position (default)
 
-=head4 max_list
+=head4 max_list (DEPRECATED)
 
-maximal allowed length of the list referred by the first argument (default: 100_000)
+The option I<max_list> is now called  I<limit>.
 
-allowed values:  1 or greater
+Will be removed with the next release.
+
+=head4 limit
+
+Sets the maximal allowed length of the list referred by the first argument. (default: 100_000)
+
+Allowed values:  1 or greater
 
 =head3 Error handling
 
@@ -1300,7 +1329,7 @@ allowed values:  1 or greater
 
 =item * If the list referred by the first argument is empty I<choose> returns  I<undef> resp. an empty list and issues a warning.
 
-=item * If the list referred by the first argument has more than I<max_list> items (default 100_000) I<choose> warns and uses the first I<max_list> list items.
+=item * If the list referred by the first argument has more than I<limit> items (default 100_000) I<choose> warns and uses the first I<limit> list items.
 
 =item * If the (optional) second argument is not a hash reference I<choose> dies.
 
@@ -1347,19 +1376,19 @@ The Terminal needs to understand the following ANSI escape sequences:
     "\e[7m"     Inverse (SGR)
 
 
-If option "hide_cursor" is enabled:
+If the option "hide_cursor" is enabled:
 
     "\e[?25l"   Hide Cursor (DECTCEM)
 
     "\e[?25h"   Show Cursor (DECTCEM)
 
-If option "clear_screen" is enabled:
+If the option "clear_screen" is enabled:
 
     "\e[2J"     Clear Screen (Erase Data)
 
     "\e[1;1H"   Go to Top Left (Cursor Position)
 
-If option "mouse_mode" is set:
+If a "mouse_mode" is enabled:
 
     "\e[6n"     Get Cursor Position (Device Status Report)
 
@@ -1380,13 +1409,13 @@ It is needed a terminal that uses a monospaced font.
 
 =head2 SIGWINCH
 
-L<Term::Choose> uses the Perl signal handling model as described in L<perlipc/Signals|http://search.cpan.org/perldoc?perlipc#Signals>. It is needed an operating system which knows the WINCH signal. I<choose> uses SIGWINCH to check if the windows size has changed.
+L<Term::Choose> makes use of the Perl signal handling as described in L<perlipc/Signals|http://search.cpan.org/perldoc?perlipc#Signals>. It is needed an operating system which knows the WINCH signal: I<choose> uses SIGWINCH to check if the windows size has changed.
 
 =head1 BUGS AND LIMITATIONS
 
 =head2 Unicode
 
-This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings. Therefore strings with characters that take more or less than one print column will break the layout. Using L<Term::Choose::GC> instead improves the layout in such conditions. It determines the string length by using the I<columns> method from L<Unicode::GCString> module.
+This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings. Therefore strings with characters that take more or less than one print column will break the layout. Using L<Term::Choose::GC> instead improves the layout in such conditions. It determines the string length by using the I<columns> method from the L<Unicode::GCString> module.
 
     use Term::Choose:GC qw(choose);
 
@@ -1414,7 +1443,7 @@ As mentioned above I<choose> from L<Term::Clui> does not order the elements in c
 
 Another difference is how lists which don't fit on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
 
-Strings where the number of characters are not equal to the number of columns on the screen break the output from L<Term::Clui> and L<Term::Choose>. L<Term::Choose::GC> tries to get along with such situations - see L</"BUGS AND LIMITATIONS">.
+Strings where the number of characters are not equal to the number of columns on the screen break the output from L<Term::Clui> and L<Term::Choose>. L<Term::Choose::GC> uses the method I<columns> from L<Unicode::GCString> for the determination of the string-length to get along with such situations - see L</"BUGS AND LIMITATIONS">.
 
 L<Term::Clui>'s I<choose> prints and returns the chosen items while I<choose> from L<Term::Choose> only returns the chosen items.
 
@@ -1428,7 +1457,7 @@ The I<choose> function from L<Term::Clui> can remember choices made in scalar co
 
 =back
 
-These differences refer to L<Term::Clui> version 1.65. For a more precise description of L<Term::Clui> consult its own documentation.
+These differences refer to L<Term::Clui> version 1.66. For a more precise description of L<Term::Clui> consult its own documentation.
 
 =head1 SUPPORT
 
@@ -1454,4 +1483,3 @@ This library is free software; you can redistribute it and/or modify it under th
 
 =cut
 
-# End of Term::Choose
