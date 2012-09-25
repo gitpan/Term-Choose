@@ -1,5 +1,10 @@
 Revision history for Term::Choose
 
+1.009   2012-09-25
+        - Removed deprecated option names "max_list" and "cursor".
+        - Updated documentation.
+        - Example: bug fix and update.
+
 1.008   2012-09-24
         - Option "page" now enabled by default.
         - Option "cursor" is now called "default".

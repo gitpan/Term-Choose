@@ -2,11 +2,12 @@
 use warnings;
 use 5.10.1;
 use utf8;
-binmode STDOUT, ':utf8';
+binmode STDOUT, ':encoding(utf-8)';
+binmode STDIN,  ':encoding(utf-8)';
 
 # use warnings FATAL => qw(all);
 # use Data::Dumper;
-# Version 0.13
+# Version 0.14
 
 use File::Find qw(find);
 use File::Path qw(make_path);
@@ -33,7 +34,13 @@ use constant {
     UP              => "\e[A" 
 };
 
-my $home = File::HomeDir->my_home;
+my $arg = {};
+$arg->{back}        = 'BACK';
+$arg->{quit}        = 'QUIT';
+$arg->{home}        = File::HomeDir->my_home;
+$arg->{cached}      = '';
+$arg->{ini_section} = 'table_watch';
+
 
 sub help {
     print << 'HELP';
@@ -66,9 +73,9 @@ Options:
 HELP
 }
 
-#####################
-####   options   ####
-#####################
+#------------------------------------------------------------------------#
+#------------------------------   options   -----------------------------#
+#------------------------------------------------------------------------#
 
 my $opt = {
     cache_expire  => '7d',
@@ -86,9 +93,6 @@ my $opt = {
     asc_desc      => 1,
 };
 
-$opt->{back} = 'BACK';
-$opt->{quit} = 'QUIT';
-
 my $help;
 GetOptions (
     'h|help'        => \$help,
@@ -98,17 +102,17 @@ GetOptions (
     'd|delete'      => \$opt->{delete},
 );
 
-my $config_file = catfile $home, '.table_info.conf';
+my $config_file = catfile $arg->{home}, '.table_info.conf';
 
-if ( not -e $config_file ) {
+if ( not -f $config_file ) {
     open my $fh, '>', $config_file or warn $!;
     close $fh or warn $!;
 }
 
-if ( -e $config_file and -s $config_file ) {
-    my $section = 'sqlite';
+if ( -f $config_file and -s $config_file ) {
     my $ini = Config::Tiny->new;
     $ini = Config::Tiny->read( $config_file );
+    my $section = $arg->{ini_section};
     for my $key ( keys %{$ini->{$section}} ) {
         if ( $ini->{$section}{$key} eq '' ) {
             $ini->{$section}{$key} = undef;
@@ -122,81 +126,15 @@ if ( -e $config_file and -s $config_file ) {
     }
 }
 
-$opt = options( $opt, $config_file ) if $help;
+$opt = options( $arg, $opt, $config_file ) if $help;
 
 
-################################
-####   get database names   ####
-################################
+#------------------------------------------------------------------------#
+#------------------   database specific subroutines   -------------------#
+#------------------------------------------------------------------------#
 
-my @dirs = @ARGV ? @ARGV : ( $home );
-my $key = join ' ', @dirs, '|', $opt->{max_depth} // '';
-my $cached = ' (cached)';
-my $cache = CHI->new ( 
-    namespace => 'table_watch_SQLite', 
-    driver => 'File', 
-    root_dir => $opt->{cache_rootdir},  
-    expires_in => $opt->{cache_expire}, 
-    expires_variance => 0.25, 
-);
-
-$cache->remove( $key ) if $opt->{reset_cache};
-
-my @databases = $cache->compute( $key, $opt->{cache_expire}, sub { return search_databases->( $opt, \@dirs ) } );
-
-sub search_databases {
-    my ( $opt, $dirs ) = @_;
-    my @databases;
-    $cached = '';
-    say 'searching...';
-    my $flm = File::LibMagic->new();
-    for my $dir ( @$dirs ) {
-        my $max_depth;
-        if ( defined $opt->{max_depth} ) {
-            $max_depth = $opt->{max_depth};
-            $dir = rel2abs $dir;
-            $max_depth += $dir =~ tr[/][];
-            $max_depth--;
-        }
-        find( {
-            preprocess => sub {
-                if ( defined $max_depth ) {
-                    my $depth = $File::Find::dir =~ tr[/][];
-                    return @_ if $depth < $max_depth;
-                    return grep { not -d } @_ if $depth == $max_depth;
-                    return;
-                } 
-                else {
-                    return @_;
-                }
-            },
-            wanted     => sub {
-                my $file = $File::Find::name;
-                return if not -f $file;
-                push @databases, $file if $flm->describe_filename( $file ) =~ /\ASQLite/;
-            },
-            no_chdir   => 1, 
-        }, 
-        $dir );
-    }
-    say 'ended searching';
-    return @databases;
-}
-
-say 'no sqlite-databases found' and exit if not @databases;
-
-
-####################
-####    main    ####
-####################
-
-DATABASES: while ( 1 ) {
-
-    my %lyt = ( layout => 3, clear_screen => 1 );
-
-    my $db = choose( [ undef, @databases ], { prompt => 'Choose Database' . $cached, %lyt, undef => $opt->{quit} } );
-    last DATABASES if not defined $db;
-
+sub get_database_handle {
+    my ( $db ) = @_;
     my $dbh;
     eval {
         die "\"$db\": $!. Maybe the cached data is not up to date." if not -f $db;
@@ -208,56 +146,150 @@ DATABASES: while ( 1 ) {
         } ) or die DBI->errstr;
         $dbh->sqlite_busy_timeout( 3000 );
         $dbh->do( 'PRAGMA cache_size = 400000' );
-        $dbh->do( 'PRAGMA synchronous = OFF' );   
+        $dbh->do( 'PRAGMA synchronous = OFF' );
     };
     if ( $@ ) {
         print $@, '  ';
         choose( [ 'Press ENTER to continue' ], { prompt => 0 } ); 
-        next DATABASES;
+        return;
     }
+    return $dbh;
+}
+
+
+sub available_databases {
+    my ( $arg, $opt ) = @_;
+    my @dirs = @ARGV ? @ARGV : ( $arg->{home} );
+    $arg->{cache_key} = join ' ', @dirs, '|', $opt->{max_depth} // '';
+    $arg->{cached} = ' (cached)';
+    $arg->{cache} = CHI->new ( 
+        namespace => 'table_watch_SQLite', 
+        driver => 'File', 
+        root_dir => $opt->{cache_rootdir},  
+        expires_in => $opt->{cache_expire}, 
+        expires_variance => 0.25, 
+    );
+    $arg->{cache}->remove( $arg->{cache_key} ) if $opt->{reset_cache};
+    
+    my @databases = $arg->{cache}->compute( 
+        $arg->{cache_key}, 
+        $opt->{cache_expire}, 
+        sub { 
+            my @databases;
+            $arg->{cached} = '';
+            say 'searching...';
+            my $flm = File::LibMagic->new();
+            for my $dir ( @dirs ) {
+                my $max_depth;
+                if ( defined $opt->{max_depth} ) {
+                    $max_depth = $opt->{max_depth};
+                    $dir = rel2abs $dir;
+                    $max_depth += $dir =~ tr[/][];
+                    $max_depth--;
+                }
+                find( {
+                    preprocess => sub {
+                        if ( defined $max_depth ) {
+                            my $depth = $File::Find::dir =~ tr[/][];
+                            return @_ if $depth < $max_depth;
+                            return grep { not -d } @_ if $depth == $max_depth;
+                            return;
+                        } 
+                        else {
+                            return @_;
+                        }
+                    },
+                    wanted     => sub {
+                        my $file = $File::Find::name;
+                        return if not -f $file;
+                        push @databases, $file if $flm->describe_filename( $file ) =~ /\ASQLite/;
+                    },
+                    no_chdir   => 1, 
+                }, 
+                $dir );
+            }
+            say 'ended searching';
+            return @databases;
+        }
+    );
+    return @databases;
+}
+
+
+sub remove_database {
+    my ( $dbh, $db ) = @_;
+    eval { unlink $db or die $! };
+    if ( $@ ) {
+        say "Could not remove database \"$db\"";
+        print $@;
+        return;
+    }
+    return 1;
+}
+
+
+sub get_table_names {
+    my ( $dbh ) = @_;
+    my $tables = $dbh->selectcol_arrayref( "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name" );
+    return $tables;
+}
+
+#------------------------------------------------------------------------#
+#-------------------------------   main   -------------------------------#
+#------------------------------------------------------------------------#
+
+my @databases = available_databases( $arg, $opt );
+say 'no sqlite-databases found' and exit if not @databases;
+
+
+DATABASES: while ( 1 ) {
+
+    my %lyt = ( layout => 3, clear_screen => 1 );
+
+    my $db = choose( [ undef, @databases ], { prompt => 'Choose Database' . $arg->{cached}, %lyt, undef => $arg->{quit} } );
+
+    last DATABASES if not defined $db;
+    my $dbh = get_database_handle( $db );
+    next DATABASES if not defined $dbh;
+    $arg->{db_type} = lc $dbh->{Driver}{Name};
 
     TABLES: while ( 1 ) {
 
-        my $tables = $dbh->selectcol_arrayref( "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name" );
+        my $tables = get_table_names( $dbh );
         my @tables = map { "- $_" } @$tables;
-        push @tables, '  sqlite_master', '  sqlite_temp_master'; 
-        push @tables, '  delete database'   if $opt->{delete};
+        push @tables, '  sqlite_master', '  sqlite_temp_master' if $arg->{db_type} eq 'sqlite';
+        push @tables, '  delete database' if $opt->{delete};
 
-        my $table = choose( [ undef, @tables ], { prompt => 'Choose Table', %lyt, undef => '  ' . $opt->{back} } );
+        my $table = choose( [ undef, @tables ], { prompt => 'Choose Table', %lyt, undef => '  ' . $arg->{back} } );
+        
         last TABLES if not defined $table;
         $table =~ s/\A..//;
-        
         if ( $table eq 'delete database' ) {
             say "\nRealy delete database ", colored( "\"$db\"", 'red' ), "?\n";
             my $c = choose( [ ' No ', ' Yes ' ], { prompt => 0, pad_one_row => 1 } );
             if ( $c eq ' Yes ' ) {
-                eval { unlink $db or die $! };
-                if ( $@ ) {
-                    say "Could not remove database \"$db\"";
-                    print $@;
-                }
-                else {
-                    $cache->remove( $key );
+                my $ok = remove_database( $arg, $dbh, $db );
+                if ( $ok and $arg->{db_type} eq 'sqlite' ) {
+                    $arg->{cache}->remove( $arg->{cache_key} );
                     @databases = grep { $_ ne $db } @databases;
                 }
                 last TABLES;
             }
         }
-        
         my $table_q = $dbh->quote_identifier( $table );
 
         CHOOSE: while ( 1 ) {
                 
             my %auswahl = ( 
-                table_auto      => '== table auto', 
-                table_customize => '== table customized',
-                count_rows      => '   count rows',
-                delete_table    => '   delete table',
+                table_auto      => '= table auto', 
+                table_customize => '= table customized',
+                count_rows      => '  count rows',
+                delete_table    => '  delete table',
             );
             my @aw_keys = ( qw( table_auto table_customize count_rows ) );
             push @aw_keys, 'delete_table' if $opt->{delete};
         
-            my $choice = choose( [ undef, @auswahl{@aw_keys} ], { %lyt, undef => '   ' . $opt->{back} } );
+            my $choice = choose( [ undef, @auswahl{@aw_keys} ], { %lyt, undef => '  ' . $arg->{back} } );
             
             given ( $choice ) {
                 when ( not defined ) {
@@ -268,7 +300,7 @@ DATABASES: while ( 1 ) {
                     my $select = "SELECT * FROM $table_q";
                     my $arguments;
                     PRINT: while ( 1 ) {
-                        my ( $offset, $last ) = choose_table_range( $opt, $rows );
+                        my ( $offset, $last ) = choose_table_range( $arg, $opt, $rows );
                         last PRINT if $last == 1;	
                         my ( $ref, $col_types ) = read_db_table( $opt, $dbh, $offset, $select, $arguments );
                         last PRINT if not defined $ref;
@@ -277,10 +309,10 @@ DATABASES: while ( 1 ) {
                     }
                 }
                 when ( $auswahl{table_customize} ) {
-                    my ( $rows, $select, $arguments ) = prepare_read_table( $opt, $dbh, $table );
+                    my ( $rows, $select, $arguments ) = prepare_read_table( $arg, $opt, $dbh, $table );
                     next CHOOSE if not defined $rows;
                     PRINT: while ( 1 ) {
-                        my ( $offset, $last ) = choose_table_range( $opt, $rows );	
+                        my ( $offset, $last ) = choose_table_range( $arg, $opt, $rows );	
                         last PRINT if $last == 1;
                         my ( $ref, $col_types ) = read_db_table( $opt, $dbh, $offset, $select, $arguments );
                         last PRINT if not defined $ref;
@@ -291,7 +323,7 @@ DATABASES: while ( 1 ) {
                 when ( $auswahl{count_rows} ) {
                     my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM $table_q" );
                     $rows =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{kilo_sep}/g;
-                    choose( [ "  Table $table_q:  $rows Rows  ", '  Press ENTER to continue  ' ], { prompt => $db, layout => 3 } ); 
+                    choose( [ "  Table $table_q:  $rows Rows  ", '  Press ENTER to continue  ' ], { prompt => "\"$db\"", layout => 3 } ); 
                 }
                 when ( $auswahl{delete_table} ) {
                     say "\n$db";
@@ -319,12 +351,13 @@ DATABASES: while ( 1 ) {
     }
 }
     
-##########################    
-####   subroutines    #### ########################################################################
-##########################
+##########################################################################
+############################   subroutines   #############################
+##########################################################################
+
 
 sub choose_table_range {
-    my ( $opt, $rows ) = @_;
+    my ( $arg, $opt, $rows ) = @_;
     my $offset = 0;
     my $last = 0;
     my $begin = 0;
@@ -340,7 +373,7 @@ sub choose_table_range {
             push @choices, sprintf "%${lr}d - %${lr}d", $begin, $end;
             $rows -= $opt->{limit};
         }
-        my $choice = choose( [ undef, @choices ], { layout => 3, undef => $opt->{back} } );
+        my $choice = choose( [ undef, @choices ], { layout => 3, undef => $arg->{back} } );
         if ( defined $choice ) {
             $offset = ( split /\s*-\s*/, $choice )[0];
             $offset =~ s/\A\s+//;
@@ -394,8 +427,8 @@ sub print_select {
 
 
 sub prepare_read_table {
-    my ( $opt, $dbh, $table ) = @_;
-    $dbh->func( 'regexp', 2, sub { my ( $regex, $string ) = @_; $string //= ''; return $string =~ m/$regex/ism }, 'create_function' );
+    my ( $arg, $opt, $dbh, $table ) = @_;
+    $dbh->func( 'regexp', 2, sub { my ( $regex, $string ) = @_; $string //= ''; return $string =~ m/$regex/ism }, 'create_function' ) if $arg->{db_type} eq 'sqlite'; 
     my $continue = ' OK ';
     my $table_q = $dbh->quote_identifier( $table );
     my @keys = ( qw( print_table columns order_by regexp ) );
@@ -412,7 +445,7 @@ sub prepare_read_table {
 
     CUSTOMIZE: while ( 1 ) {
         print_select( $opt, $table, $columns, $chosen_columns, $order_cols_tmp, $order_direction, $regexp_cols_tmp, $regexp_pattern );
-        my $custom = choose( [ undef, @customize{@keys} ], { prompt => 'Customize:', layout => 3, undef => $opt->{back} } );
+        my $custom = choose( [ undef, @customize{@keys} ], { prompt => 'Customize:', layout => 3, undef => $arg->{back} } );
         for ( $custom ) {
             when ( not defined ) {
                 last CUSTOMIZE;	
@@ -444,7 +477,8 @@ sub prepare_read_table {
                     print_select( $opt, $table, $columns, $chosen_columns, $order_cols_tmp, $order_direction, $regexp_cols_tmp, $regexp_pattern );
                     my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', pad_one_row => 2 } );
                     if ( not defined $col ) {
-                        $order_cols_tmp = [];
+                        $order_cols_tmp  = [];
+                        $order_direction = {}; 
                         last;
                     }
                     last if $col eq $continue;
@@ -460,13 +494,14 @@ sub prepare_read_table {
             }
             when ( $customize{regexp} ) {
                 my @cols = @$chosen_columns ? @$chosen_columns : @$columns;
-                $regexp_pattern  = {};
                 $regexp_cols_tmp = [];
+                $regexp_pattern  = {};
                 while ( @cols ) {
                     print_select( $opt, $table, $columns, $chosen_columns, $order_cols_tmp, $order_direction, $regexp_cols_tmp, $regexp_pattern );
                     my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', pad_one_row => 2 } );
                     if ( not defined $col ) {
                         $regexp_cols_tmp = [];
+                        $regexp_pattern  = {};
                         last;
                     }
                     last if $col eq $continue;
@@ -476,7 +511,7 @@ sub prepare_read_table {
                     print "$col: ";
                     my $regex = <>;
                     chomp $regex;
-                    $regexp_pattern->{$col} = $regex;
+                    $regexp_pattern->{$col} = qr/$regex/i;
                     push @$regexp_cols_tmp, $col;
                     my $idx = first_index { $_ eq $col } @cols;
                     splice @cols, $idx, 1;
@@ -490,15 +525,15 @@ sub prepare_read_table {
                 my @order_cols;
                 @order_cols = grep { $_ ~~ @$chosen_columns } @$order_cols_tmp if @$order_cols_tmp;
                 my $order_by_str = '';
-                $order_by_str  = " ORDER BY " . join( ', ', map { $dbh->quote_identifier( $_ )                            } @order_cols ) if @order_cols and not $opt->{asc_desc};
-                $order_by_str  = " ORDER BY " . join( ', ', map { $dbh->quote_identifier( $_ ) ." $order_direction->{$_}" } @order_cols ) if @order_cols and $opt->{asc_desc};
+                $order_by_str  = " ORDER BY " . join( ', ', map { $dbh->quote_identifier( $_ )                             } @order_cols ) if @order_cols and not $opt->{asc_desc};
+                $order_by_str  = " ORDER BY " . join( ', ', map { $dbh->quote_identifier( $_ ) . " $order_direction->{$_}" } @order_cols ) if @order_cols and $opt->{asc_desc};
                 
                 # REGEXP
                 my @regexp_cols;
                 @regexp_cols   = grep { $_ ~~ @$chosen_columns } @$regexp_cols_tmp if @$regexp_cols_tmp;
                 my $regexp_str = '';
                 $and_or =~ s/\A\s+|\s+\z//g;
-                $regexp_str    = " WHERE " . join(  " $and_or ", map { $dbh->quote_identifier( $_ ) ." REGEXP ?" } @regexp_cols ) if @regexp_cols;
+                $regexp_str    = " WHERE " . join(  " $and_or ", map { $dbh->quote_identifier( $_ ) . " REGEXP ?" } @regexp_cols ) if @regexp_cols;
                 
                 # COLUMNS
                 my $cols_str = join( ', ', map { $dbh->quote_identifier( $_ ) } @$chosen_columns ? @$chosen_columns : @$columns );
@@ -737,7 +772,7 @@ sub unicode_sprintf {
 ###############################################################################
 
 sub options {
-    my ( $opt, $config_file ) = @_;
+    my ( $arg, $opt, $config_file ) = @_;
     my $oh = {
         cache_rootdir   => '- Cache rootdir', 
         cache_expire    => '- Cache expire', 
@@ -822,9 +857,14 @@ sub options {
                 $change++;                
             }           
             when ( $oh->{max_depth} ) { 
-                my $number = choose( [ 0 .. 99, undef ], { prompt => 'Levels to descend at most:', %number_lyt } ); 
+                my $number = choose( [ '--', 0 .. 99, undef ], { prompt => 'Levels to descend at most ("--" = undef):', %number_lyt } ); 
                 break if not defined $number;
-                $opt->{max_depth} = $number;
+                if ( $number eq '--' ) {
+                    $opt->{max_depth} = undef;
+                }
+                else {
+                    $opt->{max_depth} = $number;
+                }
                 $change++;
             }
             when ( $oh->{tab} ) { 
@@ -874,7 +914,7 @@ sub options {
                         push @list, $confirm;
                     }
                     
-                    my $choice = choose( [ undef, @list ], { prompt => 'Compose new "limit":', layout => 3, right_justify => 1, undef => $opt->{back} . ' ' x ( $longest * 2 + 1 ) } );
+                    my $choice = choose( [ undef, @list ], { prompt => 'Compose new "limit":', layout => 3, right_justify => 1, undef => $arg->{back} . ' ' x ( $longest * 2 + 1 ) } );
                     break if not defined $choice;
 
                     last if $confirm and $choice eq $confirm;
@@ -945,9 +985,9 @@ sub options {
         my ( $true, $false ) = ( ' Make changes permanent ', ' Use changes only this time ' );
         my $permanent = choose( [ $false, $true ], { prompt => 'Modifications:', layout => 3, pad_one_row => 1 } );
         exit if not defined $permanent;
-        if ( $permanent eq $true and -e $config_file ) {
-            my $section = 'sqlite';
+        if ( $permanent eq $true and -f $config_file ) {
             my $ini = Config::Tiny->new;
+            my $section = $arg->{ini_section};
             for my $key ( keys %$opt ) {
                 if ( not defined $opt->{$key} ) {
                     $ini->{$section}->{$key} = '';

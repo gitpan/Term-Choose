@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '1.008';
+our $VERSION = '1.009';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -201,7 +201,7 @@ sub Term::Choose::_size_and_layout {
             my $begin = 0;
             my $end = $cols_per_row - 1;
             $end = $#{$arg->{list}} if $end > $#{$arg->{list}};
-            push @{$arg->{rowcol2list}}, [ $begin .. $end ];            
+            push @{$arg->{rowcol2list}}, [ $begin .. $end ];
             while ( $end < $#{$arg->{list}} ) {
                 $begin += $cols_per_row;
                 $end   += $cols_per_row;
@@ -333,7 +333,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 1.008
+Version 1.009
 
 =cut
 

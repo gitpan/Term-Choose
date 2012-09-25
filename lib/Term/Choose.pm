@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.008';
+our $VERSION = '1.009';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -19,7 +19,7 @@ use Term::ReadKey;
 use constant {
     ROW     => 0,
     COL     => 1,
-    
+
     MIN     => 0,
     MAX     => 1,
 };
@@ -278,33 +278,18 @@ sub _copy_orig_list {
 sub _validate_option {
     my ( $config ) = @_;
     my $limit = 1_000_000_000;
-    
-    ##########################################################
-    ####################    deprecated    ####################
-    ##########################################################
-    if ( defined $config->{max_list} && ! defined $config->{limit} ) {
-        $config->{limit} = $config->{max_list};
-        delete $config->{max_list};
-    }
-    if ( defined $config->{cursor} && ! defined $config->{default} ) {
-        $config->{default} = $config->{cursor};
-        delete $config->{cursor};
-    }
-    ##########################################################
-    ##########################################################
-    
     my $validate = {    #   min      max
         beep            => [ 0,       1 ],
         clear_screen    => [ 0,       1 ],
-        default         => [ 0,  $limit ],  # replaces cursor
+        default         => [ 0,  $limit ],
         empty_string    => '',
         hide_cursor     => [ 0,       1 ],
         layout          => [ 0,       3 ],
         length_longest  => [ 1,  $limit ],
-        limit           => [ 1,  $limit ],  # replaces max_list
+        limit           => [ 1,  $limit ],
         mouse_mode      => [ 0,       4 ],
         pad             => [ 0,  $limit ],
-        pad_one_row     => [ 0,  $limit ],     
+        pad_one_row     => [ 0,  $limit ],
         page            => [ 0,       1 ],
         prompt          => '',
         right_justify   => [ 0,       1 ],
@@ -341,12 +326,12 @@ sub _set_layout {
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
-    #$config->{default}          //= undef;
+    #$config->{default}         //= undef;
     $config->{empty_string}     //= '<empty>';
     $config->{hide_cursor}      //= 1;
     $config->{layout}           //= 1;
     #$config->{length_longest}  //= undef;
-    $config->{limit}         //= 100_000;
+    $config->{limit}            //= 100_000;
     $config->{mouse_mode}       //= 0;
     $config->{pad}              //= 2;
     $config->{pad_one_row}      //= 3;
@@ -367,7 +352,7 @@ sub _set_this_cell {
         if ( $arg->{default} ~~ @{$arg->{rowcol2list}[$i]} ) {
             for my $j ( 0 .. $#{$arg->{rowcol2list}[$i]} ) {
                 if ( $arg->{default} == $arg->{rowcol2list}[$i][$j] ) {
-                    $arg->{tmp_this_cell} = [ $i, $j ]; 
+                    $arg->{tmp_this_cell} = [ $i, $j ];
                     last LOOP;
                 }
             }
@@ -375,7 +360,7 @@ sub _set_this_cell {
     }
     while ( $arg->{tmp_this_cell}[ROW] > $arg->{end_page} ) {
         $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
-        $arg->{this_cell}[ROW] = $arg->{top_listrow};        
+        $arg->{this_cell}[ROW] = $arg->{top_listrow};
         $arg->{begin_page} = $arg->{top_listrow};
         $arg->{end_page} = $arg->{begin_page} + $arg->{maxrows} - 1;
         $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
@@ -387,7 +372,7 @@ sub _set_this_cell {
 sub _prepare_page_number {
     my ( $arg ) = @_;
     $arg->{total_pages} = int( $#{$arg->{rowcol2list}} / ( $arg->{maxrows} + $arg->{tail} ) ) + 1;
-    if ( $arg->{total_pages} > 1 ) { 
+    if ( $arg->{total_pages} > 1 ) {
         $arg->{total_pages} = int( $#{$arg->{rowcol2list}} / ( $arg->{maxrows} ) ) + 1;
         $arg->{length_total_pages} = length $arg->{total_pages};
         $arg->{prompt_printf_template} = "--- Page %0*d/%d ---";
@@ -465,7 +450,7 @@ sub _write_first_screen {
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
     print GET_CURSOR_POSITION if $arg->{mouse_mode};        # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
-    $arg->{cursor_row} = $arg->{screen_row} - $arg->{head}; # needed by handle_mouse 
+    $arg->{cursor_row} = $arg->{screen_row} - $arg->{head}; # needed by handle_mouse
 }
 
 
@@ -678,9 +663,9 @@ sub choose {
                 else {
                     $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
                     $arg->{this_cell}[ROW] = $arg->{top_listrow};
-                    # if it remains only the last row (which is then also the first row) for the last page 
+                    # if it remains only the last row (which is then also the first row) for the last page
                     # and the column in use doesn't exist in the last row, then ...
-                    if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {                    
+                    if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {
                         $arg->{backup_col}     = $arg->{this_cell}[COL];
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                     }
@@ -909,7 +894,7 @@ sub _size_and_layout {
             my $begin = 0;
             my $end = $cols_per_row - 1;
             $end = $#{$arg->{list}} if $end > $#{$arg->{list}};
-            push @{$arg->{rowcol2list}}, [ $begin .. $end ];            
+            push @{$arg->{rowcol2list}}, [ $begin .. $end ];
             while ( $end < $#{$arg->{list}} ) {
                 $begin += $cols_per_row;
                 $end   += $cols_per_row;
@@ -940,7 +925,7 @@ sub _handle_mouse {
     my $mouse_col = $x;
     my( $found_row, $found_col );
     my $found = 0;
-    for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {    
+    for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
         if ( $row == $mouse_row ) {
             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
                 if ( ( $col * $arg->{col_width} < $mouse_col ) && ( ( $col + 1 ) * $arg->{col_width} >= $mouse_col ) ) {
@@ -989,7 +974,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.008
+Version 1.009
 
 =cut
 
@@ -1247,12 +1232,6 @@ Allowed values: 1 or greater
 
 (default: undef)
 
-=head4 cursor (DEPRECATED)
-
-The option I<cursor> is now called  I<default>.
-
-Will be removed with the next release.
-
 =head4 default
 
 With the option I<default> can be selected a list item, which will be highlighted as the default instead of the first item.
@@ -1306,12 +1285,6 @@ default: '<empty>'
 0 - keep the terminals highlighting of the cursor position
 
 1 - hide the terminals highlighting of the cursor position (default)
-
-=head4 max_list (DEPRECATED)
-
-The option I<max_list> is now called  I<limit>.
-
-Will be removed with the next release.
 
 =head4 limit
 
@@ -1429,7 +1402,7 @@ L<Term::Choose::GC>'s I<choose> is probably slower than I<choose> from L<Term::C
 
 =head1 MOTIVATION
 
-The reason for writing L<Term::Choose> was to get something like L<Term::Clui::choose|http://search.cpan.org/perldoc?Term%3A%3AClui#SUBROUTINES> but with a nicer output in the case the list doesn't fit in one row. 
+The reason for writing L<Term::Choose> was to get something like L<Term::Clui::choose|http://search.cpan.org/perldoc?Term%3A%3AClui#SUBROUTINES> but with a nicer output in the case the list doesn't fit in one row.
 
 If the list does not fit in one row, I<choose> from L<Term::Clui> puts the elements on the screen without ordering the items in columns. L<Term::Choose> arranges the elements in columns which makes it easier for me to find elements and easier to navigate on the screen.
 
