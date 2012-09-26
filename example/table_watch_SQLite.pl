@@ -7,10 +7,9 @@ binmode STDIN,  ':encoding(utf-8)';
 
 # use warnings FATAL => qw(all);
 # use Data::Dumper;
-# Version 0.14
+# Version 0.15
 
 use File::Find qw(find);
-use File::Path qw(make_path);
 use File::Spec::Functions qw(catfile rel2abs tmpdir);
 use Getopt::Long qw(GetOptions :config bundling);
 use List::Util qw(sum);
@@ -34,41 +33,43 @@ use constant {
     UP              => "\e[A" 
 };
 
-my $arg = {};
-$arg->{back}        = 'BACK';
-$arg->{quit}        = 'QUIT';
-$arg->{home}        = File::HomeDir->my_home;
-$arg->{cached}      = '';
-$arg->{ini_section} = 'table_watch';
+my $home = File::HomeDir->my_home;
 
+my $arg = {
+    back            => 'BACK',
+    quit            => 'QUIT',
+    home            => $home,
+    cached          => '',
+    ini_section     => 'table_watch',
+    cache_rootdir   => tmpdir(),
+    config_file     => catfile( $home, '.table_info.conf' ),
+};
 
 sub help {
     print << 'HELP';
 
 Usage:
-    table_info.pl [help or options] [directories to be searched]
-    say rel2abs( $0 );
-<>;
-    If no directories are passed the home directory is searched for databases.
-    Options with the parenthesis at the end can be used on the comandline too.
+    table_watch_SQLite.pl [help or options] [directories to be searched]
+
+    If no directories are passed the home directory is searched for SQLite databases.
+    Options with the parenthesis at the end can be used on the commandline too.
     Customized Table - REGEXP: for case sensitivity prefix pattern with (?-i).
 
 Options:
     Help          : Show this Info.  (-h|--help)
     Settings      : Show settings.
     Cache expire  : Days until data expires. The cache holds the names of the found databases.
-    Reset cache   : Reset the cache. (-s|--no-cache)
-    Cache rootdir : Set the cache root directory.   
-    Maxdepth      : Levels to descend at most when searching in directories for databases.  (-m|max-depth) 
-    Limit         : Set the maximum number of table rows read in one time.  (-l|--limit)
-    No BLOB       : Do not print columns with the column-type BLOB.
+    Reset cache   : Reset the cache.  (-s|--no-cache)
+    Maxdepth      : Levels to descend at most when searching in directories for databases.  (-m|--max-depth) 
+    Limit         : Set the maximum number of table rows read in one time.
+    Delete        : Enable the option "delete table" and "delete database".  (-d|--delete)
+    No BLOB       : Print only "BLOB" if the column-type is BLOB.
     Tab           : Set the number of spaces between columns.
     Min-Width     : Set the width the columns should have at least when printed.
-    Delete        : Enable the option "delete table" and "delete database".  (-d|--delete)
-    Undef         : Set the string, that will be shown instead of undefined table values when printed.
-    Cut col names : When should column names be cut.
+    Undef         : Set the string that will be shown on the screen if a table value is undefined.
+    Cut col names : Set when column name should be cut.
     Thousands sep : Choose the thousands separator.
-    Sort order    : Enable the setting of the sort order ASC/DESC when chosen "ORDER BY in customized print". 
+
     
 HELP
 }
@@ -80,7 +81,6 @@ HELP
 my $opt = {
     cache_expire  => '7d',
     reset_cache   => 0,
-    cache_rootdir => tmpdir(),
     max_depth     => undef,
     limit         => 10_000,
     no_blob       => 1,
@@ -90,28 +90,25 @@ my $opt = {
     undef         => '',
     cut_col_names => -1,
     kilo_sep      => ',',
-    asc_desc      => 1,
 };
 
 my $help;
 GetOptions (
     'h|help'        => \$help,
     's|no-cache'    => \$opt->{reset_cache},
-    'l|limit:i'     => \$opt->{limit},
     'm|max-depth:i' => \$opt->{max_depth},
     'd|delete'      => \$opt->{delete},
 );
 
-my $config_file = catfile $arg->{home}, '.table_info.conf';
 
-if ( not -f $config_file ) {
-    open my $fh, '>', $config_file or warn $!;
+if ( not -f $arg->{config_file} ) {
+    open my $fh, '>', $arg->{config_file} or warn $!;
     close $fh or warn $!;
 }
 
-if ( -f $config_file and -s $config_file ) {
+if ( -f $arg->{config_file} and -s $arg->{config_file} ) {
     my $ini = Config::Tiny->new;
-    $ini = Config::Tiny->read( $config_file );
+    $ini = Config::Tiny->read( $arg->{config_file} );
     my $section = $arg->{ini_section};
     for my $key ( keys %{$ini->{$section}} ) {
         if ( $ini->{$section}{$key} eq '' ) {
@@ -126,7 +123,7 @@ if ( -f $config_file and -s $config_file ) {
     }
 }
 
-$opt = options( $arg, $opt, $config_file ) if $help;
+$opt = options( $arg, $opt ) if $help;
 
 
 #------------------------------------------------------------------------#
@@ -165,7 +162,7 @@ sub available_databases {
     $arg->{cache} = CHI->new ( 
         namespace => 'table_watch_SQLite', 
         driver => 'File', 
-        root_dir => $opt->{cache_rootdir},  
+        root_dir => $arg->{cache_rootdir},  
         expires_in => $opt->{cache_expire}, 
         expires_variance => 0.25, 
     );
@@ -217,7 +214,7 @@ sub available_databases {
 
 
 sub remove_database {
-    my ( $dbh, $db ) = @_;
+    my ( $db ) = @_;
     eval { unlink $db or die $! };
     if ( $@ ) {
         say "Could not remove database \"$db\"";
@@ -268,7 +265,7 @@ DATABASES: while ( 1 ) {
             say "\nRealy delete database ", colored( "\"$db\"", 'red' ), "?\n";
             my $c = choose( [ ' No ', ' Yes ' ], { prompt => 0, pad_one_row => 1 } );
             if ( $c eq ' Yes ' ) {
-                my $ok = remove_database( $arg, $dbh, $db );
+                my $ok = remove_database( $db );
                 if ( $ok and $arg->{db_type} eq 'sqlite' ) {
                     $arg->{cache}->remove( $arg->{cache_key} );
                     @databases = grep { $_ ne $db } @databases;
@@ -410,18 +407,14 @@ sub read_db_table {
 
 
 sub print_select {
-    my ( $opt, $table, $columns, $chosen_columns, $order_cols_tmp, $order_direction, $regexp_cols_tmp, $regexp_pattern ) = @_;
+    my ( $arg, $opt, $table, $columns, $chosen_columns, $order_columns, $order_direction, $search_columns, $search_pattern ) = @_;
     print GO_TO_TOP_LEFT;
     print CLEAR_EOS;
     $chosen_columns = @$chosen_columns ? $chosen_columns : $columns;
-    my ( @regexp_cols, @order_cols );
-    @order_cols = grep { $_ ~~ @$chosen_columns } @$order_cols_tmp if @$order_cols_tmp;
-    @regexp_cols   = grep { $_ ~~ @$chosen_columns } @$regexp_cols_tmp   if @$regexp_cols_tmp;
     say "SELECT ", ( @$chosen_columns ~~ @$columns ) ? '*' : join( ', ', @$chosen_columns );
     say " FROM $table";
-    say " WHERE ", join " AND ", map { "$_ REGEXP $regexp_pattern->{$_}" } @regexp_cols  if @regexp_cols;
-    say " ORDER BY ", join ', ', @order_cols                                             if @order_cols and not $opt->{asc_desc};
-    say " ORDER BY ", join ', ', map { "$_ $order_direction->{$_}" } @order_cols         if @order_cols and $opt->{asc_desc};
+    say " WHERE ", join " $arg->{AND_OR} ", map { "$_ REGEXP $search_pattern->{$_}" } @$search_columns  if @$search_columns;
+    say " ORDER BY ", join ', ', map { "$_ $order_direction->{$_}" } @$order_columns                    if @$order_columns;
     say "";
 }
 
@@ -435,16 +428,16 @@ sub prepare_read_table {
     my %customize = ( print_table => 'Print TABLE', columns => '- Columns', order_by => '- Order by', regexp => '- Regexp' ); 
     my $sth = $dbh->prepare( "SELECT * FROM $table_q" );
     $sth->execute();
-    my $columns	= $sth->{NAME};
+    my $columns	= $sth->{NAME};   
     my $chosen_columns  = [];
-    my $order_cols_tmp  = [];
+    my $order_columns   = [];
     my $order_direction = {};
-    my $regexp_cols_tmp = [];	
-    my $regexp_pattern  = {};
-    my $and_or = ' AND ';
+    my $search_columns  = [];	
+    my $search_pattern  = {};
+    $arg->{AND_OR} = '';
 
     CUSTOMIZE: while ( 1 ) {
-        print_select( $opt, $table, $columns, $chosen_columns, $order_cols_tmp, $order_direction, $regexp_cols_tmp, $regexp_pattern );
+        print_select( $arg, $opt, $table, $columns, $chosen_columns, $order_columns, $order_direction, $search_columns, $search_pattern );
         my $custom = choose( [ undef, @customize{@keys} ], { prompt => 'Customize:', layout => 3, undef => $arg->{back} } );
         for ( $custom ) {
             when ( not defined ) {
@@ -454,7 +447,7 @@ sub prepare_read_table {
                 my @cols = @$columns;
                 $chosen_columns = [];
                 while ( @cols ) {
-                    print_select( $opt, $table, $columns, $chosen_columns, $order_cols_tmp, $order_direction, $regexp_cols_tmp, $regexp_pattern );
+                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $order_columns, $order_direction, $search_columns, $search_pattern );
                     my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', pad_one_row => 2 } );
                     if ( not defined $col ) {
                         $chosen_columns = [];
@@ -470,76 +463,69 @@ sub prepare_read_table {
                 }[$table]
             }
             when( $customize{order_by} ) {
-                my @cols = @$chosen_columns ? @$chosen_columns : @$columns;
-                $order_cols_tmp  = []; 
+                my @cols = @$columns;
+                $order_columns   = []; 
                 $order_direction = {}; 
                 while ( @cols ) {
-                    print_select( $opt, $table, $columns, $chosen_columns, $order_cols_tmp, $order_direction, $regexp_cols_tmp, $regexp_pattern );
+                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $order_columns, $order_direction, $search_columns, $search_pattern );
                     my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', pad_one_row => 2 } );
                     if ( not defined $col ) {
-                        $order_cols_tmp  = [];
+                        $order_columns   = [];
                         $order_direction = {}; 
                         last;
                     }
                     last if $col eq $continue;
-                    push @$order_cols_tmp, $col;
+                    push @$order_columns, $col;
                     my $idx = first_index { $_ eq $col } @cols;
                     splice @cols, $idx, 1;
-                    if ( $opt->{asc_desc} ) {               
-                        my $direction = choose( [ " ASC ", " DESC " ], { prompt => 'Sort order:', layout => 1, pad_one_row => 1 } );
-                        $direction =~ s/\A\s+|\s+\z//g;
-                        $order_direction->{$col} = $direction;
-                    }
+                    my $direction = choose( [ " ASC ", " DESC " ], { prompt => 'Sort order:', layout => 1, pad_one_row => 1 } );
+                    $direction =~ s/\A\s+|\s+\z//g;
+                    $order_direction->{$col} = $direction;
                 }
             }
             when ( $customize{regexp} ) {
-                my @cols = @$chosen_columns ? @$chosen_columns : @$columns;
-                $regexp_cols_tmp = [];
-                $regexp_pattern  = {};
+                my @cols = @$columns;
+                $search_columns = [];
+                $search_pattern = {};
                 while ( @cols ) {
-                    print_select( $opt, $table, $columns, $chosen_columns, $order_cols_tmp, $order_direction, $regexp_cols_tmp, $regexp_pattern );
+                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $order_columns, $order_direction, $search_columns, $search_pattern );
                     my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', pad_one_row => 2 } );
                     if ( not defined $col ) {
-                        $regexp_cols_tmp = [];
-                        $regexp_pattern  = {};
+                        $search_columns = [];
+                        $search_pattern = {};
                         last;
                     }
                     last if $col eq $continue;
-                    if ( keys %$regexp_pattern == 1 ) {
-                        $and_or = choose( [ "     AND     ", "     OR     " ], { prompt => 'Join all REGEXP\'s with:', layout => 3, pad_one_row => 1 } );
+                    if ( keys %$search_pattern == 1 ) {
+                        $arg->{AND_OR} = choose( [ "     AND     ", "     OR     " ], { prompt => 'Join all REGEXP\'s with:', layout => 3, pad_one_row => 1 } );
+                        $arg->{AND_OR} =~ s/\A\s+|\s+\z//g;
                     }
                     print "$col: ";
-                    my $regex = <>;
-                    chomp $regex;
-                    $regexp_pattern->{$col} = qr/$regex/i;
-                    push @$regexp_cols_tmp, $col;
+                    my $pattern = <>;
+                    chomp $pattern;
+                    $pattern= qr/$pattern/i if $arg->{db_type} eq 'sqlite';
+                    $search_pattern->{$col} = $pattern;
+                    push @$search_columns, $col;
                     my $idx = first_index { $_ eq $col } @cols;
                     splice @cols, $idx, 1;
                 }
             }
             when( $customize{print_table} ) {
-
                 $chosen_columns = @$chosen_columns ? $chosen_columns : $columns;
                 
                 # ORDER BY
-                my @order_cols;
-                @order_cols = grep { $_ ~~ @$chosen_columns } @$order_cols_tmp if @$order_cols_tmp;
                 my $order_by_str = '';
-                $order_by_str  = " ORDER BY " . join( ', ', map { $dbh->quote_identifier( $_ )                             } @order_cols ) if @order_cols and not $opt->{asc_desc};
-                $order_by_str  = " ORDER BY " . join( ', ', map { $dbh->quote_identifier( $_ ) . " $order_direction->{$_}" } @order_cols ) if @order_cols and $opt->{asc_desc};
+                $order_by_str  = " ORDER BY " . join( ', ', map { $dbh->quote_identifier( $_ ) . " $order_direction->{$_}" } @$order_columns ) if @$order_columns;
                 
                 # REGEXP
-                my @regexp_cols;
-                @regexp_cols   = grep { $_ ~~ @$chosen_columns } @$regexp_cols_tmp if @$regexp_cols_tmp;
-                my $regexp_str = '';
-                $and_or =~ s/\A\s+|\s+\z//g;
-                $regexp_str    = " WHERE " . join(  " $and_or ", map { $dbh->quote_identifier( $_ ) . " REGEXP ?" } @regexp_cols ) if @regexp_cols;
+                my $search_str = '';
+                $search_str    = " WHERE " . join(  " $arg->{AND_OR} ", map { $dbh->quote_identifier( $_ ) . " REGEXP ?" } @$search_columns ) if @$search_columns;
                 
                 # COLUMNS
                 my $cols_str = join( ', ', map { $dbh->quote_identifier( $_ ) } @$chosen_columns ? @$chosen_columns : @$columns );
-                my $select = "SELECT $cols_str FROM $table_q" . $regexp_str . $order_by_str;
-                my @arguments = ( @$regexp_pattern{@regexp_cols} );
-                my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM $table_q" . $regexp_str, {}, @arguments );
+                my $select = "SELECT $cols_str FROM $table_q" . $search_str . $order_by_str;
+                my @arguments = ( @$search_pattern{@$search_columns} );
+                my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM $table_q" . $search_str, {}, @arguments );
                 return $rows, $select, \@arguments;
             }
             default {
@@ -712,7 +698,7 @@ sub print_table {
     }   
     $progress->update( $total ) if $total >= $next_update and $items > $start; #
     
-    choose( \@list, { prompt => 0, layout => 3, length_longest => sum( @$max, $opt->{tab} * $#{$max} ), max_list => $opt->{limit} + 1 } );
+    choose( \@list, { prompt => 0, layout => 3, length_longest => sum( @$max, $opt->{tab} * $#{$max} ), limit => $opt->{limit} + 1 } );
     
     return;
 }
@@ -767,14 +753,13 @@ sub unicode_sprintf {
 }
 
 
-###############################################################################
-###############################     options     ###############################
-###############################################################################
+#-----------------------------------------------------------------------------#
+#-------------------------    subroutine options     -------------------------#
+#-----------------------------------------------------------------------------#
 
 sub options {
-    my ( $arg, $opt, $config_file ) = @_;
+    my ( $arg, $opt ) = @_;
     my $oh = {
-        cache_rootdir   => '- Cache rootdir', 
         cache_expire    => '- Cache expire', 
         reset_cache     => '- Reset cache', 
         max_depth       => '- Maxdepth', 
@@ -786,9 +771,8 @@ sub options {
         undef           => '- Undef', 
         cut_col_names   => '- Cut col names',
         kilo_sep        => '- Thousands sep',
-        asc_desc        => '- Sort order',
     };
-    my @keys = ( qw( cache_rootdir cache_expire reset_cache max_depth limit delete no_blob min_width tab kilo_sep asc_desc undef cut_col_names ) );
+    my @keys = ( qw( cache_expire reset_cache max_depth limit delete no_blob min_width tab kilo_sep undef cut_col_names ) );
     my $change;
     
     OPTIONS: while ( 1 ) {
@@ -802,8 +786,8 @@ sub options {
             when ( not defined ) { last OPTIONS; }
             when ( $exit ) { exit() }
             when ( $help ) { help(); choose( [ '  Close with ENTER  ' ], { prompt => 0 } ) }
-            when ( $show_settings ) { 
-                say "";
+            when ( $show_settings ) {
+                my @choices;
                 for my $key ( @keys ) {
                     my $value;
                     if ( not defined $opt->{$key} ) {
@@ -817,17 +801,14 @@ sub options {
                         $value =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{kilo_sep}/g;
                     }
                     elsif ( $key eq 'kilo_sep' ) {
-                        $value = 'space: " "'      if $opt->{$key} eq ' ';
-                        $value = 'none'            if $opt->{$key} eq '';
-                        $value = 'underscore: "_"' if $opt->{$key} eq '_';
-                        $value = 'full stop: "."'  if $opt->{$key} eq '.';
-                        $value = 'comma: ","'      if $opt->{$key} eq ',';   
+                        $value = 'space " "'      if $opt->{$key} eq ' ';
+                        $value = 'none'           if $opt->{$key} eq '';
+                        $value = 'underscore "_"' if $opt->{$key} eq '_';
+                        $value = 'full stop "."'  if $opt->{$key} eq '.';
+                        $value = 'comma ","'      if $opt->{$key} eq ',';   
                     }
-                    elsif ( $key eq 'reset_cache' or $key eq 'delete' or $key eq 'no_blob' or $key eq 'asc_desc' ) {
+                    elsif ( $key eq 'reset_cache' or $key eq 'delete' or $key eq 'no_blob' ) {
                         $value = $opt->{$key} ? 'true' : 'false';
-                    }
-                    elsif ( $key eq 'asc_desc' ) {
-                        $value = $opt->{$key} ? 'Choose ASC or DESC' : 'default  (ASC)';
                     }
                     elsif ( $key eq 'cut_col_names' ) {
                         $value = 'auto'    if $opt->{$key} == -1;
@@ -838,26 +819,25 @@ sub options {
                         $value = $opt->{$key};
                     }
                     ( my $name = $oh->{$key} ) =~ s/\A..//;
-                    printf "%-16s : %s\n", "  $name", $value;
+                    push @choices, sprintf "%-16s : %s\n", "  $name", $value;
                 }
-                say "";
-                choose( [ '  Close with ENTER  ' ], { prompt => 0 } )
+                choose( [ @choices ], { prompt => 'Close with ENTER', layout => 3 } );
             }            
             when ( $oh->{cache_expire} ) { 
-                my $number = choose( [ 0 .. 99, undef ], { prompt => 'Days until data expires:', %number_lyt } ); 
+                my $number = choose( [ undef, 0 .. 99 ], { prompt => 'Days until data expires (' . $opt->{cache_expire} . '):', %number_lyt } ); 
                 break if not defined $number;
                 $opt->{cache_expire} = $number.'d';
                 $change++;
             }
             when ( $oh->{reset_cache} ) {
-                my ( $true, $false ) = ( ' Remove cache ', ' Keep cache ' );
-                my $choice = choose( [ $true, $false, undef ], { prompt => 'Cache:', %bol } );
+                my ( $true, $false ) = ( ' YES ', ' NO ' );
+                my $choice = choose( [ undef, $true, $false ], { prompt => 'Reset cache (' . $opt->{reset_cache} . '):', %bol } );
                 break if not defined $choice;
                 $opt->{reset_cache} = ( $choice eq $true ) ? 1 : 0;
                 $change++;                
-            }           
+            }  
             when ( $oh->{max_depth} ) { 
-                my $number = choose( [ '--', 0 .. 99, undef ], { prompt => 'Levels to descend at most ("--" = undef):', %number_lyt } ); 
+                my $number = choose( [ undef, '--', 0 .. 99 ], { prompt => 'Levels to descend at most (' . ( $opt->{max_depth} // 'undef' ) . '):', %number_lyt } ); 
                 break if not defined $number;
                 if ( $number eq '--' ) {
                     $opt->{max_depth} = undef;
@@ -868,7 +848,7 @@ sub options {
                 $change++;
             }
             when ( $oh->{tab} ) { 
-                my $number = choose( [ 0 .. 99, undef ], { prompt => 'Tab width',  %number_lyt } );
+                my $number = choose( [ undef, 0 .. 99 ], { prompt => 'Tab width (' . $opt->{tab} . '):',  %number_lyt } );
                 break if not defined $number;
                 $opt->{tab} = $number;
                 $change++;
@@ -877,20 +857,13 @@ sub options {
                 my %sep_h;
                 my ( $comma, $full_stop, $underscore, $space, $none ) = ( ' comma ', ' full stop ', ' underscore ', ' space ', ' none ' );
                 @sep_h{ $comma, $full_stop, $space, $none } = ( ',', '.', '_', ' ', '' );
-                my $sep = choose( [ $comma, $full_stop, $underscore, $space, $none, undef ], { prompt => 'Thousands separator',  %bol } );
+                my $sep = choose( [ undef, $comma, $full_stop, $underscore, $space, $none ], { prompt => 'Thousands separator (' . $opt->{kilo_sep} . '):',  %bol } );
                 break if not defined $sep;
                 $opt->{kilo_sep} = $sep_h{$sep};
                 $change++;
             }
-            when ( $oh->{asc_desc} ) {
-                my ( $enable, $disable ) = ( ' Offer sort order selection ', ' Use default sort order (ASC) ' );
-                my $choice = choose( [ $enable, $disable, undef ], { prompt => 'ORDER BY:', %bol } );
-                break if not defined $choice;
-                $opt->{asc_desc} = $choice eq $enable ? 1 : 0;
-                $change++;
-            }
             when ( $oh->{min_width} ) { 
-                my $number = choose( [ 0 .. 99, undef ], { prompt => 'Minimum Column width:',  %number_lyt } );
+                my $number = choose( [ undef, 0 .. 99 ], { prompt => 'Minimum Column width (' . $opt->{min_width} . '):',  %number_lyt } );
                 break if not defined $number;
                 $opt->{min_width} = $number;
                 $change++;
@@ -913,8 +886,8 @@ sub options {
                         $confirm = "confirm result: $limit";
                         push @list, $confirm;
                     }
-                    
-                    my $choice = choose( [ undef, @list ], { prompt => 'Compose new "limit":', layout => 3, right_justify => 1, undef => $arg->{back} . ' ' x ( $longest * 2 + 1 ) } );
+                    ( my $limit_now = $opt->{limit} ) =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{kilo_sep}/g;
+                    my $choice = choose( [ undef, @list ], { prompt => 'Compose new "limit" (' . $limit_now . '):', layout => 3, right_justify => 1, undef => $arg->{back} . ' ' x ( $longest * 2 + 1 ) } );
                     break if not defined $choice;
 
                     last if $confirm and $choice eq $confirm;
@@ -922,7 +895,7 @@ sub options {
                     $choice =~ s/\A\s*\d//;
                     my $reset = 'reset';
                     
-                    my $c = choose( [ map( $_ . $choice, 1 .. 9 ), $reset, undef ], { pad_one_row => 2, undef => '<<' } );
+                    my $c = choose( [ undef, map( $_ . $choice, 1 .. 9 ), $reset ], { pad_one_row => 2, undef => '<<' } );
                     next if not defined $c;
                     
                     if ( $c eq $reset ) {
@@ -941,37 +914,32 @@ sub options {
             }
             when ( $oh->{delete} ) { 
                 my ( $true, $false ) = ( ' Enable delete options ', ' Disable delete options ' );
-                my $choice = choose( [ $true, $false, undef ], { prompt => 'Delete" options:', %bol } );
+                my $choice = choose( [ undef, $true, $false ], { prompt => 'Delete" options (' . ( $opt->{delete} ? 'Enabled' : 'Disabled' ) . '):', %bol } );
                 break if not defined $choice;
                 $opt->{delete} = ( $choice eq $true ) ? 1 : 0;
                 $change++;
             }
             when ( $oh->{no_blob} ) { 
-                my ( $true, $false ) = ( ' Don\'t print BLOB columns ', ' Print BLOB columns ' );
-                my $choice = choose( [ $true, $false, undef ], { prompt => 'BLOB columns:', %bol } );
+                my ( $true, $false ) = ( ' Enable NO BLOB ', ' Dissable NO BLOB ' );
+                my $choice = choose( [ undef, $true, $false ], { prompt => 'NO BLOB (' . ( $opt->{no_blob} ? 'Enabled' : 'Disables' ) . '):', %bol } );
                 break if not defined $choice;
                 $opt->{no_blob} = ( $choice eq $true ) ? 1 : 0;
                 $change++;
             }
             when ( $oh->{undef} ) { 
-                print 'Choose a replacement-string for undefined table vales: ';
+                print 'Choose a replacement-string for undefined table vales ("' , $opt->{undef} . '"): ';
                 my $undef = <>;
                 chomp $undef;
                 break if not $undef;
                 $opt->{undef} = $undef;
                 $change++;
             }
-            when ( $oh->{cache_rootdir} ) {
-                my $cache_rootdir = set_dir( 'Enter cache root directory: ' );
-                break if not defined $cache_rootdir;
-                $opt->{cache_rootdir} = $cache_rootdir;
-                $change++;
-            }
             when ( $oh->{cut_col_names} ) {
                 my $default = 'Auto: cut column names if the sum of length of column names is greater than screen width.';
                 my $cut_col = 'Cut the column names to the length of the longest column value.';
                 my $no_cut  = 'Do not cut column names deliberately, instead treat column names as normal column valules.';
-                my $cut = choose( [ $default, $cut_col, $no_cut, undef ], { prompt => 'Column names:', undef => $back } );
+                my @sd = ( 'No cut', 'Cut', 'Auto' );
+                my $cut = choose( [ undef, $default, $cut_col, $no_cut ], { prompt => 'Column names (' . $sd[$opt->{cut_col_names}] . '):', undef => $back } );
                 break if not defined $cut;
                 if    ( $cut eq $cut_col ) { $opt->{cut_col_names} =  1 }
                 elsif ( $cut eq $no_cut )  { $opt->{cut_col_names} =  0 }
@@ -985,7 +953,7 @@ sub options {
         my ( $true, $false ) = ( ' Make changes permanent ', ' Use changes only this time ' );
         my $permanent = choose( [ $false, $true ], { prompt => 'Modifications:', layout => 3, pad_one_row => 1 } );
         exit if not defined $permanent;
-        if ( $permanent eq $true and -f $config_file ) {
+        if ( $permanent eq $true and -f $arg->{config_file} ) {
             my $ini = Config::Tiny->new;
             my $section = $arg->{ini_section};
             for my $key ( keys %$opt ) {
@@ -999,7 +967,7 @@ sub options {
                     $ini->{$section}->{$key} = $opt->{$key};
                 }
             }
-            $ini->write( $config_file );
+            $ini->write( $arg->{config_file} );
         }
         if ( $permanent eq $true ) {
             my $continue = choose( [ ' CONTINUE ', undef ], { prompt => 0, layout => 1, undef => ' QUIT ', pad_one_row => 1 } );
@@ -1008,43 +976,6 @@ sub options {
     }
     return $opt;
 }
-
-
-sub set_dir {
-    my ( $prompt ) = @_;
-    print $prompt;
-    my $dir = <>;
-    chomp $dir;
-    return if not $dir;
-    if ( not -e $dir or not -d $dir ) {
-        say "Creating $dir:";
-        make_path( $dir, { error => \my $error } );
-        if ( @$error ) {
-            for my $diag (@$error) {
-                my ( $file, $message ) = %$diag;
-                if ( $file ) {
-                    say "problem creating $file: $message";
-                    return;
-                }
-                else {
-                    say "general error: $message";
-                    return;
-                }
-            }
-        }
-        else {
-            return $dir;
-        }
-    }
-    elsif ( -w $dir ) {
-        return $dir;
-    }
-    else {
-        say "No permissions to write to $dir";
-        return;
-    }
-}
-
 
 
 __DATA__

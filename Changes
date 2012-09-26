@@ -1,5 +1,8 @@
 Revision history for Term::Choose
 
+1.010   2012-09-26
+        - Example: update and bug fixes.
+
 1.009   2012-09-25
         - Removed deprecated option names "max_list" and "cursor".
         - Updated documentation.
