@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.010';
+our $VERSION = '1.011';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -349,14 +349,14 @@ sub _set_this_cell {
     my ( $arg ) = @_;
     $arg->{tmp_this_cell} = [ 0, 0 ];
     LOOP: for my $i ( 0 .. $#{$arg->{rowcol2list}} ) {
-        if ( $arg->{default} ~~ @{$arg->{rowcol2list}[$i]} ) {
+        # if ( $arg->{default} ~~ @{$arg->{rowcol2list}[$i]} ) {
             for my $j ( 0 .. $#{$arg->{rowcol2list}[$i]} ) {
                 if ( $arg->{default} == $arg->{rowcol2list}[$i][$j] ) {
                     $arg->{tmp_this_cell} = [ $i, $j ];
                     last LOOP;
                 }
             }
-        }
+        # }
     }
     while ( $arg->{tmp_this_cell}[ROW] > $arg->{end_page} ) {
         $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
@@ -694,7 +694,8 @@ sub choose {
                     if ( $arg->{vertical} ) {
                         for my $col ( 0 .. $#{$arg->{rowcol2list}[0]} ) {
                             for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
-                                if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
+                                # if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
+                                if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
                                     push @chosen, $arg->{orig_list}[$i];
                                 }
@@ -704,7 +705,8 @@ sub choose {
                     else {
                          for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
                             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
-                                if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
+                                # if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
+                                if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
                                     push @chosen, $arg->{orig_list}[$i];
                                 }
@@ -784,7 +786,8 @@ sub _wr_screen {
      }
     for my $row ( $arg->{begin_page} .. $arg->{end_page} ) {
         for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
-            _wr_cell( $arg, $row, $col ); # unless [ $row, $col ] ~~ $this_cell;
+            # _wr_cell( $arg, $row, $col ); # unless [ $row, $col ] ~~ $this_cell;
+            _wr_cell( $arg, $row, $col ); # unless $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL];            
         }
     }
     _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] );
@@ -803,17 +806,17 @@ sub _wr_cell {
         }
         _goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $lngth );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
-        print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
+        print REVERSE if $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL]; # print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
         print $arg->{list}[$arg->{rowcol2list}[$row][$col]];
     }
     else {
         _goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $col * $arg->{col_width} );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
-        print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
+        print REVERSE if $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL]; # print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
         printf "%*.*s",  $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$arg->{rowcol2list}[$row][$col]] if   $arg->{right_justify};
         printf "%-*.*s", $arg->{length_longest}, $arg->{length_longest}, $arg->{list}[$arg->{rowcol2list}[$row][$col]] if ! $arg->{right_justify};
     }
-    print RESET if $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell};
+    print RESET if $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL]; # print RESET if $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell};
 }
 
 
@@ -948,7 +951,8 @@ sub _handle_mouse {
     else {
         return NEXT_getch; # xterm
     }
-    if ( ! ( [ $found_row, $found_col ] ~~ $arg->{this_cell} ) ) {
+    # if ( ! ( [ $found_row, $found_col ] ~~ $arg->{this_cell} ) ) {
+    if ( ! ( $found_row == $arg->{this_cell}[ROW] && $found_col == $arg->{this_cell}[COL] ) ) {    
         my $t = $arg->{this_cell};
         $arg->{this_cell} = [ $found_row, $found_col ];
         _wr_cell( $arg, $t->[0], $t->[1] );
@@ -974,7 +978,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.010
+Version 1.011
 
 =cut
 
@@ -1388,7 +1392,7 @@ L<Term::Choose> makes use of the Perl signal handling as described in L<perlipc/
 
 =head2 Unicode
 
-This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings. Therefore strings with characters that take more or less than one print column will break the layout. Using L<Term::Choose::GC> instead improves the layout in such conditions. It determines the string length by using the I<columns> method from the L<Unicode::GCString> module.
+This modules uses the Perl builtin functions I<length> to determine the length of strings, I<substr> to cut strings and I<sprintf> widths to justify strings. Strings with characters where I<length(character)> is not equal to the number of print columns of the respective character could break the layout. So Unicode strings (and binary data) might break the output. To make I<choose> work also with Unicode strings L<Term::Choose::GC> determines the string length - if valid Unicode - by using the I<columns> method from the L<Unicode::GCString> module.
 
     use Term::Choose:GC qw(choose);
 

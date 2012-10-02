@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '1.010';
+our $VERSION = '1.011';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -16,6 +16,10 @@ use Unicode::GCString;
 #use Log::Log4perl qw(get_logger);
 #my $log = get_logger("Term::Choose::GC");
 
+use constant {
+    ROW     => 0,
+    COL     => 1,
+}; 
 
 use constant {
     RESET       => "\e[0m",
@@ -105,16 +109,16 @@ sub Term::Choose::_wr_cell {
         }
         Term::Choose::_goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $lngth );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
-        print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
+        print REVERSE if $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL]; # print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
         print $arg->{list}[$arg->{rowcol2list}[$row][$col]];
     }
     else {
         Term::Choose::_goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $col * $arg->{col_width} );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
-        print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
+        print REVERSE if $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL]; # print REVERSE if [ $row, $col ] ~~ $arg->{this_cell};
         print _unicode_sprintf( $arg, $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
     }
-    print RESET if $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell};
+    print RESET if $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL]; # print RESET if $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell};
 }
 
 
@@ -333,7 +337,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 1.010
+Version 1.011
 
 =cut
 

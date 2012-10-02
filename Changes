@@ -1,5 +1,11 @@
 Revision history for Term::Choose
 
+1.011   2012-10-02
+        - Removed/replaced "smartmatch" operators.
+        - Improved documentation.
+        - Example: update and bug fixes.
+        - Example: from "File::Find" to "File::Find::Rule".
+
 1.010   2012-09-26
         - Example: update and bug fixes.
 
