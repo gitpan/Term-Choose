@@ -5,11 +5,11 @@ use utf8;
 binmode STDOUT, ':encoding(utf-8)';
 binmode STDIN,  ':encoding(utf-8)';
 
-use warnings FATAL => qw(all);
-use Data::Dumper;
-# Version 0.16
+#use warnings FATAL => qw(all);
+#use Data::Dumper;
+# Version 0.17
 
-use File::Spec::Functions qw(catfile rel2abs tmpdir);
+use File::Spec::Functions qw(catfile tmpdir);
 use Getopt::Long qw(GetOptions :config bundling);
 use List::Util qw(sum);
 use Scalar::Util qw(looks_like_number);
@@ -22,7 +22,7 @@ use File::Find::Rule;
 use File::HomeDir qw(my_home); 
 use File::LibMagic;
 use List::MoreUtils qw(first_index);
-use Term::Choose::GC qw(choose);
+use Term::Choose qw(choose);
 use Term::ProgressBar;
 use Term::ReadKey qw(GetTerminalSize);
 use Unicode::GCString;
@@ -67,8 +67,7 @@ Options:
     Reset cache   : Reset the cache.  (-s|--no-cache)
     Maxdepth      : Levels to descend at most when searching in directories for databases.  (-m|--max-depth) 
     Limit         : Set the maximum number of table rows read in one time.
-    Delete        : Enable the option "delete table" and "delete database".  (-d|--delete)
-    No BLOB       : Print only "BLOB" if the column-type is BLOB.
+    No BLOB       : Print only "BLOB" if the column-type is BLOB (printing BLOB/binary data could break the output).
     Tab           : Set the number of spaces between columns.
     Min-Width     : Set the width the columns should have at least when printed.
     Undef         : Set the string that will be shown on the screen if a table value is undefined.
@@ -91,7 +90,6 @@ my $opt = {
     no_blob       => 1,
     tab           => 2,
     min_width     => 30,
-    delete        => 0,
     undef         => '',
     cut_col_names => -1,
     kilo_sep      => ',',
@@ -125,7 +123,6 @@ GetOptions (
     'h|help'        => \$help,
     's|no-cache'    => \$opt->{reset_cache},
     'm|max-depth:i' => \$opt->{max_depth},
-    'd|delete'      => \$opt->{delete},
 );
 
 $opt = options( $arg, $opt ) if $help;
@@ -185,12 +182,6 @@ sub available_databases {
 }
 
 
-sub remove_database {
-    my ( $db ) = @_;
-    unlink $db or die $!;
-}
-
-
 sub get_table_names {
     my ( $dbh ) = @_;
     my $tables = $dbh->selectcol_arrayref( "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name" );
@@ -235,46 +226,20 @@ DATABASES: while ( 1 ) {
 
     my @tables = map { "- $_" } @$tables;
     push @tables, '  sqlite_master', '  sqlite_temp_master' if $arg->{db_type} eq 'sqlite';
-    push @tables, '  delete database' if $opt->{delete};
 
     TABLES: while ( 1 ) {
         # CHOOSE
         my $table = choose( [ undef, @tables ], { prompt => 'Choose Table', %lyt, undef => '  ' . $arg->{back} } );
         last TABLES if not defined $table;
         $table =~ s/\A..//;
-        if ( $table eq 'delete database' ) {
-            if ( not eval {     ##  TRY  ##
-                say "\nRealy delete database ", colored( "\"$db\"", 'red' ), "?\n";
-                # CHOOSE
-                my $c = choose( [ ' No ', ' Yes ' ], { prompt => 0, pad_one_row => 1 } );
-                if ( $c eq ' Yes ' ) {
-                    remove_database( $db );
-                }
-                1 }
-            ) {                 ## CATCH #
-                say 'Delete database:';
-                say "Could not remove database \"$db\"";
-                print $@;
-                choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
-            }
-            else {
-                $arg->{cache}->remove( $arg->{cache_key} ) if $arg->{db_type} eq 'sqlite';
-                @databases = grep { $_ ne $db } @databases;
-                last TABLES;
-            }
-            # last TABLES;
-        }
-
         my $table_q = $dbh->quote_identifier( $table );
         
         my %mode = ( 
             table_auto      => '= table auto', 
             table_customize => '= table customized',
             count_rows      => '  count rows',
-            delete_table    => '  delete table',
         );
         my @mode_keys = ( qw( table_auto table_customize count_rows ) );
-        push @mode_keys, 'delete_table' if $opt->{delete};
 
         CHOOSE: while ( 1 ) {
             # CHOOSE   
@@ -335,30 +300,6 @@ DATABASES: while ( 1 ) {
                         print $@;
                         choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
                     }
-                }
-                when ( $mode{delete_table} ) {
-                    if ( not eval {     ##  TRY  ##
-                        say "\n$db";
-                        say "";
-                        say 'Realy delete table ', colored( "$table_q", 'red' ), '?';
-                        say "";
-                        # CHOOSE
-                        my $c = choose( [ ' No ', ' Yes ' ], { prompt => 0, pad_one_row => 1 } );
-                        if ( $c eq ' Yes ' ) {
-                            $dbh->do( "DROP TABLE $table_q" );
-                        }
-                        1 }
-                    ) {                 ## CATCH ##
-                        say 'Delete table:';
-                        say "Could not drop table $table_q";
-                        print $@;
-                        choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
-                    }
-                    else {              ## ELSE ##
-                        @tables = grep { $_ ne $table } @tables;
-                        last CHOOSE;                        
-                    }
-                    #last CHOOSE;
                 }
                 default {
                     die "$choice: no such value in the hash \%mode";
@@ -523,39 +464,6 @@ sub prepare_read_table {
                     $print->{distinct_stmt} = ' ' . $select_distinct;
                 }
             }
-            when( $customize{order_by} ) {
-                my @cols = ( @$columns, @aliases );
-                $arg->{col_sep} = ' ';
-                $quote->{order_by_stmt} = " ORDER BY";
-                $print->{order_by_stmt} = " ORDER BY";
-                ORDER_BY: while ( 1 ) {
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
-                    # CHOOSE
-                    my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', %list } ); # undef
-                    if ( not defined $col ) {
-                        $quote->{order_by_stmt} = '';
-                        $print->{order_by_stmt} = '';
-                        last ORDER_BY;
-                    }
-                    if ( $col eq $continue ) {
-                        last ORDER_BY;
-                    }
-                    $quote->{order_by_stmt} .= $arg->{col_sep} . $dbh->quote_identifier( $col );
-                    $print->{order_by_stmt} .= $arg->{col_sep} .                         $col  ;
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
-                    # CHOOSE
-                    my $direction = choose( [ " ASC ", " DESC " ], { prompt => 'Sort order:', %bol } ); # undef
-                    if ( not defined $direction ){
-                        $quote->{order_by_stmt} = '';
-                        $print->{order_by_stmt} = '';
-                        last ORDER_BY;
-                    }
-                    $direction =~ s/\A\s+|\s+\z//g;
-                    $quote->{order_by_stmt} .= ' ' . $direction;
-                    $print->{order_by_stmt} .= ' ' . $direction;
-                    $arg->{col_sep} = ', ';
-                }
-            }
             when ( $customize{where} ) {
                 my @cols = @$columns;
                 my $AND_OR = '';
@@ -573,13 +481,20 @@ sub prepare_read_table {
                         last WHERE;
                     }
                     if ( $col eq $continue ) {
+                        if ( @{$quote->{where_args}} == 0 ) {
+                            $quote->{where_stmt} = '';
+                            $print->{where_stmt} = '';
+                        }
                         last WHERE;
                     }
                     if ( @{$quote->{where_args}} >= 1 ) {
                         print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
                         # CHOOSE
-                        $AND_OR = choose( [ " AND ", " OR " ], { prompt => 'Append with:', %bol } ); # undef
+                        $AND_OR = choose( [ " AND ", " OR " ], { prompt => 'Choose:', %bol } ); # undef
                         if ( not defined $AND_OR ) {
+                            $quote->{where_args} = [];
+                            $quote->{where_stmt} = '';
+                            $print->{where_stmt} = '';
                             last WHERE;
                         }
                         $AND_OR =~ s/\A\s+|\s+\z//g;
@@ -589,14 +504,11 @@ sub prepare_read_table {
                     $print->{where_stmt} .= $AND_OR . ' ' .                         $col  ;
                     print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
                     # CHOOSE
-                    my $filter_type = choose( [ @{$arg->{filter_types}} ], { prompt => 'Filter type:', %list } ); # undef
+                    my $filter_type = choose( [ @{$arg->{filter_types}} ], { prompt => 'Choose:', %list } ); # undef
                     if ( not defined $filter_type ) {
                         $quote->{where_args} = [];
                         $quote->{where_stmt} = '';
                         $print->{where_stmt} = '';
-                        last WHERE;
-                    }
-                    if ( $filter_type eq $continue ) {
                         last WHERE;
                     }
                     $filter_type =~ s/\A\s+|\s+\z//g;
@@ -620,7 +532,7 @@ sub prepare_read_table {
                 AGGREGATE: while ( 1 ) {
                     print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
                     # CHOOSE
-                    my $func = choose( [ $continue, @{$arg->{aggregate_functions}} ], { prompt => 'SELECT aggregate - choose function', %list } ); # undef
+                    my $func = choose( [ $continue, @{$arg->{aggregate_functions}} ], { prompt => 'Choose:', %list } ); # undef
                     if ( not defined $func ) {
                         $quote->{aggregate_stmt} = '';
                         $print->{aggregate_stmt} = '';
@@ -632,23 +544,20 @@ sub prepare_read_table {
                     my $col;
                     if ( $func =~ /\Acount\s*\(\s*\*\s*\)\z/) {
                         $col = '*';
-                        $func = 'count';
-                        $quote->{aggregate_stmt} .= $arg->{col_sep} . $func . '(';
-                        $print->{aggregate_stmt} .= $arg->{col_sep} . $func . '(';  
                     }
-                    else {
-                        $func =~ s/\s*\(\s*\S\s*\)\z//;
-                        $quote->{aggregate_stmt} .= $arg->{col_sep} . $func . '(';
-                        $print->{aggregate_stmt} .= $arg->{col_sep} . $func . '(';  
+                    $func =~ s/\s*\(\s*\S\s*\)\z//;
+                    $quote->{aggregate_stmt} .= $arg->{col_sep} . $func . '(';
+                    $print->{aggregate_stmt} .= $arg->{col_sep} . $func . '(';
+                    if ( not defined $col ) {
                         print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
                         # CHOOSE
-                        $col = choose( [ @cols ], { prompt => 'SELECT aggregate - choose column', %list } ); # undef
+                        $col = choose( [ @cols ], { prompt => 'Choose:', %list } ); # undef
                         if ( not defined $col ) {
                             $quote->{aggregate_stmt} = '';
                             $print->{aggregate_stmt} = '';
                             last AGGREGATE;
                         }
-                    }                
+                    }
                     my $alias = $func . '_' . $col;
                     $quote->{aggregate_stmt} .= $dbh->quote_identifier( $col ) . ') AS ' . $dbh->quote( $alias );
                     $print->{aggregate_stmt} .=                         $col   . ') AS ' .              $alias  ; 
@@ -673,6 +582,10 @@ sub prepare_read_table {
                         last GROUP_BY;
                     }
                     if ( $col eq $continue ) {
+                        if ( $arg->{col_sep} eq ' ' ) {
+                            $quote->{group_by_stmt} = '';
+                            $print->{group_by_stmt} = '';
+                        }
                         last GROUP_BY;
                     }
                     if ( not @$chosen_columns ) {
@@ -693,7 +606,7 @@ sub prepare_read_table {
                 HAVING: while ( 1 ) { 
                     print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
                     # CHOOSE
-                    my $func = choose( [ $continue, @{$arg->{aggregate_functions}} ], { prompt => 'Choose: ', %list } ); # undef
+                    my $func = choose( [ $continue, @{$arg->{aggregate_functions}} ], { prompt => 'Choose:', %list } ); # undef
                     if ( not defined $func ) {
                         $quote->{having_args} = [];
                         $quote->{having_stmt} = '';
@@ -701,12 +614,16 @@ sub prepare_read_table {
                         last HAVING;
                     }
                     if ( $func eq $continue ) {
+                        if ( @{$quote->{having_args}} == 0 ) {
+                            $quote->{having_stmt} = '';
+                            $print->{having_stmt} = '';
+                        }
                         last HAVING;
                     }
                     if ( @{$quote->{having_args}} >= 1 ) {
                         print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
                         # CHOOSE
-                        $AND_OR = choose( [ " AND ", " OR " ], { prompt => 'Append with:', %bol } ); # undef
+                        $AND_OR = choose( [ " AND ", " OR " ], { prompt => 'Choose:', %bol } ); # undef
                         if ( not defined $AND_OR ) {
                             last HAVING;
                         }
@@ -716,17 +633,14 @@ sub prepare_read_table {
                     my $col;
                     if ( $func =~ /\Acount\s*\(\s*\*\s*\)\z/) {
                         $col = '*';
-                        $func = 'count';
-                        $quote->{having_stmt} .= $AND_OR . ' ' . $func . '(';
-                        $print->{having_stmt} .= $AND_OR . ' ' . $func . '(';  
                     }
-                    else {
-                        $func =~ s/\s*\(\s*\S\s*\)\z//;
-                        $quote->{having_stmt} .= $AND_OR . ' ' . $func . '(';
-                        $print->{having_stmt} .= $AND_OR . ' ' . $func . '(';  
+                    $func =~ s/\s*\(\s*\S\s*\)\z//;
+                    $quote->{having_stmt} .= $AND_OR . ' ' . $func . '(';
+                    $print->{having_stmt} .= $AND_OR . ' ' . $func . '(';  
+                    if ( not defined $col ) {
                         print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
                         # CHOOSE
-                        $col = choose( [ @cols, undef ], { prompt => 'HAVING aggregate - choose column', %list } ); # undef                       
+                        $col = choose( [ @cols ], { prompt => 'Choose:', %list } ); # undef                       
                         if ( not defined $col ) {
                             $quote->{having_args} = [];
                             $quote->{having_stmt} = '';
@@ -738,7 +652,7 @@ sub prepare_read_table {
                     $print->{having_stmt} .=                         $col   . ')'; 
                     print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
                     # CHOOSE
-                    my $filter_type = choose( [ @{$arg->{filter_types}} ], { prompt => 'Filter type:', %list } ); # undef
+                    my $filter_type = choose( [ @{$arg->{filter_types}} ], { prompt => 'Choose:', %list } ); # undef
                     if ( not defined $filter_type ) {
                         $quote->{having_args} = [];
                         $quote->{having_stmt} = '';
@@ -759,6 +673,43 @@ sub prepare_read_table {
                     $quote->{having_stmt} .= " ?";
                     $print->{having_stmt} .= " $pattern";
                     push @{$quote->{having_args}}, $pattern;
+                }
+            }
+            when( $customize{order_by} ) {
+                my @cols = ( @$columns, @aliases );
+                $arg->{col_sep} = ' ';
+                $quote->{order_by_stmt} = " ORDER BY";
+                $print->{order_by_stmt} = " ORDER BY";
+                ORDER_BY: while ( 1 ) {
+                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    # CHOOSE
+                    my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', %list } ); # undef
+                    if ( not defined $col ) {
+                        $quote->{order_by_stmt} = '';
+                        $print->{order_by_stmt} = '';
+                        last ORDER_BY;
+                    }
+                    if ( $col eq $continue ) {
+                        if ( $arg->{col_sep} eq ' ' ) {
+                            $quote->{order_by_stmt} = '';
+                            $print->{order_by_stmt} = '';
+                        }
+                        last ORDER_BY;
+                    }
+                    $quote->{order_by_stmt} .= $arg->{col_sep} . $dbh->quote_identifier( $col );
+                    $print->{order_by_stmt} .= $arg->{col_sep} .                         $col  ;
+                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    # CHOOSE
+                    my $direction = choose( [ " ASC ", " DESC " ], { prompt => 'Choose:', %bol } ); # undef
+                    if ( not defined $direction ){
+                        $quote->{order_by_stmt} = '';
+                        $print->{order_by_stmt} = '';
+                        last ORDER_BY;
+                    }
+                    $direction =~ s/\A\s+|\s+\z//g;
+                    $quote->{order_by_stmt} .= ' ' . $direction;
+                    $print->{order_by_stmt} .= ' ' . $direction;
+                    $arg->{col_sep} = ', ';
                 }
             }
             when( $customize{print_table} ) {
@@ -1008,7 +959,6 @@ sub options {
         reset_cache     => '- Reset cache', 
         max_depth       => '- Maxdepth', 
         limit           => '- Limit', 
-        delete          => '- Delete', 
         tab             => '- Tab', 
         min_width       => '- Min-Width', 
         no_blob         => '- No BLOB',
@@ -1017,7 +967,7 @@ sub options {
         kilo_sep        => '- Thousands sep',
         customized      => '- Customized',
     };
-    my @keys = ( qw( cache_expire reset_cache max_depth limit delete no_blob min_width tab kilo_sep undef cut_col_names customized ) );
+    my @keys = ( qw( cache_expire reset_cache max_depth limit no_blob min_width tab kilo_sep undef cut_col_names customized ) );
     my $change;
     
     OPTIONS: while ( 1 ) {
@@ -1053,7 +1003,7 @@ sub options {
                         $value = 'full stop "."'  if $opt->{$key} eq '.';
                         $value = 'comma ","'      if $opt->{$key} eq ',';   
                     }
-                    elsif ( $key eq 'reset_cache' or $key eq 'delete' or $key eq 'no_blob' ) {
+                    elsif ( $key eq 'reset_cache' or $key eq 'no_blob' ) {
                         $value = $opt->{$key} ? 'true' : 'false';
                     }
                     elsif ( $key eq 'cut_col_names' ) {
@@ -1163,14 +1113,6 @@ sub options {
                 } 
                 $limit =~ s/\Q$opt->{kilo_sep}\E//g;
                 $opt->{limit} = $limit;
-                $change++;
-            }
-            when ( $oh->{delete} ) { 
-                my ( $true, $false ) = ( ' Enable delete options ', ' Disable delete options ' );
-                # CHOOSE
-                my $choice = choose( [ undef, $true, $false ], { prompt => 'Delete" options (' . ( $opt->{delete} ? 'Enabled' : 'Disabled' ) . '):', %bol } );
-                break if not defined $choice;
-                $opt->{delete} = ( $choice eq $true ) ? 1 : 0;
                 $change++;
             }
             when ( $oh->{no_blob} ) { 

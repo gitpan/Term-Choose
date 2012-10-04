@@ -1,5 +1,12 @@
 Revision history for Term::Choose
 
+
+1.012   2012-10-04
+        - Term::Choose with Unicode support and Term::Choose::GC removed.
+        - Changed "eval" bracketing.
+        - Example: removed "delete" option.
+        - Example: fixed bugs.
+        
 1.011   2012-10-02
         - Removed/replaced "smartmatch" operators.
         - Improved documentation.
