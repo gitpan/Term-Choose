@@ -4,14 +4,17 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
+our $VERSION = '1.013';
 
-
-# package Term::Choose::GC is now Term::Choose.
-
-
-# use Term::Choose qw(choose);
-
-
+say "";
+say "package Term::Choose::GC is now Term::Choose.";
+say "";
+say "Please use Term::Choose:";
+say "";
+say "    use Term::Choose qw(choose);";
+say "";
+die;
+1;
 
 
 =pod
@@ -24,7 +27,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 1.012
+Version 1.013
 
 =cut
 

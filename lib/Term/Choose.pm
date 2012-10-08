@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.012';
+our $VERSION = '1.013';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -244,22 +244,26 @@ sub _end_win {
 sub _length_longest {
     my ( $list ) = @_;
     my $longest;
-    if ( ! eval { # Try
+#    if ( ! eval { # Try
+        utf8::upgrade( $list->[0] );
+
         my $gcs = Unicode::GCString->new( $list->[0] );
         $longest = $gcs->columns();
-        1 }
-    ) { # Catch
-        $longest = length $list->[0];
-    }
+#        1 }
+#    ) { # Catch
+#        $longest = length $list->[0];
+#    }
     for my $str ( @{$list} ) {
-        if ( ! eval { # Try
+#        if ( ! eval { # Try
+            utf8::upgrade( $str );
+            
             my $gcs = Unicode::GCString->new( $str );
             my $length = $gcs->columns();
             $longest = $length if $length > $longest;
-            1 }
-        ) { # Catch
-            $longest = length $str if length $str > $longest;
-        }
+#            1 }
+#        ) { # Catch
+#            $longest = length $str if length $str > $longest;
+#        }
     }
     return $longest;
 }
@@ -415,13 +419,14 @@ sub _prepare_promptline {
         if ( $arg->{prompt} ) {
             $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)';
             my $prompt_length;
-            if ( ! eval { # Try
+#            if ( ! eval { # Try
+                utf8::upgrade( $arg->{prompt_line} );
                 my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
                 $prompt_length = $gcs->columns();
-                1 }
-            ) { # Catch
-                $prompt_length = length $arg->{prompt_line};
-            }
+#                1 }
+#            ) { # Catch
+#                $prompt_length = length $arg->{prompt_line};
+#            }
             $arg->{prompt_line} = $arg->{prompt} . ' (multiple choice)' if $prompt_length > $arg->{maxcols};
         }
         else {
@@ -429,13 +434,14 @@ sub _prepare_promptline {
         }
     }
     my $prompt_length;
-    if ( ! eval { # Try
+#    if ( ! eval { # Try
+        utf8::upgrade( $arg->{prompt_line} );
         my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
         $prompt_length = $gcs->columns();
-        1 }
-    ) { # Catch
-        $prompt_length = length $arg->{prompt_line};
-    }
+#        1 }
+#    ) { # Catch
+#        $prompt_length = length $arg->{prompt_line};
+#    }
     if ( $prompt_length > $arg->{maxcols} ) {
         $arg->{prompt_line} = _unicode_cut( $arg, $arg->{prompt} );
     }
@@ -828,13 +834,14 @@ sub _wr_cell {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
-                if ( ! eval { # Try
+#                if ( ! eval { # Try
+                    utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
                     my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
                     $lngth += $gcs->columns();
-                    1 }
-                ) { # Catch
-                    $lngth += length $arg->{list}[$arg->{rowcol2list}[$row][$cl]];
-                }
+#                    1 }
+#                ) { # Catch
+#                    $lngth += length $arg->{list}[$arg->{rowcol2list}[$row][$cl]];
+#                }
                 $lngth += $arg->{pad_one_row} // 0;
             }
         }
@@ -872,13 +879,14 @@ sub _size_and_layout {
             $all_in_first_row .= $arg->{list}[$idx];
             $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
             my $length_first_row;
-            if ( ! eval { # Try
+#            if ( ! eval { # Try
+                utf8::upgrade( $all_in_first_row );
                 my $gcs = Unicode::GCString->new( $all_in_first_row );
                 $length_first_row = $gcs->columns();
-                1 }
-            ) { # Catch
-                $length_first_row = length $all_in_first_row;
-            }
+#                1 }
+#            ) { # Catch
+#                $length_first_row = length $all_in_first_row;
+#            }
             if ( $length_first_row > $arg->{maxcols} ) {
                 $all_in_first_row = '';
                 last;
@@ -949,9 +957,11 @@ sub _size_and_layout {
 
 
 sub _unicode_cut {
-    my ( $arg, $word ) = @_;
-    my $unicode = $word;
-    if ( ! eval { # Try
+    my ( $arg, $unicode ) = @_;
+#    my ( $arg, $word ) = @_;
+#    my $unicode = $word; #
+#    if ( ! eval { # Try 
+        utf8::upgrade( $unicode );
         my $gcs = Unicode::GCString->new( $unicode );
         my $colwidth = $gcs->columns();
         if ( $colwidth > $arg->{maxcols} ) {
@@ -978,25 +988,27 @@ sub _unicode_cut {
             $unicode .= ' ' if $colwidth < $length;
             $unicode .= '...';
         }
-        1 }
-    ) { # Catch
-        if ( length $word > $arg->{maxcols} ) {
-            my $length = $arg->{maxcols} - 3;
-            $word = substr( $word, 0, $length );
-            $word .= '...';
-        }
-        return $word;
-    }
-    else { # Else
+#        1 }
+#    ) { # Catch
+#        if ( length $word > $arg->{maxcols} ) {
+#            my $length = $arg->{maxcols} - 3;
+#            $word = substr( $word, 0, $length );
+#            $word .= '...';
+#        }
+#        return $word;
+#    }
+#    else { # Else
         return $unicode;
-    }
+#    }
 }
 
 
 sub _unicode_sprintf {
-    my ( $arg, $word ) = @_;
-    my $unicode = $word;
-    if ( ! eval { # Try
+    my ( $arg, $unicode ) = @_;
+#    my ( $arg, $word ) = @_;
+#    my $unicode = $word;
+#    if ( ! eval { # Try
+        utf8::upgrade( $unicode );
         my $gcs = Unicode::GCString->new( $unicode );
         my $colwidth = $gcs->columns();
         if ( $colwidth > $arg->{length_longest} ) {
@@ -1029,25 +1041,25 @@ sub _unicode_sprintf {
                 $unicode = $unicode . " " x ( $arg->{length_longest} - $colwidth );
             }
         }
-        1 }
-    ) { # Catch
-        my $colwidth = length $word;
-        if ( $colwidth > $arg->{length_longest} ) {
-            $word = substr( $word, 0, $arg->{length_longest} );
-        }
-        elsif ( $colwidth < $arg->{length_longest} ) {
-            if ( $arg->{right_justify} ) {
-                $word = " " x ( $arg->{length_longest} - $colwidth ) . $word;
-            }
-            else {
-                $word = $word . " " x ( $arg->{length_longest} - $colwidth );
-            }
-        }
-        return $word;
-    }
-    else { # Else
+#        1 }
+#    ) { # Catch
+#        my $colwidth = length $word;
+#        if ( $colwidth > $arg->{length_longest} ) {
+#            $word = substr( $word, 0, $arg->{length_longest} );
+#        }
+#        elsif ( $colwidth < $arg->{length_longest} ) {
+#            if ( $arg->{right_justify} ) {
+#                $word = " " x ( $arg->{length_longest} - $colwidth ) . $word;
+#            }
+#            else {
+#                $word = $word . " " x ( $arg->{length_longest} - $colwidth );
+#            }
+#        }
+#        return $word;
+#    }
+#    else { # Else
         return $unicode;
-    }
+#    }
 }
 
 
@@ -1118,7 +1130,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.012
+Version 1.013
 
 =cut
 
@@ -1140,7 +1152,7 @@ Version 1.012
 
 =head1 DESCRIPTION
 
-Choose from a list of elements.
+Choose from a list of items.
 
 Requires Perl Version 5.10.1 or greater.
 
@@ -1162,7 +1174,7 @@ Nothing by default.
 
               choose( $array_ref [, \%options] );
 
-I<choose> expects as first argument an array reference which passes the list elements available for selection (in void context no selection can be made).
+I<choose> expects as a first argument an array reference which passes the list items available for selection (in void context no selection can be made).
 
 Options can be passed with a hash reference as a second (optional) argument.
 
@@ -1196,46 +1208,52 @@ If the window size is changed, then as soon as the user enters a keystroke I<cho
 
 The "q" key returns I<undef> or an empty list in list context.
 
-With a I<mouse_mode> enabled (and if supported by the terminal) the element can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
+With a I<mouse_mode> enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
 Keys to move around: arrow keys (or hjkl), Tab, BackSpace (or Shift-Tab or Ctrl-H), PageUp and PageDown (or Ctrl+B/Ctrl+F).
 
+=head3 Print columns
+
+L<Term::Choose> uses the I<columns> method from the L<Unicode::GCString> module to determine the length of Unicode strings. The I<columns> method from the L<Unicode::GCString> module returns the number of print columns.
+
 =head3 Modifications for the output
 
-For the output on the screen the list elements are modified:
+For the output on the screen the list items are modified:
 
 =over
 
 =item *
 
-if a list element is not defined the value from the option I<undef> is assigned to the element.
+if a list items is not defined the value from the option I<undef> is assigned to the item.
 
 =item *
 
-if a list element holds an empty string the value from the option I<empty_string> is assigned to the element.
+if a list item holds an empty string the value from the option I<empty_string> is assigned to the item.
 
 =item *
 
-white-spaces in list elements are replaced with simple spaces.
+white-spaces in list items are replaced with simple spaces.
 
-    $element =~ s/\p{Space}/ /g;
+    $item =~ s/\p{Space}/ /g;
 
 =item *
 
 control characters are removed.
 
-    $element =~ s/\p{Cntrl}//g;
+    $item =~ s/\p{Cntrl}//g;
 
 =item *
 
-if the length of a list element is greater than the width of the screen the element is cut.
+if the length of a list item is greater than the width of the screen the item is cut.
 
 
-    $element = substr( $element, 0, $allowed_length - 3 ) . '...';
+    $item = substr( $item, 0, $allowed_length - 3 ) . '...';*
+    
+* L<Term::Choose> uses its own function to cut strings which uses print columns for the arithmetic.
 
 =back
 
-All these modifications are made on a copy of the original list so I<choose> returns the chosen elements as they were passed to the function without modifications.
+All these modifications are made on a copy of the original list so I<choose> returns the chosen items as they were passed to the function without modifications.
 
 =head3 Options
 
@@ -1362,17 +1380,17 @@ Allowed values:  0 or greater
 
 =head4 length_longest
 
-If the length* of the list element with the largest length is known before calling I<choose> it can be passed with this option.
+If the length* of the list item with the largest length is known before calling I<choose> it can be passed with this option.
 
-If I<length_longest> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
+If I<length_longest> is set, then I<choose> doesn't calculate the length of the longest item itself but uses the value passed with this option.
 
-If I<length_longest> is set to a value less than the length of the longest element all elements which a length greater than this value will be cut.
+If I<length_longest> is set to a value less than the length of the longest item all items which a length greater than this value will be cut.
 
-A larger value than the length of the longest element wastes space on the screen.
+A larger value than the length of the longest item wastes space on the screen.
 
 If the value of I<length_longest> is greater than the screen width I<length_longest> will be set to the screen width.
 
-* length means here: the number of print columns the element will use on the terminal.
+* length means the number of print columns the item will use on the terminal.
 
 Allowed values: 1 or greater
 
@@ -1384,7 +1402,7 @@ With the option I<default> can be selected a list item, which will be highlighte
 
 I<default> expects a zero indexed value, so e.g. to highlight the third item the value would be I<2>.
 
-If the passed value is greater than the index of the last listelement the first item is highlighted.
+If the passed value is greater than the index of the last list item the first item is highlighted.
 
 Allowed values:  0 or greater
 
@@ -1410,7 +1428,7 @@ Allowed values:  0 or greater
 
 =head4 undef
 
-Sets the string displayed on the screen instead an undefined list element.
+Sets the string displayed on the screen instead an undefined list item.
 
 default: '<undef>'
 
@@ -1525,31 +1543,13 @@ and
 
 are used to enable/disable the different mouse modes.
 
-
 =head2 Monospaced font
 
 It is needed a terminal that uses a monospaced font.
 
 =head2 List data
 
-List elements should be
-
-=over
-
-=item
-
-valid Unicode strings or 
-
-=item
-
-strings with characters where I<length(character)> is equal to the number of print columns of the respective character.
-
-=back
-
-Data which does not meet these requirements might break the layout. So binary data could break the output.
-
-L<Term::Choose> uses the I<columns> method from the L<Unicode::GCString> module to determine the length of Unicode strings. To cut an to justify strings it uses its own functions based on L<Unicode::GCString::columns|http://search.cpan.org/perldoc?Unicode::GCString#Sizes>. The I<columns> method does not return the number of characters but the number of print columns.
-The codeparts using L<Unicode::GCString::columns|http://search.cpan.org/perldoc?Unicode::GCString#Sizes> run in eval blocks: if the code in the eval block fails Perl builtins I<length>, I<substr> and I<sprintf> widths are used instead. The reason for this procedure with eval is to make I<choose> work also with non-Unicode characters.
+I<choose> expects decoded strings as list items. 
 
 =head2 SIGWINCH
 
@@ -1559,7 +1559,7 @@ L<Term::Choose> makes use of the Perl signal handling as described in L<perlipc/
 
 The reason for writing L<Term::Choose> was to get something like L<Term::Clui::choose|http://search.cpan.org/perldoc?Term%3A%3AClui#SUBROUTINES> but with a nicer output in the case the list doesn't fit in one row.
 
-If the list does not fit in one row, I<choose> from L<Term::Clui> puts the elements on the screen without ordering the items in columns. L<Term::Choose> arranges the elements in columns which makes it easier for me to find elements and easier to navigate on the screen.
+If the list does not fit in one row, I<choose> from L<Term::Clui> puts the items on the screen without ordering the items in columns. L<Term::Choose> arranges the items in columns which makes it easier for me to find items and easier to navigate on the screen.
 
 =over
 
@@ -1567,11 +1567,11 @@ If the list does not fit in one row, I<choose> from L<Term::Clui> puts the eleme
 
 L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).
 
-As mentioned above I<choose> from L<Term::Clui> does not order the elements in columns if there is more than one row on the screen while L<Term::Choose> in such situations arranges the elements in columns.
+As mentioned above I<choose> from L<Term::Clui> does not order the items in columns if there is more than one row on the screen while L<Term::Choose> arranges the items in such situations in columns.
 
 Another difference is how lists which don't fit on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
 
-Unicode strings might break the output from L<Term::Clui>. To make L<Term::Choose>s I<choose> function work with Unicode it uses the method I<columns> from L<Unicode::GCString> to determine the string length. 
+Unicode strings might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with Unicode it uses the method I<columns> from L<Unicode::GCString> to determine the string length. 
 
 L<Term::Clui>'s I<choose> prints and returns the chosen items while I<choose> from L<Term::Choose> only returns the chosen items.
 
@@ -1599,9 +1599,9 @@ Matthäus Kiem <cuer2s@gmail.com>
 
 =head1 CREDITS
 
-Based on and inspired by the I<choose> function from L<Term::Clui> module.
+Based on and inspired by the I<choose> function from the L<Term::Clui> module.
 
-Thanks to the L<http://www.perl-community.de> and the people form L<http://stackoverflow.com> for the help.
+Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people form L<stackoverflow|http://stackoverflow.com> for the help.
 
 =head1 LICENSE AND COPYRIGHT
 
