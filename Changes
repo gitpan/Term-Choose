@@ -1,5 +1,10 @@
 Revision history for Term::Choose
 
+
+1.014   2012-10-10
+        - Code cleanup.
+        - Updated example.
+
 1.013   2012-10-08
         - Unicode::GCString: moved from "eval" to "utf8::upgrade".
         - Improved documentation.

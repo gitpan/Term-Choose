@@ -7,7 +7,7 @@ binmode STDIN,  ':encoding(utf-8)';
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 0.18
+# Version 0.19
 
 use File::Basename;
 use File::Spec::Functions qw(catfile tmpdir);
@@ -43,7 +43,7 @@ my $arg = {
     cached              => '',
     cache_rootdir       => tmpdir(),
     config_file         => catfile( $home, '.table_info.conf' ),
-    filter_types        => [ "REGEXP", "<", ">", ">=", "<=", "=", "<>" ], # "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL"
+    filter_types        => [ " REGEXP ", " NOT REGEXP ", " = ", " != ", " < ", " > ", " >= ", " <= ", " IS NULL ", " IS NOT NULL ", " IN " ], # "LIKE", "NOT LIKE"
     aggregate_functions => [ 'avg(X)', 'count(X)', 'count(*)', 'max(X)', 'min(X)', 'sum(X)' ], # group_concat(X), group_concat(X,Y), total(X)
 };
 
@@ -94,7 +94,7 @@ my $opt = {
                 sqlite_busy_timeout        => 3_000,
                 sqlite_cache_size          => 400_000,
     },
-    all => {    limit         => 10_000,
+    all => {    limit         => 25_000,
                 no_blob       => 1,
                 tab           => 2,
                 min_width     => 30,
@@ -104,7 +104,7 @@ my $opt = {
     },
 };
 
-if ( not eval { # try
+if ( not eval {
     if ( not -f $arg->{config_file} ) {
         open my $fh, '>', $arg->{config_file} or die $!;
         close $fh or die $!;
@@ -120,7 +120,7 @@ if ( not eval { # try
 
     $opt = options( $arg, $opt ) if $help;
     1 }
-) { # catch
+) {
     say 'Configfile/Options:';
     print $@;
     choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
@@ -130,6 +130,7 @@ if ( not eval { # try
 #------------------------------------------------------------------------#
 #------------------   database specific subroutines   -------------------#
 #------------------------------------------------------------------------#
+
 
 sub get_database_handle {
     my ( $opt, $db ) = @_;
@@ -146,7 +147,6 @@ sub get_database_handle {
     #$dbh->do( 'PRAGMA synchronous = OFF' );
     return $dbh;
 }
-
 
 sub available_databases {
     my ( $arg, $opt ) = @_;
@@ -178,9 +178,8 @@ sub available_databases {
             return @databases;                
         }
     );
-    return @databases;
+    return \@databases;
 }
-
 
 sub get_table_names {
     my ( $dbh ) = @_;
@@ -188,21 +187,22 @@ sub get_table_names {
     return $tables;
 }
 
+
 #------------------------------------------------------------------------#
 #-------------------------------   main   -------------------------------#
 #------------------------------------------------------------------------#
 
-my @databases;
-if ( not eval { # try
-    @databases = available_databases( $arg, $opt );
+my $databases;
+if ( not eval {
+    $databases = available_databases( $arg, $opt );
     1 }
-) { # catch
+) {
     say 'Available databases:';
     print $@;
     choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
 }
 
-say 'no sqlite-databases found' and exit if not @databases;
+say 'no sqlite-databases found' and exit if not @$databases;
 
 my %lyt = ( layout => 3, clear_screen => 1 );
 my $new_db_setting = 0;
@@ -211,19 +211,19 @@ my $db;
 DATABASES: while ( 1 ) {
     # CHOOSE
     if ( not $new_db_setting ) {
-        $db = choose( [ undef, @databases ], { prompt => 'Choose Database' . $arg->{cached}, %lyt, undef => $arg->{quit} } );
+        $db = choose( [ undef, @$databases ], { prompt => 'Choose Database' . $arg->{cached}, %lyt, undef => $arg->{quit} } );
         last DATABASES if not defined $db;
     }
     else {
         $new_db_setting = 0;
     }
     my ( $dbh, $tables );
-    if ( not eval { # try
+    if ( not eval {
         $dbh = get_database_handle( $opt, $db );
         $arg->{db_type} = lc $dbh->{Driver}{Name};
         $tables = get_table_names( $dbh );
         1 }
-    ) { # catch
+    ) {
         say 'Get database handle and table names:';
         print $@;
         choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
@@ -246,77 +246,20 @@ DATABASES: while ( 1 ) {
             next TABLES;
         }
         my $table_q = $dbh->quote_identifier( $table );
-        my %mode = ( 
-            table_auto      => '= table auto', 
-            table_customize => '= table customized',
-            count_rows      => '  count rows',
-        );
-        my @mode_keys = ( qw( table_auto table_customize count_rows ) );
-
-        CHOOSE: while ( 1 ) {
-            # CHOOSE   
-            my $choice = choose( [ undef, @mode{@mode_keys} ], { %lyt, undef => '  ' . $arg->{back} } );
-            given ( $choice ) {
-                when ( not defined ) {
-                    last CHOOSE;
-                }
-                when ( $mode{table_auto} ) {
-                    if ( not eval { # try
-                        my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM $table_q" );
-                        my $select = "SELECT * FROM $table_q";
-                        my $arguments;
-                        PRINT: while ( 1 ) {
-                            my ( $offset, $last ) = choose_table_range( $arg, $opt, $rows );
-                            last PRINT if $last == 1;	
-                            my ( $ref, $col_types ) = read_db_table( $opt, $dbh, $offset, $select, $arguments );
-                            last PRINT if not defined $ref;
-                            print_table( $opt, $ref, $col_types );
-                            last PRINT if $last == 2;
-                        }
-                        1 }
-                    ) { # catch
-                        say 'Table auto:';
-                        print $@;
-                        choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
-                    }
-                }
-                when ( $mode{table_customize} ) {
-                    if ( not eval { # try
-                        my ( $rows, $select, $arguments ) = prepare_read_table( $arg, $opt, $dbh, $table );
-                        #next CHOOSE if not defined $rows;
-                        break if not defined $rows;
-                        PRINT: while ( 1 ) {
-                            my ( $offset, $last ) = choose_table_range( $arg, $opt, $rows );	
-                            last PRINT if $last == 1;
-                            my ( $ref, $col_types ) = read_db_table( $opt, $dbh, $offset, $select, $arguments );
-                            last PRINT if not defined $ref;
-                            print_table( $opt, $ref, $col_types );
-                            last PRINT if $last == 2;
-                        }
-                        1 }
-                    ) { # catch
-                        say 'Table customized:';
-                        print $@;
-                        choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
-                    }
-                }
-                when ( $mode{count_rows} ) {
-                    if ( not eval { # try
-                        my $rows = $dbh->selectrow_array( "SELECT COUNT(*) FROM $table_q" );
-                        $rows =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{all}{kilo_sep}/g;
-                        choose( [ "  Table $table_q:  $rows Rows  ", '  Press ENTER to continue  ' ], { prompt => "\"$db\"", layout => 3 } );
-                        1 }
-                    ) { # catch
-                        say 'Count rows:';
-                        print $@;
-                        choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
-                    }
-                }
-                default {
-                    die "$choice: no such value in the hash \%mode";
-                }
+        if ( not eval {
+        
+            CUSTOMIZE: while ( 1 ) {    
+                my ( $rows, $select, $arguments ) = customize_statement( $arg, $opt, $dbh, $table );
+                last CUSTOMIZE if not defined $rows;
+                print_table( $arg, $opt, $dbh, $rows, $select, $arguments );
+            
             }
-        } 
+            1 }
+        ) {
+            say 'Print table:';
+            print $@;
+            choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+        }
     }
 }
 
@@ -325,54 +268,8 @@ DATABASES: while ( 1 ) {
 #------------------------------------------------------------------------#
 
 
-sub choose_table_range {
-    my ( $arg, $opt, $rows ) = @_;
-    my $offset = 0;
-    my $last = 0;
-    my $begin = 0;
-    my $end = $opt->{all}{limit} - 1;    
-    if ( $rows > $opt->{all}{limit} ) {
-        my @choices;
-        my $lr = length $rows;
-        push @choices, sprintf "%${lr}d - %${lr}d", $begin, $end;
-        $rows -= $opt->{all}{limit};
-        while ( $rows > 0 ) {
-            $begin += $opt->{all}{limit};
-            $end   += ( $rows > $opt->{all}{limit} ) ? $opt->{all}{limit} : $rows;
-            push @choices, sprintf "%${lr}d - %${lr}d", $begin, $end;
-            $rows -= $opt->{all}{limit};
-        }
-        # CHOOSE
-        my $choice = choose( [ undef, @choices ], { layout => 3, undef => $arg->{back} } );
-        if ( defined $choice ) {
-            $offset = ( split /\s*-\s*/, $choice )[0];
-            $offset =~ s/\A\s+//;
-        }
-        else { 
-            $last = 1; 
-        }
-    }
-    else { 
-        $last = 2;
-    }
-    return $offset, $last;
-}
-
-
-sub read_db_table {
-    my ( $opt, $dbh, $offset, $select, $arguments ) = @_;
-    my $sth = $dbh->prepare( $select . " LIMIT ?, ?" );
-    $sth->execute( defined $arguments ? @$arguments : (), $offset, $opt->{all}{limit} );
-    my $col_names = $sth->{NAME};
-    my $col_types = $sth->{TYPE};
-    my $ref = $sth->fetchall_arrayref();
-    unshift @$ref, $col_names;
-    return $ref, $col_types;
-}
-
-
 sub print_select {
-    my ( $arg, $opt, $table, $columns, $chosen_columns, $print ) = @_;
+    my ( $arg, $opt, $table, $chosen_columns, $print ) = @_;
     print GO_TO_TOP_LEFT;
     print CLEAR_EOS;
     my $cols_str = '';
@@ -395,13 +292,14 @@ sub print_select {
 }
 
 
-sub prepare_read_table {
+sub customize_statement {
     my ( $arg, $opt, $dbh, $table ) = @_;
     $dbh->func( 'regexp', 2, sub { my ( $regex, $string ) = @_; $string //= ''; return $string =~ m/$regex/ism }, 'create_function' ) if $arg->{db_type} eq 'sqlite'; 
     my $continue = '- OK -';
     my $back = '- reset -';
-    my %bol  = ( layout => 1, pad_one_row => 1, undef => $back );
-    my %list = ( layout => 1, pad_one_row => 2, undef => $back );
+    my %bol    = ( layout => 1, pad_one_row => 1, undef => $back );
+    my %list   = ( layout => 1, pad_one_row => 2, undef => $back );
+    my %filter = ( layout => 1, pad_one_row => 1, undef => $back );    
     my $table_q = $dbh->quote_identifier( $table );
     my @keys = ( qw( print_table columns aggregate distinct where group_by having order_by ) );
     my %customize = ( 
@@ -431,7 +329,7 @@ sub prepare_read_table {
     my ( $DISTINCT, $ALL, $ASC, $DESC, $AND, $OR ) = ( " DISTINCT ", " ALL ", " ASC ", " DESC ", " AND ", " OR " );
 
     CUSTOMIZE: while ( 1 ) {
-        print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+        print_select( $arg, $opt, $table, $chosen_columns, $print );
         # CHOOSE
         my $custom = choose( [ undef, @customize{@keys} ], { prompt => 'Customize:', layout => 3, undef => $arg->{back} } );
         for ( $custom ) {
@@ -442,7 +340,7 @@ sub prepare_read_table {
                 my @cols = @$columns;
                 $chosen_columns = [];
                 COLUMNS: while ( @cols ) {
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
                     my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', %list } ); # undef
                     if ( not defined $col ) {
@@ -459,7 +357,7 @@ sub prepare_read_table {
                 $quote->{distinct_stmt} = '';
                 $print->{distinct_stmt} = '';
                 DISTINCT: while ( 1 ) {
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
                     my $select_distinct = choose( [ $continue, $DISTINCT, $ALL ], { prompt => 'Choose: ', %bol } ); # undef
                     if ( not defined $select_distinct ) {
@@ -481,8 +379,9 @@ sub prepare_read_table {
                 $quote->{where_args} = [];
                 $quote->{where_stmt} = " WHERE";
                 $print->{where_stmt} = " WHERE";
+                my $count = 0;
                 WHERE: while ( 1 ) { 
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
                     my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', %list } ); # undef
                     if ( not defined $col ) {
@@ -492,14 +391,15 @@ sub prepare_read_table {
                         last WHERE;
                     }
                     if ( $col eq $continue ) {
-                        if ( @{$quote->{where_args}} == 0 ) {
+                        if ( $count == 0 ) {
+                            $quote->{where_args} = [];
                             $quote->{where_stmt} = '';
                             $print->{where_stmt} = '';
                         }
                         last WHERE;
                     }
-                    if ( @{$quote->{where_args}} >= 1 ) {
-                        print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    if ( $count >= 1 ) {
+                        print_select( $arg, $opt, $table, $chosen_columns, $print );
                         # CHOOSE
                         $AND_OR = choose( [ $AND, $OR ], { prompt => 'Choose:', %bol } ); # undef
                         if ( not defined $AND_OR ) {
@@ -513,9 +413,9 @@ sub prepare_read_table {
                     }
                     $quote->{where_stmt} .= $AND_OR . ' ' . $dbh->quote_identifier( $col );
                     $print->{where_stmt} .= $AND_OR . ' ' .                         $col  ;
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
-                    my $filter_type = choose( [ @{$arg->{filter_types}} ], { prompt => 'Choose:', %list } ); # undef
+                    my $filter_type = choose( [ @{$arg->{filter_types}} ], { prompt => 'Choose:', %filter } ); # undef
                     if ( not defined $filter_type ) {
                         $quote->{where_args} = [];
                         $quote->{where_stmt} = '';
@@ -525,8 +425,41 @@ sub prepare_read_table {
                     $filter_type =~ s/\A\s+|\s+\z//g;
                     $quote->{where_stmt} .= ' ' . $filter_type;
                     $print->{where_stmt} .= ' ' . $filter_type;
-                    #if ( $filter_type !~ /NULL/ ) {
-                        print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );                    
+                    if ( $filter_type =~ /NULL\z/ ) {
+                        # do nothing
+                    }
+                    elsif ( $filter_type eq 'IN' ) {
+                        $arg->{col_sep} = $before_col;                      
+                        $quote->{where_stmt} .= '(';
+                        $print->{where_stmt} .= '(';  
+                        
+                        IN: while ( 1 ) {
+                            print_select( $arg, $opt, $table, $chosen_columns, $print );
+                            # CHOOSE
+                            my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', %list } ); # undef
+                            if ( not defined $col ) {
+                                $quote->{where_args} = [];
+                                $quote->{where_stmt} = '';
+                                $print->{where_stmt} = '';             
+                                last WHERE;
+                            }
+                            if ( $col eq $continue ) {
+                                $quote->{where_stmt} .= ' )';
+                                $print->{where_stmt} .= ' )';
+                                if ( $arg->{col_sep} eq $before_col ) {
+                                    $quote->{where_args} = [];
+                                    $quote->{where_stmt} = '';
+                                    $print->{where_stmt} = '';  
+                                }
+                                last WHERE;
+                            }
+                            $quote->{where_stmt} .= $arg->{col_sep} . $dbh->quote_identifier( $col );
+                            $print->{where_stmt} .= $arg->{col_sep} .                         $col  ;
+                            $arg->{col_sep} = $between_col;
+                        }
+                    }
+                    else {
+                        print_select( $arg, $opt, $table, $chosen_columns, $print );                    
                         print "arg: ";
                         my $pattern = <STDIN>;
                         chomp $pattern;
@@ -534,7 +467,8 @@ sub prepare_read_table {
                         $quote->{where_stmt} .= " ?";
                         $print->{where_stmt} .= " $pattern";
                         push @{$quote->{where_args}}, $pattern;
-                    #}
+                    }
+                    $count++;
                 }
             }
             when( $customize{aggregate} ) {
@@ -543,7 +477,7 @@ sub prepare_read_table {
                 $quote->{aggregate_stmt} = '';
                 $print->{aggregate_stmt} = '';
                 AGGREGATE: while ( 1 ) {
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
                     my $func = choose( [ $continue, @{$arg->{aggregate_functions}} ], { prompt => 'Choose:', %list } ); # undef
                     if ( not defined $func ) {
@@ -562,7 +496,7 @@ sub prepare_read_table {
                     $quote->{aggregate_stmt} .= $arg->{col_sep} . $func . '(';
                     $print->{aggregate_stmt} .= $arg->{col_sep} . $func . '(';
                     if ( not defined $col ) {
-                        print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                        print_select( $arg, $opt, $table, $chosen_columns, $print );
                         # CHOOSE
                         $col = choose( [ @cols ], { prompt => 'Choose:', %list } ); # undef
                         if ( not defined $col ) {
@@ -572,7 +506,8 @@ sub prepare_read_table {
                         }
                     }
                     my $alias = $func . '_' . $col;
-                    $quote->{aggregate_stmt} .= $dbh->quote_identifier( $col ) . ') AS ' . $dbh->quote( $alias );
+                    $quote->{aggregate_stmt} .=                         $col   . ') AS ' . $dbh->quote( $alias ) if $col eq '*';
+                    $quote->{aggregate_stmt} .= $dbh->quote_identifier( $col ) . ') AS ' . $dbh->quote( $alias ) if $col ne '*';
                     $print->{aggregate_stmt} .=                         $col   . ') AS ' .              $alias  ; 
                     push @aliases, $alias;
                     $arg->{col_sep} = $between_col;
@@ -584,7 +519,7 @@ sub prepare_read_table {
                 $quote->{group_by_stmt} = " GROUP BY";
                 $print->{group_by_stmt} = " GROUP BY";
                 GROUP_BY: while ( 1 ) {
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
                     my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', %list } ); # undef
                     if ( not defined $col ) {
@@ -618,8 +553,9 @@ sub prepare_read_table {
                 $quote->{having_args} = [];
                 $quote->{having_stmt} = " HAVING";
                 $print->{having_stmt} = " HAVING";
+                my $count = 0;
                 HAVING: while ( 1 ) { 
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
                     my $func = choose( [ $continue, @{$arg->{aggregate_functions}} ], { prompt => 'Choose:', %list } ); # undef
                     if ( not defined $func ) {
@@ -629,14 +565,15 @@ sub prepare_read_table {
                         last HAVING;
                     }
                     if ( $func eq $continue ) {
-                        if ( @{$quote->{having_args}} == 0 ) {
+                        if ( $count == 0 ) {
+                            $quote->{having_args} = [];
                             $quote->{having_stmt} = '';
                             $print->{having_stmt} = '';
                         }
                         last HAVING;
                     }
-                    if ( @{$quote->{having_args}} >= 1 ) {
-                        print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    if ( $count >= 1 ) {
+                        print_select( $arg, $opt, $table, $chosen_columns, $print );
                         # CHOOSE
                         $AND_OR = choose( [ $AND, $OR ], { prompt => 'Choose:', %bol } ); # undef
                         if ( not defined $AND_OR ) {
@@ -653,7 +590,7 @@ sub prepare_read_table {
                     $quote->{having_stmt} .= $AND_OR . ' ' . $func . '(';
                     $print->{having_stmt} .= $AND_OR . ' ' . $func . '(';  
                     if ( not defined $col ) {
-                        print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                        print_select( $arg, $opt, $table, $chosen_columns, $print );
                         # CHOOSE
                         $col = choose( [ @cols ], { prompt => 'Choose:', %list } ); # undef                       
                         if ( not defined $col ) {
@@ -663,11 +600,12 @@ sub prepare_read_table {
                             last HAVING;
                         }
                     }
-                    $quote->{having_stmt} .= $dbh->quote_identifier( $col ) . ')';
+                    $quote->{having_stmt} .=                         $col   . ')' if $col eq '*';
+                    $quote->{having_stmt} .= $dbh->quote_identifier( $col ) . ')' if $col ne '*';
                     $print->{having_stmt} .=                         $col   . ')'; 
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
-                    my $filter_type = choose( [ @{$arg->{filter_types}} ], { prompt => 'Choose:', %list } ); # undef
+                    my $filter_type = choose( [ @{$arg->{filter_types}} ], { prompt => 'Choose:', %filter } ); # undef
                     if ( not defined $filter_type ) {
                         $quote->{having_args} = [];
                         $quote->{having_stmt} = '';
@@ -680,16 +618,50 @@ sub prepare_read_table {
                     $filter_type =~ s/\A\s+|\s+\z//g;
                     $quote->{having_stmt} .= ' ' . $filter_type;
                     $print->{having_stmt} .= ' ' . $filter_type;
-                    #if ( $filter_type !~ /NULL/ ) {
-                        print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );                    
+                    if ( $filter_type =~ /NULL\z/ ) {
+                        # do nothing
+                    }
+                    elsif ( $filter_type eq 'IN' ) {
+                        $arg->{col_sep} = $before_col;                      
+                        $quote->{having_stmt} .= '(';
+                        $print->{having_stmt} .= '(';  
+                        
+                        IN: while ( 1 ) {
+                            print_select( $arg, $opt, $table, $chosen_columns, $print );
+                            # CHOOSE
+                            my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', %list } ); # undef
+                            if ( not defined $col ) {
+                                $quote->{having_args} = [];
+                                $quote->{having_stmt} = '';
+                                $print->{having_stmt} = '';             
+                                last WHERE;
+                            }
+                            if ( $col eq $continue ) {
+                                $quote->{having_stmt} .= ' )';
+                                $print->{having_stmt} .= ' )';
+                                if ( $arg->{col_sep} eq $before_col ) {
+                                    $quote->{having_args} = [];
+                                    $quote->{having_stmt} = '';
+                                    $print->{having_stmt} = '';  
+                                }
+                                last WHERE;
+                            }
+                            $quote->{having_stmt} .= $arg->{col_sep} . $dbh->quote_identifier( $col );
+                            $print->{having_stmt} .= $arg->{col_sep} .                         $col  ;
+                            $arg->{col_sep} = $between_col;
+                        }
+                    }
+                    else {
+                        print_select( $arg, $opt, $table, $chosen_columns, $print );                    
                         print "arg: ";
                         my $pattern = <STDIN>;
                         chomp $pattern;
                         $pattern= qr/$pattern/i if $arg->{db_type} eq 'sqlite' and $filter_type eq "REGEXP";
-                        $quote->{having_stmt} .= " ?"; # ( ( $arg->{filter_types} =~ /\A\s*(?:<|>|>=|<=)\s*\z/ ) ? " (0 + ?)" : " ?" );
+                        $quote->{having_stmt} .= " ?";
                         $print->{having_stmt} .= " $pattern";
                         push @{$quote->{having_args}}, $pattern;
-                    #}
+                    }
+                    $count++;
                 }
             }
             when( $customize{order_by} ) {
@@ -698,7 +670,7 @@ sub prepare_read_table {
                 $quote->{order_by_stmt} = " ORDER BY";
                 $print->{order_by_stmt} = " ORDER BY";
                 ORDER_BY: while ( 1 ) {
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
                     my $col = choose( [ $continue, @cols ], { prompt => 'Choose: ', %list } ); # undef
                     if ( not defined $col ) {
@@ -715,7 +687,7 @@ sub prepare_read_table {
                     }
                     $quote->{order_by_stmt} .= $arg->{col_sep} . $dbh->quote_identifier( $col );
                     $print->{order_by_stmt} .= $arg->{col_sep} .                         $col  ;
-                    print_select( $arg, $opt, $table, $columns, $chosen_columns, $print );
+                    print_select( $arg, $opt, $table, $chosen_columns, $print );
                     # CHOOSE
                     my $direction = choose( [ $ASC, $DESC ], { prompt => 'Choose:', %bol } ); # undef
                     if ( not defined $direction ){
@@ -744,11 +716,18 @@ sub prepare_read_table {
                 $select .= $quote->{having_stmt};
                 $select .= $quote->{order_by_stmt};
                 my @arguments = ( @{$quote->{where_args}}, @{$quote->{having_args}} );
-                my $rows = $dbh->selectrow_array( 
-                    "SELECT COUNT(*) FROM $table_q" . $quote->{where_stmt},     # . $quote->{group_by_stmt} . $quote->{having_stmt}, 
-                    {}, 
-                    @{$quote->{where_args}},                                    # @arguments, 
-                );
+                my $rows;
+                if ( $quote->{aggregate_stmt} ) {
+                    $rows = $dbh->selectall_arrayref( $select, {}, @arguments, );
+                    $rows = @$rows;
+                }
+                else {
+                    $rows = $dbh->selectrow_array( 
+                        "SELECT" . $quote->{distinct_stmt} . " COUNT(*) FROM $table_q" . $quote->{where_stmt}, 
+                        {}, 
+                        @{$quote->{where_args}},
+                    );
+                }
                 print GO_TO_TOP_LEFT;
                 print CLEAR_EOS;
                 return $rows, $select, \@arguments;
@@ -759,6 +738,55 @@ sub prepare_read_table {
         }
     }
     return;
+}
+
+
+sub print_table {
+    my ( $arg, $opt, $dbh, $rows, $select, $arguments ) = @_;
+    my $offset = 0;
+    my $last = 0;
+    my $begin = 0;
+    my $end = $opt->{all}{limit} - 1;
+    my @choices;
+    if ( $rows > $opt->{all}{limit} ) {
+        my $lr = length $rows;
+        push @choices, sprintf "%${lr}d - %${lr}d", $begin, $end;
+        $rows -= $opt->{all}{limit};
+        while ( $rows > 0 ) {
+            $begin += $opt->{all}{limit};
+            $end   += ( $rows > $opt->{all}{limit} ) ? $opt->{all}{limit} : $rows;
+            push @choices, sprintf "%${lr}d - %${lr}d", $begin, $end;
+            $rows -= $opt->{all}{limit};
+        }
+    }
+
+    PRINT: while ( 1 ) {
+        if ( @choices ) {
+            # CHOOSE
+            my $choice = choose( [ undef, @choices ], { layout => 3, undef => $arg->{back} } );
+            last PRINT if not defined $choice;
+            $offset = ( split /\s*-\s*/, $choice )[0];
+            $offset =~ s/\A\s+//;
+        }
+        else { 
+            $last = 1;
+        }
+        my ( $ref, $col_types ) = read_db_table( $opt, $dbh, $offset, $select, $arguments );
+        print_tbl( $opt, $ref, $col_types );
+        last PRINT if $last;
+    }
+}
+
+
+sub read_db_table {
+    my ( $opt, $dbh, $offset, $select, $arguments ) = @_;
+    my $sth = $dbh->prepare( $select . " LIMIT ?, ?" );
+    $sth->execute( defined $arguments ? @$arguments : (), $offset, $opt->{all}{limit} );
+    my $col_names = $sth->{NAME};
+    my $col_types = $sth->{TYPE};
+    my $ref = $sth->fetchall_arrayref();
+    unshift @$ref, $col_names;
+    return $ref, $col_types;
 }
 
 
@@ -779,25 +807,15 @@ sub calc_widths {
                     next ;
                 }
                 elsif ( $cut == -1 ) {
-#                    if ( not eval { # try
-                        utf8::upgrade( $row->[$i] );
-                        my $gcstring = Unicode::GCString->new( $row->[$i] );
-                        $max_head->[$i] = $gcstring->columns();
-#                        1 }
-#                    ) { # catch
-#                        $max_head->[$i] = length $row->[$i];
-#                    }
+                    utf8::upgrade( $row->[$i] );
+                    my $gcstring = Unicode::GCString->new( $row->[$i] );
+                    $max_head->[$i] = $gcstring->columns();
                     next;
                 }
             }
-#            if ( not eval { # try
-                utf8::upgrade( $row->[$i] );
-                my $gcstring = Unicode::GCString->new( $row->[$i] );
-                $max->[$i] = $gcstring->columns() if $gcstring->columns() > $max->[$i];
-#                1 } 
-#            ) { # catch
-#                $max->[$i] = length $row->[$i] if length $row->[$i] > $max->[$i];
-#            }
+            utf8::upgrade( $row->[$i] );
+            my $gcstring = Unicode::GCString->new( $row->[$i] );
+            $max->[$i] = $gcstring->columns() if $gcstring->columns() > $max->[$i];
             next if $count == 1;
             ++$not_a_number->[$i] if not looks_like_number $row->[$i];
         }
@@ -868,7 +886,7 @@ sub recalc_widths {
 }
 
             
-sub print_table {
+sub print_tbl {
     my ( $opt, $ref, $col_types ) = @_;
     my ( $maxcols, $maxrows ) = GetTerminalSize( *STDOUT );
     return if not defined $ref;
@@ -921,49 +939,31 @@ sub print_table {
 
 
 sub unicode_sprintf {
-    my ( $length, $word, $right_justify, $max_length ) = @_;
-    my $unicode = $word; #
-#    if ( not eval { # try
-        utf8::upgrade( $unicode );
-        my $gcs = Unicode::GCString->new( $unicode );
-        my $colwidth = $gcs->columns();
-        if ( $colwidth > $length ) {
-            if ( defined $max_length && $colwidth > $max_length ) {
-                $unicode = substr( $gcs->as_string, 0, $max_length );
-                my $gcs = Unicode::GCString->new( $unicode );
-                $colwidth = $gcs->columns();
-            }
-            while ( $colwidth > $length ) {
-                $unicode =~ s/\X\z//;
-                my $gcs = Unicode::GCString->new( $unicode );
-                $colwidth = $gcs->columns();
-            }
-            $unicode .= ' ' if $colwidth < $length;
-        } 
-        elsif ( $colwidth < $length ) {
-            if ( $right_justify ) {
-                $unicode = " " x ( $length - $colwidth ) . $unicode;
-            }
-            else {
-                $unicode = $unicode . " " x ( $length - $colwidth );
-            }
+    my ( $length, $unicode, $right_justify, $max_length ) = @_;
+    utf8::upgrade( $unicode );
+    my $gcs = Unicode::GCString->new( $unicode );
+    my $colwidth = $gcs->columns();
+    if ( $colwidth > $length ) {
+        if ( defined $max_length && $colwidth > $max_length ) {
+            $unicode = substr( $gcs->as_string, 0, $max_length );
+            my $gcs = Unicode::GCString->new( $unicode );
+            $colwidth = $gcs->columns();
         }
-#        1 }
-#    ) { # catch
-#        my $colwidth = length $word;
-#        if ( $colwidth > $length ) {
-#            $word = substr( $word, 0, $length );
-#        } 
-#        elsif ( $colwidth < $length ) {        
-#            if ( $right_justify ) {
-#                $word = " " x ( $length - $colwidth ) . $word;
-#            }
-#            else {
-#                $word = $word . " " x ( $length - $colwidth );
-#            }
-#        }
-#        return $word;
-#    }
+        while ( $colwidth > $length ) {
+            $unicode =~ s/\X\z//;
+            my $gcs = Unicode::GCString->new( $unicode );
+            $colwidth = $gcs->columns();
+        }
+        $unicode .= ' ' if $colwidth < $length;
+    } 
+    elsif ( $colwidth < $length ) {
+        if ( $right_justify ) {
+            $unicode = " " x ( $length - $colwidth ) . $unicode;
+        }
+        else {
+            $unicode = $unicode . " " x ( $length - $colwidth );
+        }
+    }
     return $unicode;
 }
 
@@ -1304,4 +1304,3 @@ sub choose_a_number {
 
 
 __DATA__
-

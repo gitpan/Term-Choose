@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.013';
+our $VERSION = '1.014';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -244,26 +244,14 @@ sub _end_win {
 sub _length_longest {
     my ( $list ) = @_;
     my $longest;
-#    if ( ! eval { # Try
-        utf8::upgrade( $list->[0] );
-
-        my $gcs = Unicode::GCString->new( $list->[0] );
-        $longest = $gcs->columns();
-#        1 }
-#    ) { # Catch
-#        $longest = length $list->[0];
-#    }
+    utf8::upgrade( $list->[0] );
+    my $gcs = Unicode::GCString->new( $list->[0] );
+    $longest = $gcs->columns();
     for my $str ( @{$list} ) {
-#        if ( ! eval { # Try
-            utf8::upgrade( $str );
-            
-            my $gcs = Unicode::GCString->new( $str );
-            my $length = $gcs->columns();
-            $longest = $length if $length > $longest;
-#            1 }
-#        ) { # Catch
-#            $longest = length $str if length $str > $longest;
-#        }
+        utf8::upgrade( $str );
+        my $gcs = Unicode::GCString->new( $str );
+        my $length = $gcs->columns();
+        $longest = $length if $length > $longest;
     }
     return $longest;
 }
@@ -419,14 +407,9 @@ sub _prepare_promptline {
         if ( $arg->{prompt} ) {
             $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)';
             my $prompt_length;
-#            if ( ! eval { # Try
-                utf8::upgrade( $arg->{prompt_line} );
-                my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
-                $prompt_length = $gcs->columns();
-#                1 }
-#            ) { # Catch
-#                $prompt_length = length $arg->{prompt_line};
-#            }
+            utf8::upgrade( $arg->{prompt_line} );
+            my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
+            $prompt_length = $gcs->columns();
             $arg->{prompt_line} = $arg->{prompt} . ' (multiple choice)' if $prompt_length > $arg->{maxcols};
         }
         else {
@@ -434,14 +417,9 @@ sub _prepare_promptline {
         }
     }
     my $prompt_length;
-#    if ( ! eval { # Try
-        utf8::upgrade( $arg->{prompt_line} );
-        my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
-        $prompt_length = $gcs->columns();
-#        1 }
-#    ) { # Catch
-#        $prompt_length = length $arg->{prompt_line};
-#    }
+    utf8::upgrade( $arg->{prompt_line} );
+    my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
+    $prompt_length = $gcs->columns();
     if ( $prompt_length > $arg->{maxcols} ) {
         $arg->{prompt_line} = _unicode_cut( $arg, $arg->{prompt} );
     }
@@ -729,7 +707,6 @@ sub choose {
                     if ( $arg->{vertical} ) {
                         for my $col ( 0 .. $#{$arg->{rowcol2list}[0]} ) {
                             for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
-                                # if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
                                 if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
                                     push @chosen, $arg->{orig_list}[$i];
@@ -740,7 +717,6 @@ sub choose {
                     else {
                          for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
                             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
-                                # if ( $arg->{marked}[$row][$col] || [ $row, $col ] ~~ $arg->{this_cell} ) {
                                 if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
                                     push @chosen, $arg->{orig_list}[$i];
@@ -821,7 +797,7 @@ sub _wr_screen {
      }
     for my $row ( $arg->{begin_page} .. $arg->{end_page} ) {
         for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
-            _wr_cell( $arg, $row, $col ); # unless $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL];            
+            _wr_cell( $arg, $row, $col ); # unless $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL];
         }
     }
     _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] );
@@ -834,14 +810,9 @@ sub _wr_cell {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
-#                if ( ! eval { # Try
-                    utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
-                    my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
-                    $lngth += $gcs->columns();
-#                    1 }
-#                ) { # Catch
-#                    $lngth += length $arg->{list}[$arg->{rowcol2list}[$row][$cl]];
-#                }
+                utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
+                my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
+                $lngth += $gcs->columns();
                 $lngth += $arg->{pad_one_row} // 0;
             }
         }
@@ -879,14 +850,9 @@ sub _size_and_layout {
             $all_in_first_row .= $arg->{list}[$idx];
             $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
             my $length_first_row;
-#            if ( ! eval { # Try
-                utf8::upgrade( $all_in_first_row );
-                my $gcs = Unicode::GCString->new( $all_in_first_row );
-                $length_first_row = $gcs->columns();
-#                1 }
-#            ) { # Catch
-#                $length_first_row = length $all_in_first_row;
-#            }
+            utf8::upgrade( $all_in_first_row );
+            my $gcs = Unicode::GCString->new( $all_in_first_row );
+            $length_first_row = $gcs->columns();
             if ( $length_first_row > $arg->{maxcols} ) {
                 $all_in_first_row = '';
                 last;
@@ -958,108 +924,73 @@ sub _size_and_layout {
 
 sub _unicode_cut {
     my ( $arg, $unicode ) = @_;
-#    my ( $arg, $word ) = @_;
-#    my $unicode = $word; #
-#    if ( ! eval { # Try 
-        utf8::upgrade( $unicode );
-        my $gcs = Unicode::GCString->new( $unicode );
-        my $colwidth = $gcs->columns();
-        if ( $colwidth > $arg->{maxcols} ) {
-            my $length = $arg->{maxcols} - 3;
-            my $max_length = int( $length / 2 ) + 1;
-            while ( 1 ) {
-                #my( $tmp ) = $unicode =~ /\A(\X{0,$max_length})/;
-                my $tmp = substr( $unicode, 0, $max_length );
-                my $gcs = Unicode::GCString->new( $tmp );
-                $colwidth = $gcs->columns();
-                if ( $colwidth > $length ) {
-                    # this code runs if $colwidth > $arg->{maxcols}
-                    # so it should reach here at some time
-                    $unicode = $tmp;
-                    last;
-                }
-                $max_length += 10;
+    utf8::upgrade( $unicode );
+    my $gcs = Unicode::GCString->new( $unicode );
+    my $colwidth = $gcs->columns();
+    if ( $colwidth > $arg->{maxcols} ) {
+        my $length = $arg->{maxcols} - 3;
+        my $max_length = int( $length / 2 ) + 1;
+        while ( 1 ) {
+            #my( $tmp ) = $unicode =~ /\A(\X{0,$max_length})/;
+            my $tmp = substr( $unicode, 0, $max_length );
+            my $gcs = Unicode::GCString->new( $tmp );
+            $colwidth = $gcs->columns();
+            if ( $colwidth > $length ) {
+                # this code runs if $colwidth > $arg->{maxcols}
+                # so it should reach here at some time
+                $unicode = $tmp;
+                last;
             }
-            while ( $colwidth > $length ) {
-                $unicode =~ s/\X\z//;
-                my $gcs = Unicode::GCString->new( $unicode );
-                $colwidth = $gcs->columns();
-            }
-            $unicode .= ' ' if $colwidth < $length;
-            $unicode .= '...';
+            $max_length += 10;
         }
-#        1 }
-#    ) { # Catch
-#        if ( length $word > $arg->{maxcols} ) {
-#            my $length = $arg->{maxcols} - 3;
-#            $word = substr( $word, 0, $length );
-#            $word .= '...';
-#        }
-#        return $word;
-#    }
-#    else { # Else
-        return $unicode;
-#    }
+        while ( $colwidth > $length ) {
+            $unicode =~ s/\X\z//;
+            my $gcs = Unicode::GCString->new( $unicode );
+            $colwidth = $gcs->columns();
+        }
+        $unicode .= ' ' if $colwidth < $length;
+        $unicode .= '...';
+    }
+    return $unicode;
 }
 
 
 sub _unicode_sprintf {
     my ( $arg, $unicode ) = @_;
-#    my ( $arg, $word ) = @_;
-#    my $unicode = $word;
-#    if ( ! eval { # Try
-        utf8::upgrade( $unicode );
-        my $gcs = Unicode::GCString->new( $unicode );
-        my $colwidth = $gcs->columns();
-        if ( $colwidth > $arg->{length_longest} ) {
-            my $max_length = int( $arg->{length_longest} / 2 ) + 1;
-            while ( 1 ) {
-                #my( $tmp ) = $unicode =~ /\A(\X{0,$max_length})/;
-                my $tmp = substr( $unicode, 0, $max_length );
-                my $gcs = Unicode::GCString->new( $tmp );
-                $colwidth = $gcs->columns();
-                if ( $colwidth > $arg->{length_longest} ) {
-                    # this code runs if $colwidth > $arg->{length_longest}
-                    # so it should reach here at some time
-                    $unicode = $tmp;
-                    last;
-                }
-                $max_length += 10;
+    utf8::upgrade( $unicode );
+    my $gcs = Unicode::GCString->new( $unicode );
+    my $colwidth = $gcs->columns();
+    if ( $colwidth > $arg->{length_longest} ) {
+        my $max_length = int( $arg->{length_longest} / 2 ) + 1;
+        while ( 1 ) {
+            #my( $tmp ) = $unicode =~ /\A(\X{0,$max_length})/;
+            my $tmp = substr( $unicode, 0, $max_length );
+            my $gcs = Unicode::GCString->new( $tmp );
+            $colwidth = $gcs->columns();
+            if ( $colwidth > $arg->{length_longest} ) {
+                # this code runs if $colwidth > $arg->{length_longest}
+                # so it should reach here at some time
+                $unicode = $tmp;
+                last;
             }
-            while ( $colwidth > $arg->{length_longest} ) {
-                $unicode =~ s/\X\z//;
-                my $gcs = Unicode::GCString->new( $unicode );
-                $colwidth = $gcs->columns();
-            }
-            $unicode .= ' ' if $colwidth < $arg->{length_longest};
+            $max_length += 10;
         }
-        elsif ( $colwidth < $arg->{length_longest} ) {
-            if ( $arg->{right_justify} ) {
-                $unicode = " " x ( $arg->{length_longest} - $colwidth ) . $unicode;
-            }
-            else {
-                $unicode = $unicode . " " x ( $arg->{length_longest} - $colwidth );
-            }
+        while ( $colwidth > $arg->{length_longest} ) {
+            $unicode =~ s/\X\z//;
+            my $gcs = Unicode::GCString->new( $unicode );
+            $colwidth = $gcs->columns();
         }
-#        1 }
-#    ) { # Catch
-#        my $colwidth = length $word;
-#        if ( $colwidth > $arg->{length_longest} ) {
-#            $word = substr( $word, 0, $arg->{length_longest} );
-#        }
-#        elsif ( $colwidth < $arg->{length_longest} ) {
-#            if ( $arg->{right_justify} ) {
-#                $word = " " x ( $arg->{length_longest} - $colwidth ) . $word;
-#            }
-#            else {
-#                $word = $word . " " x ( $arg->{length_longest} - $colwidth );
-#            }
-#        }
-#        return $word;
-#    }
-#    else { # Else
-        return $unicode;
-#    }
+        $unicode .= ' ' if $colwidth < $arg->{length_longest};
+    }
+    elsif ( $colwidth < $arg->{length_longest} ) {
+        if ( $arg->{right_justify} ) {
+            $unicode = " " x ( $arg->{length_longest} - $colwidth ) . $unicode;
+        }
+        else {
+            $unicode = $unicode . " " x ( $arg->{length_longest} - $colwidth );
+        }
+    }
+    return $unicode;
 }
 
 
@@ -1104,7 +1035,7 @@ sub _handle_mouse {
     else {
         return NEXT_getch; # xterm
     }
-    if ( ! ( $found_row == $arg->{this_cell}[ROW] && $found_col == $arg->{this_cell}[COL] ) ) {    
+    if ( ! ( $found_row == $arg->{this_cell}[ROW] && $found_col == $arg->{this_cell}[COL] ) ) {
         my $t = $arg->{this_cell};
         $arg->{this_cell} = [ $found_row, $found_col ];
         _wr_cell( $arg, $t->[0], $t->[1] );
@@ -1130,7 +1061,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.013
+Version 1.014
 
 =cut
 
@@ -1248,7 +1179,7 @@ if the length of a list item is greater than the width of the screen the item is
 
 
     $item = substr( $item, 0, $allowed_length - 3 ) . '...';*
-    
+
 * L<Term::Choose> uses its own function to cut strings which uses print columns for the arithmetic.
 
 =back
@@ -1549,7 +1480,7 @@ It is needed a terminal that uses a monospaced font.
 
 =head2 List data
 
-I<choose> expects decoded strings as list items. 
+I<choose> expects decoded strings as list items.
 
 =head2 SIGWINCH
 
@@ -1571,7 +1502,7 @@ As mentioned above I<choose> from L<Term::Clui> does not order the items in colu
 
 Another difference is how lists which don't fit on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
 
-Unicode strings might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with Unicode it uses the method I<columns> from L<Unicode::GCString> to determine the string length. 
+Unicode strings might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with Unicode it uses the method I<columns> from L<Unicode::GCString> to determine the string length.
 
 L<Term::Clui>'s I<choose> prints and returns the chosen items while I<choose> from L<Term::Choose> only returns the chosen items.
 

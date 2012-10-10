@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose::GC;
 
-our $VERSION = '1.013';
+our $VERSION = '1.014';
 
 say "";
 say "package Term::Choose::GC is now Term::Choose.";
@@ -27,7 +27,7 @@ Term::Choose::GC - Works as L<Term::Choose>.
 
 =head1 VERSION
 
-Version 1.013
+Version 1.014
 
 =cut
 
