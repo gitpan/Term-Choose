@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.014';
+our $VERSION = '1.015';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -1035,7 +1035,8 @@ sub _handle_mouse {
     else {
         return NEXT_getch; # xterm
     }
-    if ( ! ( $found_row == $arg->{this_cell}[ROW] && $found_col == $arg->{this_cell}[COL] ) ) {
+    # if ( ! ( $found_row == $arg->{this_cell}[ROW] && $found_col == $arg->{this_cell}[COL] ) ) {
+    if ( $found_row != $arg->{this_cell}[ROW] || $found_col != $arg->{this_cell}[COL] ) {
         my $t = $arg->{this_cell};
         $arg->{this_cell} = [ $found_row, $found_col ];
         _wr_cell( $arg, $t->[0], $t->[1] );
@@ -1061,7 +1062,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.014
+Version 1.015
 
 =cut
 
@@ -1070,9 +1071,9 @@ Version 1.014
     use 5.10.1;
     use Term::Choose qw(choose);
 
-    my $list = [ qw( one two three four five ) ];
+    my $array_ref = [ qw( one two three four five ) ];
 
-    my $choice = choose( $list );                                 # single choice
+    my $choice = choose( $array_ref );                            # single choice
     say $choice;
 
     my @choices = choose( [ 1 .. 100 ], { right_justify => 1 } ); # multiple choice
@@ -1105,7 +1106,9 @@ Nothing by default.
 
               choose( $array_ref [, \%options] );
 
-I<choose> expects as a first argument an array reference which passes the list items available for selection (in void context no selection can be made).
+I<choose> expects as a first argument an array reference. The array the reference refers to holds the list items available for selection (in void context no selection can be made).
+
+The array the reference - passed with the first argument - refers to is called in the documentation simply array resp. elements (of the array).
 
 Options can be passed with a hash reference as a second (optional) argument.
 
@@ -1123,7 +1126,7 @@ I<choose> then returns the chosen item.
 
 If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar".
 
-I<choose> then returns the list of marked items, including the item highlight when "Return" was pressed.
+When "Return" is pressed I<choose> then returns the list of marked items, including the highlighted item.
 
 =item
 
@@ -1149,42 +1152,41 @@ L<Term::Choose> uses the I<columns> method from the L<Unicode::GCString> module 
 
 =head3 Modifications for the output
 
-For the output on the screen the list items are modified:
+For the output on the screen the array elements are modified:
 
 =over
 
 =item *
 
-if a list items is not defined the value from the option I<undef> is assigned to the item.
+if an element is not defined the value from the option I<undef> is assigned to the element.
 
 =item *
 
-if a list item holds an empty string the value from the option I<empty_string> is assigned to the item.
+if an element holds an empty string the value from the option I<empty_string> is assigned to the element.
 
 =item *
 
-white-spaces in list items are replaced with simple spaces.
+white-spaces in elements are replaced with simple spaces.
 
-    $item =~ s/\p{Space}/ /g;
+    $element =~ s/\p{Space}/ /g;
 
 =item *
 
 control characters are removed.
 
-    $item =~ s/\p{Cntrl}//g;
+    $element =~ s/\p{Cntrl}//g;
 
 =item *
 
-if the length of a list item is greater than the width of the screen the item is cut.
+if the length of an element is greater than the width of the screen the element is cut.
 
-
-    $item = substr( $item, 0, $allowed_length - 3 ) . '...';*
+    $element = substr( $element, 0, $allowed_length - 3 ) . '...';*
 
 * L<Term::Choose> uses its own function to cut strings which uses print columns for the arithmetic.
 
 =back
 
-All these modifications are made on a copy of the original list so I<choose> returns the chosen items as they were passed to the function without modifications.
+All these modifications are made on a copy of the original array so I<choose> returns the chosen elements as they were passed to the function without modifications.
 
 =head3 Options
 
@@ -1271,7 +1273,7 @@ From broad to narrow: 0 > 1 > 2 > 3
 
 If set, restricts the screen width to the integer value of I<screen_width> percentage of the effective screen width.
 
-If the result of int I<screen_width> percentage of the screen width is zero the virtual screen width is set to one screen column.
+If the integer value of I<screen_width> percentage of the screen width is zero the virtual screen width is set to one screen column.
 
 If not defined all the screen width is used.
 
@@ -1281,15 +1283,17 @@ Allowed values: from 1 to 100
 
 =head4 vertical
 
-0 - items are ordered horizontally
+If the output has more than one row and more than one column:
 
-1 - items are ordered vertically (default)
+0 - elements are ordered horizontally
+
+1 - elements are ordered vertically (default)
 
 =head4 right_justify
 
-0 - items ordered in columns are left justified (default)
+0 - elements ordered in columns are left justified (default)
 
-1 - items ordered in columns are right justified
+1 - elements ordered in columns are right justified
 
 =head4 pad
 
@@ -1299,7 +1303,7 @@ Allowed values:  0 or greater
 
 =head4 pad_one_row
 
-Sets the number of whitespaces between items if we have only one row. (default: 3)
+Sets the number of whitespaces between elements if we have only one row. (default: 3)
 
 Allowed values:  0 or greater
 
@@ -1311,17 +1315,17 @@ Allowed values:  0 or greater
 
 =head4 length_longest
 
-If the length* of the list item with the largest length is known before calling I<choose> it can be passed with this option.
+If the length* of the element with the largest length is known before calling I<choose> it can be passed with this option.
 
-If I<length_longest> is set, then I<choose> doesn't calculate the length of the longest item itself but uses the value passed with this option.
+If I<length_longest> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
 
-If I<length_longest> is set to a value less than the length of the longest item all items which a length greater than this value will be cut.
+If I<length_longest> is set to a value less than the length of the longest element all elements which a length greater than this value will be cut.
 
-A larger value than the length of the longest item wastes space on the screen.
+A larger value than the length of the longest element wastes space on the screen.
 
 If the value of I<length_longest> is greater than the screen width I<length_longest> will be set to the screen width.
 
-* length means the number of print columns the item will use on the terminal.
+* length means the number of print columns the element will use on the terminal.
 
 Allowed values: 1 or greater
 
@@ -1329,11 +1333,11 @@ Allowed values: 1 or greater
 
 =head4 default
 
-With the option I<default> can be selected a list item, which will be highlighted as the default instead of the first item.
+With the option I<default> can be selected an element, which will be highlighted as the default instead of the first element.
 
-I<default> expects a zero indexed value, so e.g. to highlight the third item the value would be I<2>.
+I<default> expects a zero indexed value, so e.g. to highlight the third element the value would be I<2>.
 
-If the passed value is greater than the index of the last list item the first item is highlighted.
+If the passed value is greater than the index of the last array element the first element is highlighted.
 
 Allowed values:  0 or greater
 
@@ -1355,11 +1359,11 @@ Allowed values:  0 or greater
 
 3 - extended mouse mode (1005) - uses utf8
 
-4 - extended SGR mouse mode (1006); mouse mode 1003 if mouse mode 1006 is not supported
+4 - extended SGR mouse mode (1006) - mouse mode 1003 is used if mouse mode 1006 is not supported
 
 =head4 undef
 
-Sets the string displayed on the screen instead an undefined list item.
+Sets the string displayed on the screen instead an undefined element.
 
 default: '<undef>'
 
@@ -1383,7 +1387,7 @@ default: '<empty>'
 
 =head4 limit
 
-Sets the maximal allowed length of the list referred by the first argument. (default: 100_000)
+Sets the maximal allowed length of the array. (default: 100_000)
 
 Allowed values:  1 or greater
 
@@ -1395,9 +1399,9 @@ Allowed values:  1 or greater
 
 =item * If the first argument is not a array reference I<choose> dies.
 
-=item * If the list referred by the first argument is empty I<choose> returns  I<undef> resp. an empty list and issues a warning.
+=item * If the array referred by the first argument is empty I<choose> returns  I<undef> resp. an empty list and issues a warning.
 
-=item * If the list referred by the first argument has more than I<limit> items (default 100_000) I<choose> warns and uses the first I<limit> list items.
+=item * If the array referred by the first argument has more than I<limit> elements (default 100_000) I<choose> warns and uses the first I<limit> array elements.
 
 =item * If the (optional) second argument is not a hash reference I<choose> dies.
 
@@ -1428,6 +1432,18 @@ L<Term::ReadKey>
 L<Unicode::GCString>
 
 =back
+
+=head2 Decoded strings
+
+I<choose> expects decoded strings as array elements.
+
+=head2 Monospaced font
+
+It is needed a terminal that uses a monospaced font.
+
+=head2 SIGWINCH
+
+L<Term::Choose> makes use of the Perl signal handling as described in L<perlipc/Signals|http://search.cpan.org/perldoc?perlipc#Signals>. It is needed an operating system which knows the WINCH signal: I<choose> uses SIGWINCH to check if the windows size has changed.
 
 =head2 Escape sequences
 
@@ -1474,18 +1490,6 @@ and
 
 are used to enable/disable the different mouse modes.
 
-=head2 Monospaced font
-
-It is needed a terminal that uses a monospaced font.
-
-=head2 List data
-
-I<choose> expects decoded strings as list items.
-
-=head2 SIGWINCH
-
-L<Term::Choose> makes use of the Perl signal handling as described in L<perlipc/Signals|http://search.cpan.org/perldoc?perlipc#Signals>. It is needed an operating system which knows the WINCH signal: I<choose> uses SIGWINCH to check if the windows size has changed.
-
 =head1 MOTIVATION
 
 The reason for writing L<Term::Choose> was to get something like L<Term::Clui::choose|http://search.cpan.org/perldoc?Term%3A%3AClui#SUBROUTINES> but with a nicer output in the case the list doesn't fit in one row.
@@ -1496,13 +1500,15 @@ If the list does not fit in one row, I<choose> from L<Term::Clui> puts the items
 
 =item Differences between L<Term::Clui> and L<Term::Choose>
 
-L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the first argument is the list of items passed as an array reference. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).
+L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the available choices are passed with an array reference as first argument. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).
 
-As mentioned above I<choose> from L<Term::Clui> does not order the items in columns if there is more than one row on the screen while L<Term::Choose> arranges the items in such situations in columns.
+As mentioned above I<choose> from L<Term::Clui> does not order the elements in columns if there is more than one row on the screen while L<Term::Choose> arranges the elements in such situations in columns.
 
 Another difference is how lists which don't fit on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
 
-Unicode strings might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with Unicode it uses the method I<columns> from L<Unicode::GCString> to determine the string length.
+Strings with characters where I<length(>characterI<)>* is not equal to the number of print columns of the respective character might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with such kind of Unicode strings it uses the method I<columns> from L<Unicode::GCString> to determine the string length.
+
+* Perl builtin function I<length>.
 
 L<Term::Clui>'s I<choose> prints and returns the chosen items while I<choose> from L<Term::Choose> only returns the chosen items.
 

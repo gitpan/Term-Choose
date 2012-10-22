@@ -1,6 +1,11 @@
 Revision history for Term::Choose
 
 
+1.015   2012-10-22
+        - Code cleanup.
+        - Improved documentation.
+        - Example: update and bug fixes.
+        
 1.014   2012-10-10
         - Code cleanup.
         - Updated example.
