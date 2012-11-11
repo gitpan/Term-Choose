@@ -37,11 +37,7 @@
    "provides" : {
       "Term::Choose" : {
          "file" : "lib/Term/Choose.pm",
-         "version" : "1.015"
-      },
-      "Term::Choose::GC" : {
-         "file" : "lib/Term/Choose/GC.pm",
-         "version" : "1.015"
+         "version" : "1.016"
       }
    },
    "release_status" : "stable",
@@ -50,5 +46,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "1.015"
+   "version" : "1.016"
 }

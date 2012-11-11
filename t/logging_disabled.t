@@ -3,6 +3,7 @@
 use 5.10.1;
 use strict;
 use warnings;
+use autodie;
 use Test::More;
 
 unless ( $ENV{RELEASE_TESTING} ) {
@@ -14,57 +15,41 @@ else {
 }
 
 
-my $log_1 = 0;
-
-open my $fh1, '<', 'lib/Term/Choose.pm' or die $!;
+my $log = 0;
+open my $fh1, '<', 'lib/Term/Choose.pm';
 while ( my $line = readline $fh1 ) {
-	if ( $line =~ /\$log\s*->/ ) {
-		$log_1++;
-	}
-    if ( $line =~ /(?:\A\s*|\s+)my\s*\$log/ ) {
-		$log_1++;
-	}
 	if ( $line =~ /(?:\A\s*|\s+)use\s+Log::Log4perl/ ) {
-		$log_1++;
+		$log++;
 	}
 }
-close $fh1 or die $!;
+close $fh1;
 
-is( $log_1, 0, 'OK - all logging in Choose.pm disabled.' );
+is( $log, 0, 'OK - logging in Choose.pm disabled.' );
 
 
-my $log_2 = 0;
 
-open my $fh2, '<', 'lib/Term/Choose/GC.pm' or die $!;
+my $test_env = 0;
+open my $fh2, '<', 'example/table_watch_SQLite.pl';
 while ( my $line = readline $fh2 ) {
-	if ( $line =~ /\$log\s*->/ ) {
-		$log_2++;
-	}
-    if ( $line =~ /(?:\A\s*|\s+)my\s*\$log/ ) {
-		$log_2++;
-	}
-	if ( $line =~ /(?:\A\s*|\s+)use\s+Log::Log4perl/ ) {
-		$log_2++;
-	}
+    if ( $line =~ /\A\s*use\s+warnings\s+FATAL/s ) {
+        $test_env++;
+    }
+    if ( $line =~ /\A\s*use\s+Data::Dumper/s ) {
+        $test_env++;
+    }
 }
-close $fh2 or die $!;
+close $fh2;
 
-
-is( $log_2, 0, 'OK - all logging in GC.pm disabled.' );
-    
-    
+is( $test_env, 0, 'OK - test environment in table_watch_SQLite.pl disabled.' );
 
 my $data = 0;
-
-open my $fh3, '<', 'example/table_watch_SQLite.pl' or die $!;
+open my $fh3, '<', 'example/table_watch_SQLite.pl';
 my $whole_file = do { 
     local $/ = undef; 
     <$fh3> 
 };
-close $fh3 or die $!;
-
+close $fh3;
 if ( $whole_file !~ /__DATA__\s*\z/ ) {
     $data = 1;
 }
-
 is( $data, 0, 'OK - __DATA__ section is clean' );

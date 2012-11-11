@@ -3,6 +3,7 @@
 use 5.10.1;
 use strict;
 use warnings;
+use autodie;
 use Test::More;
 
 unless ( $ENV{RELEASE_TESTING} ) {
@@ -18,7 +19,7 @@ my @unicode_cut;
 my @unicode_sprintf;
 
 
-open my $fh, '<', 'lib/Term/Choose.pm' or die $!;
+open my $fh, '<', 'lib/Term/Choose.pm';
 while ( readline $fh ) {
     if ( /\Asub _unicode_cut/ .. /\A\}/ ) {
         push @unicode_cut, $_;
@@ -27,11 +28,11 @@ while ( readline $fh ) {
         push @unicode_sprintf, $_;
     }    
 }
-close $fh or die $!;
+close $fh;
 
 
 
-my @c = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ } @unicode_cut[7..26];
-my @s = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ } @unicode_sprintf[6..25];
+my @c = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ } @unicode_cut[7..25];
+my @s = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ } @unicode_sprintf[6..24];
 
 ok( @c ~~ @s, '_unicode... cut ok' );

@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.015';
+our $VERSION = '1.016';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -133,7 +133,6 @@ sub _getch {
                         $arg->{abs_curs_Y} = $abs_curs_Y;
                         $arg->{abs_curs_X} = $abs_curs_X;
                     }
-
                     return NEXT_getch;
                 }
                 else {
@@ -428,10 +427,10 @@ sub _prepare_promptline {
 
 sub _write_first_screen {
     my ( $arg ) = @_;
-    if ( $arg->{clear_screen} ) {
-        print CLEAR_SCREEN;
-        print GO_TO_TOP_LEFT;
-    }
+#    if ( $arg->{clear_screen} ) {
+#        print CLEAR_SCREEN;
+#        print GO_TO_TOP_LEFT;
+#    }
     ( $arg->{maxcols}, $arg->{maxrows} ) = GetTerminalSize( $arg->{handle_out} );
     if ( $arg->{screen_width} ) {
         $arg->{maxcols} = int( ( $arg->{maxcols} / 100 ) * $arg->{screen_width} );
@@ -459,6 +458,11 @@ sub _write_first_screen {
     $arg->{screen_row} = 0;
     $arg->{this_cell} = [ 0, 0 ];
     _set_this_cell( $arg ) if defined $arg->{default} && $arg->{default} <= $#{$arg->{list}};
+    # No printing before clear_screen!
+    if ( $arg->{clear_screen} ) {
+        print CLEAR_SCREEN;
+        print GO_TO_TOP_LEFT;
+    }
     _wr_screen( $arg );
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
@@ -677,7 +681,7 @@ sub choose {
                     $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
                     $arg->{this_cell}[ROW] = $arg->{top_listrow};
                     # if it remains only the last row (which is then also the first row) for the last page
-                    # and the column in use doesn't exist in the last row, then ...
+                    # and the column in use doesn't exist in the last row, then backup col
                     if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{this_cell}[COL] >= $arg->{rest}) {
                         $arg->{backup_col}     = $arg->{this_cell}[COL];
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
@@ -936,8 +940,7 @@ sub _unicode_cut {
             my $gcs = Unicode::GCString->new( $tmp );
             $colwidth = $gcs->columns();
             if ( $colwidth > $length ) {
-                # this code runs if $colwidth > $arg->{maxcols}
-                # so it should reach here at some time
+                # As soon as the string is longer than length_longest again:
                 $unicode = $tmp;
                 last;
             }
@@ -968,8 +971,7 @@ sub _unicode_sprintf {
             my $gcs = Unicode::GCString->new( $tmp );
             $colwidth = $gcs->columns();
             if ( $colwidth > $arg->{length_longest} ) {
-                # this code runs if $colwidth > $arg->{length_longest}
-                # so it should reach here at some time
+                # As soon as the string is longer than length_longest again:
                 $unicode = $tmp;
                 last;
             }
@@ -1035,7 +1037,6 @@ sub _handle_mouse {
     else {
         return NEXT_getch; # xterm
     }
-    # if ( ! ( $found_row == $arg->{this_cell}[ROW] && $found_col == $arg->{this_cell}[COL] ) ) {
     if ( $found_row != $arg->{this_cell}[ROW] || $found_col != $arg->{this_cell}[COL] ) {
         my $t = $arg->{this_cell};
         $arg->{this_cell} = [ $found_row, $found_col ];
@@ -1062,7 +1063,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.015
+Version 1.016
 
 =cut
 
@@ -1126,7 +1127,7 @@ I<choose> then returns the chosen item.
 
 If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar".
 
-When "Return" is pressed I<choose> then returns the list of marked items, including the highlighted item.
+I<choose> then returns - when "Return" is pressed - the list of marked items including the highlighted item.
 
 =item
 
@@ -1145,10 +1146,6 @@ The "q" key returns I<undef> or an empty list in list context.
 With a I<mouse_mode> enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
 Keys to move around: arrow keys (or hjkl), Tab, BackSpace (or Shift-Tab or Ctrl-H), PageUp and PageDown (or Ctrl+B/Ctrl+F).
-
-=head3 Print columns
-
-L<Term::Choose> uses the I<columns> method from the L<Unicode::GCString> module to determine the length of Unicode strings. The I<columns> method from the L<Unicode::GCString> module returns the number of print columns.
 
 =head3 Modifications for the output
 

@@ -1,5 +1,12 @@
 Revision history for Term::Choose
 
+1.016   2012-11-11
+        - Code refactoring (clear_screen).
+        - Removed "Choose/GC.pm".
+        - Code cleanup.
+        - Improved documentation.
+        - Example: added "Join Tables".
+        - Example: update and bug fixes.
 
 1.015   2012-10-22
         - Code cleanup.
