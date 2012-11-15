@@ -1,8 +1,9 @@
 #!perl -T
 
-use 5.10.1;
+use 5.010001;
 use strict;
 use warnings;
+use autodie;
 use Test::More;
 
 unless ( $ENV{RELEASE_TESTING} ) {
@@ -20,7 +21,7 @@ my $file = 'lib/Term/Choose.pm';
 my $fh;
 my %option_default;
 
-open $fh, '<', $file or die $!;
+open $fh, '<', $file;
 while ( my $line = readline $fh ) {
     if ( $line =~ /\Asub _set_layout {/ .. $line =~ /\A\s+return\s\$config;/ ) {
         if ( $line =~ m|\A\s+#?\s*\$config->{(\w+)}\s+//=\s(.*);| ) {
@@ -36,7 +37,7 @@ my %pod_default;
 my %pod;
 
 for my $key ( @all ) {
-    open $fh, '<', $file or die $!;
+    open $fh, '<', $file;
     while ( my $line = readline $fh ) {
         if ( $line =~ /\A=head4\s\Q$key\E/ ... $line =~ /\A=head/ ) {
             chomp $line;

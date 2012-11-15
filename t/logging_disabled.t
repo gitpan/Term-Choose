@@ -1,6 +1,6 @@
 #!perl -T
 
-use 5.10.1;
+use 5.010001;
 use strict;
 use warnings;
 use autodie;
@@ -15,32 +15,35 @@ else {
 }
 
 
-my $log = 0;
+my $test_env_1 = 0;
 open my $fh1, '<', 'lib/Term/Choose.pm';
 while ( my $line = readline $fh1 ) {
+    if ( $line =~ /\A\s*use\s+warnings\s+FATAL/s ) {
+        $test_env_1++;
+    }
 	if ( $line =~ /(?:\A\s*|\s+)use\s+Log::Log4perl/ ) {
-		$log++;
+		$test_env_1++;
 	}
 }
 close $fh1;
 
-is( $log, 0, 'OK - logging in Choose.pm disabled.' );
+is( $test_env_1, 0, 'OK - test environment in Choose.pm disabled.' );
 
 
 
-my $test_env = 0;
+my $test_env_2 = 0;
 open my $fh2, '<', 'example/table_watch_SQLite.pl';
 while ( my $line = readline $fh2 ) {
     if ( $line =~ /\A\s*use\s+warnings\s+FATAL/s ) {
-        $test_env++;
+        $test_env_2++;
     }
     if ( $line =~ /\A\s*use\s+Data::Dumper/s ) {
-        $test_env++;
+        $test_env_2++;
     }
 }
 close $fh2;
 
-is( $test_env, 0, 'OK - test environment in table_watch_SQLite.pl disabled.' );
+is( $test_env_2, 0, 'OK - test environment in table_watch_SQLite.pl disabled.' );
 
 my $data = 0;
 open my $fh3, '<', 'example/table_watch_SQLite.pl';

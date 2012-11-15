@@ -1,5 +1,13 @@
 Revision history for Term::Choose
 
+1.017   2012-11-15
+        - Fixed bug in "if size_changed".
+        - Added: Check "ReadKey"/"_getch" if return value is defined.
+        - Added: "Ctrl+D" behaves as the "q" key.
+        - Code cleanup.
+        - Build.PL/Makefile.PL: "die 'No support for OS' if $^O eq 'MSWin32';"
+        - Example: updated and reduced dependencies.
+        
 1.016   2012-11-11
         - Code refactoring (clear_screen).
         - Removed "Choose/GC.pm".

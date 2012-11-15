@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.016';
+our $VERSION = '1.017';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -64,10 +64,11 @@ use constant {
 use constant {
     NEXT_getch      => -1,
 
-    CONTROL_b       => 0x02,
-    CONTROL_c       => 0x03,
-    CONTROL_f       => 0x06,
-    CONTROL_h       => 0x08,
+    CONTROL_B       => 0x02,
+    CONTROL_C       => 0x03,
+    CONTROL_D       => 0x04,
+    CONTROL_F       => 0x06,
+    CONTROL_H       => 0x08,
     KEY_TAB         => 0x09,
     KEY_ENTER       => 0x0d,
     KEY_ESC         => 0x1b,
@@ -93,6 +94,7 @@ use constant {
 sub _getch {
     my ( $arg ) = @_;
     my $c = ReadKey 0;
+    return if ! defined $c;
     if ( $c eq "\e" ) {
         my $c = ReadKey 0.10;
         if ( ! defined $c ) { return KEY_ESC; }
@@ -242,10 +244,9 @@ sub _end_win {
 
 sub _length_longest {
     my ( $list ) = @_;
-    my $longest;
     utf8::upgrade( $list->[0] );
     my $gcs = Unicode::GCString->new( $list->[0] );
-    $longest = $gcs->columns();
+    my $longest = $gcs->columns();
     for my $str ( @{$list} ) {
         utf8::upgrade( $str );
         my $gcs = Unicode::GCString->new( $str );
@@ -258,7 +259,7 @@ sub _length_longest {
 
 sub _copy_orig_list {
     my ( $arg ) = @_;
-    if ( defined $arg->{list_to_long} && $arg->{list_to_long} ) {
+    if ( $arg->{list_to_long} ) {
         return [ map {
             my $copy = $_;
             $copy = ( ! defined $copy ) ? $arg->{undef}        : $copy;
@@ -511,10 +512,16 @@ sub choose {
 
     while ( 1 ) {
         my $c = _getch( $arg );
+        if ( ! defined $c ) {
+            _end_win( $arg );
+            say "EOT";
+            return;
+        }
         next if $c == NEXT_getch;
         next if $c == KEY_Tilde;
         if ( $arg->{size_changed} ) {
             $arg->{list} = _copy_orig_list( $arg );
+            print CR, UP x ( $arg->{this_cell}[ROW] + $arg->{head} );
             _write_first_screen( $arg );
             $arg->{size_changed} = 0;
             next;
@@ -606,7 +613,7 @@ sub choose {
                     }
                 }
             }
-            when ( $c == KEY_BSPACE || $c == CONTROL_h || $c == KEY_BTAB ) {
+            when ( $c == KEY_BSPACE || $c == CONTROL_H || $c == KEY_BTAB ) {
                 if ( $arg->{this_cell}[COL] == 0 && $arg->{this_cell}[ROW] == 0 ) {
                     _beep( $arg );
                 }
@@ -656,7 +663,7 @@ sub choose {
                     $arg->{backup_col} = undef if defined $arg->{backup_col}; # don't remember col if col is changed deliberately
                 }
             }
-            when ( $c == CONTROL_b || $c == KEY_PAGE_UP ) {
+            when ( $c == CONTROL_B || $c == KEY_PAGE_UP ) {
                 if ( $arg->{begin_page} <= 0 ) {
                     _beep( $arg );
                 }
@@ -667,13 +674,12 @@ sub choose {
                         $arg->{this_cell}[COL] = $arg->{backup_col};
                         $arg->{backup_col}     = undef;
                     }
-                    #$arg->{this_cell}[COL] = 0;
                     $arg->{begin_page} = $arg->{top_listrow};
                     $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
                     _wr_screen( $arg );
                 }
             }
-            when ( $c == CONTROL_f || $c == KEY_PAGE_DOWN ) {
+            when ( $c == CONTROL_F || $c == KEY_PAGE_DOWN ) {
                 if ( $arg->{end_page} >= $#{$arg->{rowcol2list}} ) {
                     _beep( $arg );
                 }
@@ -686,18 +692,17 @@ sub choose {
                         $arg->{backup_col}     = $arg->{this_cell}[COL];
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                     }
-                    #$arg->{this_cell}[COL] = 0;
                     $arg->{begin_page} = $arg->{top_listrow};
                     $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
                     $arg->{end_page}   = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
                     _wr_screen( $arg );
                 }
             }
-            when ( $c == KEY_q ) {
+            when ( $c == KEY_q || $c == CONTROL_D ) {
                 _end_win( $arg );
                 return;
             }
-            when ( $c == CONTROL_c ) {
+            when ( $c == CONTROL_C ) {
                 _end_win( $arg );
                 print "^C";
                 kill( 'INT', $$ );
@@ -1063,7 +1068,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.016
+Version 1.017
 
 =cut
 
