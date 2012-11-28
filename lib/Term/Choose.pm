@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.017';
+our $VERSION = '1.018';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -514,7 +514,7 @@ sub choose {
         my $c = _getch( $arg );
         if ( ! defined $c ) {
             _end_win( $arg );
-            say "EOT";
+            warn "EOT";
             return;
         }
         next if $c == NEXT_getch;
@@ -1068,7 +1068,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.017
+Version 1.018
 
 =cut
 
@@ -1091,8 +1091,6 @@ Version 1.017
 =head1 DESCRIPTION
 
 Choose from a list of items.
-
-Requires Perl Version 5.10.1 or greater.
 
 Based on the I<choose> function from the L<Term::Clui> module - for more details see L</MOTIVATION>.
 
