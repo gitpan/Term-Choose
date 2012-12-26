@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.018';
+our $VERSION = '1.019';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -289,18 +289,28 @@ sub _validate_option {
         default         => [ 0,  $limit ],
         empty_string    => '',
         hide_cursor     => [ 0,       1 ],
+        
+        justify         => [ 0,       2 ], # NOTE: NEW -> replaces "right_justify"
+        
         layout          => [ 0,       3 ],
         length_longest  => [ 1,  $limit ],
         limit           => [ 1,  $limit ],
         mouse_mode      => [ 0,       4 ],
+        
+        order           => [ 0,       1 ], # NOTE: NEW -> replaces "vertical"
+        
         pad             => [ 0,  $limit ],
         pad_one_row     => [ 0,  $limit ],
         page            => [ 0,       1 ],
         prompt          => '',
-        right_justify   => [ 0,       1 ],
+        
+        right_justify   => [ 0,       1 ], # NOTE: deprecated -> replaced by "justify"
+   
         screen_width    => [ 1 ,    100 ],
         undef           => '',
-        vertical        => [ 0,       1 ],
+        
+        vertical        => [ 0,       1 ], # NOTE: deprecated -> replaced by "order"
+        
     };
     my $warn = 0;
     for my $key ( keys %$config ) {
@@ -328,24 +338,44 @@ sub _validate_option {
 sub _set_layout {
     my ( $wantarray, $config ) = @_;
     my $prompt = ( defined $wantarray ) ? 'Your choice:' : 'Close with ENTER';
+    
+    # ### #####
+    if ( defined $config->{right_justify} && ! defined $config->{justify} ) {
+        $config->{justify} = $config->{right_justify};
+    }   
+    if ( defined $config->{vertical} && ! defined $config->{order} ) {
+        $config->{order} = $config->{vertical};
+    }
+    # ### #####
+    
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
     #$config->{default}         //= undef;
     $config->{empty_string}     //= '<empty>';
     $config->{hide_cursor}      //= 1;
+    
+    $config->{justify}          //= 0; # NOTE: NEW -> replaces "right_justify"
+    
     $config->{layout}           //= 1;
     #$config->{length_longest}  //= undef;
     $config->{limit}            //= 100_000;
     $config->{mouse_mode}       //= 0;
+    
+    $config->{order}            //= 1; # NOTE: NEW -> replaces "vertical"
+    
     $config->{pad}              //= 2;
     $config->{pad_one_row}      //= 3;
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
-    $config->{right_justify}    //= 0;
+    
+    ## $config->{right_justify}    //= 0; # NOTE: deprecated -> replaced by "justify"
+    
     #$config->{screen_width}    //= undef;
     $config->{undef}            //= '<undef>';
-    $config->{vertical}         //= 1;
+    
+    ## $config->{vertical}         //= 1; # NOTE: deprecated -> replaced by "order"
+    
     return $config;
 }
 
@@ -713,7 +743,8 @@ sub choose {
                 _end_win( $arg );
                 return if ! defined $arg->{wantarray};
                 if ( $arg->{wantarray} ) {
-                    if ( $arg->{vertical} ) {
+                    #if ( $arg->{vertical} ) {
+                    if ( $arg->{order} ) {                    
                         for my $col ( 0 .. $#{$arg->{rowcol2list}[0]} ) {
                             for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
                                 if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
@@ -886,17 +917,19 @@ sub _size_and_layout {
             $tmc++ if @{$arg->{list}} % $arg->{maxrows};
             $tmc *= $arg->{col_width};
             if ( $tmc < $maxcls ) {
-                $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 2 ) ) if $arg->{layout} == 1;
+                #$tmc = int( $tmc + ( ( $maxcls - $tmc ) / 2 ) ) if $arg->{layout} == 1;
+                $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 1.5 ) ) if $arg->{layout} == 1;
                 $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 6 ) ) if $arg->{layout} == 2;
                 $maxcls = $tmc;
             }
         }
-    ### vertical
+    ### order
         my $cols_per_row = int( $maxcls / $arg->{col_width} );
         $cols_per_row = 1 if $cols_per_row < 1;
         my $rows = int( ( $#{$arg->{list}} + $cols_per_row ) / $cols_per_row );
         $arg->{rest} = @{$arg->{list}} % $cols_per_row;
-        if ( $arg->{vertical} ) {
+        #if ( $arg->{vertical} ) {
+        if ( $arg->{order} ) {        
             my @rearranged_idx;
             my $begin = 0;
             my $end = $rows - 1;
@@ -963,6 +996,44 @@ sub _unicode_cut {
 }
 
 
+#sub _unicode_sprintf {
+#    my ( $arg, $unicode ) = @_;
+#    utf8::upgrade( $unicode );
+#    my $gcs = Unicode::GCString->new( $unicode );
+#    my $colwidth = $gcs->columns();
+#    if ( $colwidth > $arg->{length_longest} ) {
+#        my $max_length = int( $arg->{length_longest} / 2 ) + 1;
+#        while ( 1 ) {
+#            #my( $tmp ) = $unicode =~ /\A(\X{0,$max_length})/;
+#            my $tmp = substr( $unicode, 0, $max_length );
+#            my $gcs = Unicode::GCString->new( $tmp );
+#            $colwidth = $gcs->columns();
+#            if ( $colwidth > $arg->{length_longest} ) {
+#                # As soon as the string is longer than length_longest again:
+#                $unicode = $tmp;
+#                last;
+#            }
+#            $max_length += 10;
+#        }
+#        while ( $colwidth > $arg->{length_longest} ) {
+#            $unicode =~ s/\X\z//;
+#            my $gcs = Unicode::GCString->new( $unicode );
+#            $colwidth = $gcs->columns();
+#        }
+#        $unicode .= ' ' if $colwidth < $arg->{length_longest};
+#    }
+#    elsif ( $colwidth < $arg->{length_longest} ) {
+#        if ( $arg->{right_justify} ) {
+#            $unicode = " " x ( $arg->{length_longest} - $colwidth ) . $unicode;
+#        }
+#        else {
+#            $unicode = $unicode . " " x ( $arg->{length_longest} - $colwidth );
+#        }
+#    }
+#    return $unicode;
+#}
+
+
 sub _unicode_sprintf {
     my ( $arg, $unicode ) = @_;
     utf8::upgrade( $unicode );
@@ -990,15 +1061,22 @@ sub _unicode_sprintf {
         $unicode .= ' ' if $colwidth < $arg->{length_longest};
     }
     elsif ( $colwidth < $arg->{length_longest} ) {
-        if ( $arg->{right_justify} ) {
-            $unicode = " " x ( $arg->{length_longest} - $colwidth ) . $unicode;
-        }
-        else {
+        if ( $arg->{justify} == 0 ) {
             $unicode = $unicode . " " x ( $arg->{length_longest} - $colwidth );
         }
+        elsif ( $arg->{justify} == 1 ) {
+            $unicode = " " x ( $arg->{length_longest} - $colwidth ) . $unicode;
+        }
+        elsif ( $arg->{justify} == 2 ) {
+            my $all = $arg->{length_longest} - $colwidth;
+            my $half = int( $all / 2 ); 
+            $unicode = " " x $half . $unicode . " " x ( $all - $half );
+        }
+        
     }
     return $unicode;
 }
+
 
 
 sub _handle_mouse {
@@ -1068,7 +1146,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.018
+Version 1.019
 
 =cut
 
@@ -1232,11 +1310,11 @@ From broad to narrow: 0 > 1 > 2 > 3
 1 - layout "H" (default)
 
  .----------------------.   .----------------------.   .----------------------.   .----------------------.
- | .. .. .. .. .. .. .. |   | .. .. .. ..          |   | .. .. .. .. ..       |   | .. .. .. .. .. .. .. |
- |                      |   | .. .. .. ..          |   | .. .. .. .. ..       |   | .. .. .. .. .. .. .. |
- |                      |   | .. ..                |   | .. .. .. .. ..       |   | .. .. .. .. .. .. .. |
- |                      |   |                      |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
- |                      |   |                      |   |                      |   | .. .. .. .. .. .. .. |
+ | .. .. .. .. .. .. .. |   | .. .. .. .. ..       |   | .. .. .. .. .. ..    |   | .. .. .. .. .. .. .. |
+ |                      |   | .. .. .. .. ..       |   | .. .. .. .. .. ..    |   | .. .. .. .. .. .. .. |
+ |                      |   | .. ..                |   | .. .. .. .. .. ..    |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   | .. .. .. .. .. ..    |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   | .. .. ..             |   | .. .. .. .. .. .. .. |
  |                      |   |                      |   |                      |   | .. .. .. .. .. .. .. |
  '----------------------'   '----------------------'   '----------------------'   '----------------------'
 
@@ -1246,11 +1324,11 @@ From broad to narrow: 0 > 1 > 2 > 3
 2 - layout "V"
 
  .----------------------.   .----------------------.   .----------------------.   .----------------------.
- | ..                   |   | .. ..                |   | .. .. ..             |   | .. .. .. .. .. .. .. |
- | ..                   |   | .. ..                |   | .. .. ..             |   | .. .. .. .. .. .. .. |
- | ..                   |   | .. ..                |   | .. .. ..             |   | .. .. .. .. .. .. .. |
+ | ..                   |   | .. ..                |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
+ | ..                   |   | .. ..                |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
+ | ..                   |   | .. ..                |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
  | ..                   |   | ..                   |   | .. .. ..             |   | .. .. .. .. .. .. .. |
- | ..                   |   |                      |   | .. ..                |   | .. .. .. .. .. .. .. |
+ | ..                   |   |                      |   | .. .. ..             |   | .. .. .. .. .. .. .. |
  | ..                   |   |                      |   |                      |   | .. .. .. .. .. .. .. |
  '----------------------'   '----------------------'   '----------------------'   '----------------------'
 
@@ -1281,7 +1359,9 @@ Allowed values: from 1 to 100
 
 (default: undef)
 
-=head4 vertical
+=head4 vertical DEPRECATED
+
+This option will be removed - use I<order> instead.
 
 If the output has more than one row and more than one column:
 
@@ -1289,11 +1369,29 @@ If the output has more than one row and more than one column:
 
 1 - elements are ordered vertically (default)
 
-=head4 right_justify
+=head4 order
+
+If the output has more than one row and more than one column:
+
+0 - elements are ordered horizontally
+
+1 - elements are ordered vertically (default)
+
+=head4 right_justify DEPRECATED
+
+This option will be removed - use I<justify> instead.
 
 0 - elements ordered in columns are left justified (default)
 
 1 - elements ordered in columns are right justified
+
+=head4 justify
+
+0 - elements ordered in columns are left justified (default)
+
+1 - elements ordered in columns are right justified
+
+2 - elements ordered in columns are centered
 
 =head4 pad
 
@@ -1455,20 +1553,20 @@ The Terminal needs to understand the following ANSI escape sequences:
 
     "\e[0J"     Clear to  End of Screen (Erase Data)
 
-    "\e[0m"     Normal/Reset (SGR)
+    "\e[0m"     Normal/Reset
 
-    "\e[1m"     Bold (SGR)
+    "\e[1m"     Bold
 
-    "\e[4m"     Underline (SGR)
+    "\e[4m"     Underline
 
-    "\e[7m"     Inverse (SGR)
+    "\e[7m"     Inverse
 
 
 If the option "hide_cursor" is enabled:
 
-    "\e[?25l"   Hide Cursor (DECTCEM)
+    "\e[?25l"   Hide Cursor
 
-    "\e[?25h"   Show Cursor (DECTCEM)
+    "\e[?25h"   Show Cursor
 
 If the option "clear_screen" is enabled:
 
@@ -1500,7 +1598,7 @@ If the list does not fit in one row, I<choose> from L<Term::Clui> puts the items
 
 =item Differences between L<Term::Clui> and L<Term::Choose>
 
-L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the available choices are passed with an array reference as first argument. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed as an option (I<prompt>).
+L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the available choices are passed with an array reference as first argument. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed with the option I<prompt>.
 
 As mentioned above I<choose> from L<Term::Clui> does not order the elements in columns if there is more than one row on the screen while L<Term::Choose> arranges the elements in such situations in columns.
 

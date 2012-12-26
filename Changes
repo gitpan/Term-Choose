@@ -1,5 +1,11 @@
 Revision history for Term::Choose
 
+1.019   2012-12-26
+        -The "layout" "1" starts more broadly now (if more than one row). 
+        -options: replaced "right_justify" with "justify" (with new value "centered").
+        -options: replaced "vertical" with "order".
+        -updated documentation.
+        -updated example.
 
 1.018   2012-11-28
         - warn "EOT" if "_getch" returns "undef".

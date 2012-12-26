@@ -12,7 +12,8 @@ t/00-load.t
 t/check_forked_functions.t
 t/check_pod_defaults.t
 t/cmp_buildpl_makepl.t
-t/logging_disabled.t
+t/cntr_choose.t
+t/cntrl_table_watch.t
 t/manifest.t
 t/pod-coverage.t
 t/pod.t
