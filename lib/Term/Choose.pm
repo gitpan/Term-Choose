@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.019';
+our $VERSION = '1.020';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -289,28 +289,25 @@ sub _validate_option {
         default         => [ 0,  $limit ],
         empty_string    => '',
         hide_cursor     => [ 0,       1 ],
-        
-        justify         => [ 0,       2 ], # NOTE: NEW -> replaces "right_justify"
-        
+        index           => [ 0,       1 ],
+        justify         => [ 0,       2 ],
         layout          => [ 0,       3 ],
         length_longest  => [ 1,  $limit ],
         limit           => [ 1,  $limit ],
         mouse_mode      => [ 0,       4 ],
-        
-        order           => [ 0,       1 ], # NOTE: NEW -> replaces "vertical"
-        
+        order           => [ 0,       1 ],
         pad             => [ 0,  $limit ],
         pad_one_row     => [ 0,  $limit ],
         page            => [ 0,       1 ],
         prompt          => '',
-        
+
         right_justify   => [ 0,       1 ], # NOTE: deprecated -> replaced by "justify"
-   
+
         screen_width    => [ 1 ,    100 ],
         undef           => '',
-        
+
         vertical        => [ 0,       1 ], # NOTE: deprecated -> replaced by "order"
-        
+
     };
     my $warn = 0;
     for my $key ( keys %$config ) {
@@ -338,44 +335,35 @@ sub _validate_option {
 sub _set_layout {
     my ( $wantarray, $config ) = @_;
     my $prompt = ( defined $wantarray ) ? 'Your choice:' : 'Close with ENTER';
-    
+
     # ### #####
     if ( defined $config->{right_justify} && ! defined $config->{justify} ) {
         $config->{justify} = $config->{right_justify};
-    }   
+    }
     if ( defined $config->{vertical} && ! defined $config->{order} ) {
         $config->{order} = $config->{vertical};
     }
     # ### #####
-    
+
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
     #$config->{default}         //= undef;
     $config->{empty_string}     //= '<empty>';
     $config->{hide_cursor}      //= 1;
-    
-    $config->{justify}          //= 0; # NOTE: NEW -> replaces "right_justify"
-    
+    $config->{index}            //= 0;
+    $config->{justify}          //= 0;
     $config->{layout}           //= 1;
     #$config->{length_longest}  //= undef;
     $config->{limit}            //= 100_000;
     $config->{mouse_mode}       //= 0;
-    
-    $config->{order}            //= 1; # NOTE: NEW -> replaces "vertical"
-    
+    $config->{order}            //= 1;
     $config->{pad}              //= 2;
     $config->{pad_one_row}      //= 3;
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
-    
-    ## $config->{right_justify}    //= 0; # NOTE: deprecated -> replaced by "justify"
-    
     #$config->{screen_width}    //= undef;
     $config->{undef}            //= '<undef>';
-    
-    ## $config->{vertical}         //= 1; # NOTE: deprecated -> replaced by "order"
-    
     return $config;
 }
 
@@ -744,12 +732,12 @@ sub choose {
                 return if ! defined $arg->{wantarray};
                 if ( $arg->{wantarray} ) {
                     #if ( $arg->{vertical} ) {
-                    if ( $arg->{order} ) {                    
+                    if ( $arg->{order} ) {
                         for my $col ( 0 .. $#{$arg->{rowcol2list}[0]} ) {
                             for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
                                 if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
-                                    push @chosen, $arg->{orig_list}[$i];
+                                    push @chosen, ( $arg->{index} ? $i : $arg->{orig_list}[$i] );
                                 }
                             }
                         }
@@ -759,7 +747,7 @@ sub choose {
                             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
                                 if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
-                                    push @chosen, $arg->{orig_list}[$i];
+                                    push @chosen, ( $arg->{index} ? $i : $arg->{orig_list}[$i] );
                                 }
                             }
                         }
@@ -768,7 +756,7 @@ sub choose {
                 }
                 else {
                     my $i = $arg->{rowcol2list}[$arg->{this_cell}[ROW]][$arg->{this_cell}[COL]];
-                    return $arg->{orig_list}[$i];
+                    return $arg->{index} ? $i : $arg->{orig_list}[$i];
                 }
             }
             when ( $c == KEY_SPACE ) {
@@ -917,7 +905,6 @@ sub _size_and_layout {
             $tmc++ if @{$arg->{list}} % $arg->{maxrows};
             $tmc *= $arg->{col_width};
             if ( $tmc < $maxcls ) {
-                #$tmc = int( $tmc + ( ( $maxcls - $tmc ) / 2 ) ) if $arg->{layout} == 1;
                 $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 1.5 ) ) if $arg->{layout} == 1;
                 $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 6 ) ) if $arg->{layout} == 2;
                 $maxcls = $tmc;
@@ -928,8 +915,7 @@ sub _size_and_layout {
         $cols_per_row = 1 if $cols_per_row < 1;
         my $rows = int( ( $#{$arg->{list}} + $cols_per_row ) / $cols_per_row );
         $arg->{rest} = @{$arg->{list}} % $cols_per_row;
-        #if ( $arg->{vertical} ) {
-        if ( $arg->{order} ) {        
+        if ( $arg->{order} ) {
             my @rearranged_idx;
             my $begin = 0;
             my $end = $rows - 1;
@@ -996,44 +982,6 @@ sub _unicode_cut {
 }
 
 
-#sub _unicode_sprintf {
-#    my ( $arg, $unicode ) = @_;
-#    utf8::upgrade( $unicode );
-#    my $gcs = Unicode::GCString->new( $unicode );
-#    my $colwidth = $gcs->columns();
-#    if ( $colwidth > $arg->{length_longest} ) {
-#        my $max_length = int( $arg->{length_longest} / 2 ) + 1;
-#        while ( 1 ) {
-#            #my( $tmp ) = $unicode =~ /\A(\X{0,$max_length})/;
-#            my $tmp = substr( $unicode, 0, $max_length );
-#            my $gcs = Unicode::GCString->new( $tmp );
-#            $colwidth = $gcs->columns();
-#            if ( $colwidth > $arg->{length_longest} ) {
-#                # As soon as the string is longer than length_longest again:
-#                $unicode = $tmp;
-#                last;
-#            }
-#            $max_length += 10;
-#        }
-#        while ( $colwidth > $arg->{length_longest} ) {
-#            $unicode =~ s/\X\z//;
-#            my $gcs = Unicode::GCString->new( $unicode );
-#            $colwidth = $gcs->columns();
-#        }
-#        $unicode .= ' ' if $colwidth < $arg->{length_longest};
-#    }
-#    elsif ( $colwidth < $arg->{length_longest} ) {
-#        if ( $arg->{right_justify} ) {
-#            $unicode = " " x ( $arg->{length_longest} - $colwidth ) . $unicode;
-#        }
-#        else {
-#            $unicode = $unicode . " " x ( $arg->{length_longest} - $colwidth );
-#        }
-#    }
-#    return $unicode;
-#}
-
-
 sub _unicode_sprintf {
     my ( $arg, $unicode ) = @_;
     utf8::upgrade( $unicode );
@@ -1069,14 +1017,13 @@ sub _unicode_sprintf {
         }
         elsif ( $arg->{justify} == 2 ) {
             my $all = $arg->{length_longest} - $colwidth;
-            my $half = int( $all / 2 ); 
+            my $half = int( $all / 2 );
             $unicode = " " x $half . $unicode . " " x ( $all - $half );
         }
-        
+
     }
     return $unicode;
 }
-
 
 
 sub _handle_mouse {
@@ -1146,7 +1093,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.019
+Version 1.020
 
 =cut
 
@@ -1361,7 +1308,7 @@ Allowed values: from 1 to 100
 
 =head4 vertical DEPRECATED
 
-This option will be removed - use I<order> instead.
+This option will be removed with the next release - use I<order> instead.
 
 If the output has more than one row and more than one column:
 
@@ -1379,7 +1326,7 @@ If the output has more than one row and more than one column:
 
 =head4 right_justify DEPRECATED
 
-This option will be removed - use I<justify> instead.
+This option will be removed with the next release - use I<justify> instead.
 
 0 - elements ordered in columns are left justified (default)
 
@@ -1440,6 +1387,12 @@ If the passed value is greater than the index of the last array element the firs
 Allowed values:  0 or greater
 
 (default: undef)
+
+=head4 index
+
+0 - off (default)
+
+1 - return the index of the chosen element instead of the chosen element resp. the indices of the chosen elements instead of the chosen elements.
 
 =head4 page
 

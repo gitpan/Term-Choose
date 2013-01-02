@@ -9,7 +9,7 @@ unless ( $ENV{RELEASE_TESTING} ) {
 }
 
 my @long = ( qw( pad pad_one_row empty_string undef length_longest default limit screen_width ) );
-my @simple = ( qw( justify layout order clear_screen page mouse_mode beep hide_cursor ) ); # prompt
+my @simple = ( qw( justify layout order clear_screen page mouse_mode beep hide_cursor index ) ); # prompt
 my @all = ( @long, @simple );
 
 plan tests => 2 + scalar @all;
