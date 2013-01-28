@@ -1,5 +1,13 @@
 Revision history for Term::Choose
 
+
+1.021   2013-01-28
+        -Removed deprecated options "right_justify" and "vertical".
+        -Updated documentation.
+        -Updated copyright.
+        -Example: switched back to "File::Find".
+        -Example: added postgres.
+
 1.020   2013-01-02
         -Added option "index".
         -Updated documentation.

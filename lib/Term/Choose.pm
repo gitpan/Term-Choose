@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.020';
+our $VERSION = '1.021';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -300,14 +300,8 @@ sub _validate_option {
         pad_one_row     => [ 0,  $limit ],
         page            => [ 0,       1 ],
         prompt          => '',
-
-        right_justify   => [ 0,       1 ], # NOTE: deprecated -> replaced by "justify"
-
         screen_width    => [ 1 ,    100 ],
         undef           => '',
-
-        vertical        => [ 0,       1 ], # NOTE: deprecated -> replaced by "order"
-
     };
     my $warn = 0;
     for my $key ( keys %$config ) {
@@ -335,16 +329,6 @@ sub _validate_option {
 sub _set_layout {
     my ( $wantarray, $config ) = @_;
     my $prompt = ( defined $wantarray ) ? 'Your choice:' : 'Close with ENTER';
-
-    # ### #####
-    if ( defined $config->{right_justify} && ! defined $config->{justify} ) {
-        $config->{justify} = $config->{right_justify};
-    }
-    if ( defined $config->{vertical} && ! defined $config->{order} ) {
-        $config->{order} = $config->{vertical};
-    }
-    # ### #####
-
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
@@ -731,7 +715,6 @@ sub choose {
                 _end_win( $arg );
                 return if ! defined $arg->{wantarray};
                 if ( $arg->{wantarray} ) {
-                    #if ( $arg->{vertical} ) {
                     if ( $arg->{order} ) {
                         for my $col ( 0 .. $#{$arg->{rowcol2list}[0]} ) {
                             for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
@@ -1093,7 +1076,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.020
+Version 1.021
 
 =cut
 
@@ -1306,16 +1289,6 @@ Allowed values: from 1 to 100
 
 (default: undef)
 
-=head4 vertical DEPRECATED
-
-This option will be removed with the next release - use I<order> instead.
-
-If the output has more than one row and more than one column:
-
-0 - elements are ordered horizontally
-
-1 - elements are ordered vertically (default)
-
 =head4 order
 
 If the output has more than one row and more than one column:
@@ -1323,14 +1296,6 @@ If the output has more than one row and more than one column:
 0 - elements are ordered horizontally
 
 1 - elements are ordered vertically (default)
-
-=head4 right_justify DEPRECATED
-
-This option will be removed with the next release - use I<justify> instead.
-
-0 - elements ordered in columns are left justified (default)
-
-1 - elements ordered in columns are right justified
 
 =head4 justify
 
@@ -1593,7 +1558,7 @@ Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people f
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2012 Matthäus Kiem.
+Copyright 2012-2013 Matthäus Kiem.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 

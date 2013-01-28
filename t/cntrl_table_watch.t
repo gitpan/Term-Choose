@@ -46,15 +46,21 @@ is( $data, 0, 'OK - __DATA__ section in $file is clean' );
 my $test_username_passwd = 0;
 open my $fh3, '<', $file;
 while ( my $line = readline $fh3 ) {
-    if ( $line =~ /\A\s+db_user\s+=>\sundef,/ ) {
+    if ( $line =~ /\A\s+mysql_user\s+=>\sundef,/ ) {
         $test_username_passwd++;
     }
-    if ( $line =~ /\A\s+db_passwd\s+=>\sundef,/ ) {
+    if ( $line =~ /\A\s+mysql_passwd\s+=>\sundef,/ ) {
+        $test_username_passwd++;
+    }    
+    if ( $line =~ /\A\s+postgres_user\s+=>\sundef,/ ) {
+        $test_username_passwd++;
+    }    
+    if ( $line =~ /\A\s+postgres_passwd\s+=>\sundef,/ ) {
         $test_username_passwd++;
     }
 }
 close $fh3;
-is( $test_username_passwd , 2, "OK - default username and default password not defined in $file." );
+is( $test_username_passwd , 4, "OK - default username and default password not defined in $file." );
 
 
 
