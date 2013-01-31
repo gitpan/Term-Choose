@@ -1,6 +1,9 @@
 Revision history for Term::Choose
 
 
+1.022   2013-01-31
+        - Example: update and bug fixes.
+
 1.021   2013-01-28
         -Removed deprecated options "right_justify" and "vertical".
         -Updated documentation.
