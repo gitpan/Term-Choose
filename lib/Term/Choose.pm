@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.022';
+our $VERSION = '1.023';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -63,12 +63,16 @@ use constant {
 
 use constant {
     NEXT_getch      => -1,
-
+    
+    # Key code is ord key :
+    CONTROL_A       => 0x01,
     CONTROL_B       => 0x02,
     CONTROL_C       => 0x03,
     CONTROL_D       => 0x04,
+    CONTROL_E       => 0x05,   
     CONTROL_F       => 0x06,
     CONTROL_H       => 0x08,
+    CONTROL_I       => 0x09,    
     KEY_TAB         => 0x09,
     KEY_ENTER       => 0x0d,
     KEY_ESC         => 0x1b,
@@ -80,14 +84,17 @@ use constant {
     KEY_q           => 0x71,
     KEY_Tilde       => 0x7e,
     KEY_BSPACE      => 0x7f,
-
-    KEY_UP          => 0x1b5b41,
-    KEY_DOWN        => 0x1b5b42,
-    KEY_RIGHT       => 0x1b5b43,
-    KEY_LEFT        => 0x1b5b44,
-    KEY_BTAB        => 0x1b5b5a,
-    KEY_PAGE_UP     => 0x1b5b35,
-    KEY_PAGE_DOWN   => 0x1b5b36,
+    
+    # Arbitrary key codes : 
+    KEY_PAGE_UP     => 0x21,
+    KEY_PAGE_DOWN   => 0x22,
+    KEY_END         => 0x23,
+    KEY_HOME        => 0x24,  
+    KEY_LEFT        => 0x25,
+    KEY_UP          => 0x26,
+    KEY_RIGHT       => 0x27,
+    KEY_DOWN        => 0x28,
+    KEY_BTAB        => 0x08,
 };
 
 
@@ -102,6 +109,8 @@ sub _getch {
         elsif ( $c eq 'B' ) { return KEY_DOWN; }
         elsif ( $c eq 'C' ) { return KEY_RIGHT; }
         elsif ( $c eq 'D' ) { return KEY_LEFT; }
+        elsif ( $c eq 'F' ) { return KEY_END; }
+        elsif ( $c eq 'H' ) { return KEY_HOME; } 
         elsif ( $c eq 'Z' ) { return KEY_BTAB; }
         elsif ( $c eq '5' ) { return KEY_PAGE_UP; }
         elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
@@ -111,6 +120,8 @@ sub _getch {
             elsif ( $c eq 'B' ) { return KEY_DOWN; }
             elsif ( $c eq 'C' ) { return KEY_RIGHT; }
             elsif ( $c eq 'D' ) { return KEY_LEFT; }
+            elsif ( $c eq 'F' ) { return KEY_END; }
+            elsif ( $c eq 'H' ) { return KEY_HOME; } 
             elsif ( $c eq 'Z' ) { return KEY_BTAB; }
             elsif ( $c =~ /\d/ ) {
                 my $c1 = ReadKey 0;
@@ -586,7 +597,7 @@ sub choose {
                     }
                 }
             }
-            when ( $c == KEY_TAB ) {
+            when ( $c == KEY_TAB || $c == CONTROL_I ) { 
                 if ( $arg->{this_cell}[COL] == $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]} && $arg->{this_cell}[ROW] == $#{$arg->{rowcol2list}} ) {
                     _beep( $arg );
                 }
@@ -700,6 +711,55 @@ sub choose {
                     _wr_screen( $arg );
                 }
             }
+            when ( $c == CONTROL_A || $c == KEY_HOME ) {
+                if ( $arg->{this_cell}[COL] == 0 && $arg->{this_cell}[ROW] == 0 ) {
+                    _beep( $arg );
+                }
+                else {
+                    $arg->{top_listrow} = 0;
+                    $arg->{this_cell}[ROW] = $arg->{top_listrow};
+                    $arg->{this_cell}[COL] = 0;
+                    $arg->{begin_page} = $arg->{top_listrow};
+                    $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
+                    $arg->{end_page}   = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
+                    _wr_screen( $arg );
+                }
+            }
+            when ( $c == CONTROL_E || $c == KEY_END ) {
+                if ( $arg->{order} == 1 and $arg->{rest} ) {
+                    if ( $arg->{this_cell}[COL] == $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]} && $arg->{this_cell}[ROW] == $#{$arg->{rowcol2list}} - 1 ) {
+                        _beep( $arg );
+                    }
+                    else {
+                        $arg->{top_listrow}    = $arg->{maxrows} * ( int( @{$arg->{rowcol2list}} / $arg->{maxrows} ) );
+                        $arg->{this_cell}[ROW] = $#{$arg->{rowcol2list}} - 1;
+                        $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};  
+                        if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} ) {
+                            $arg->{top_listrow} = $arg->{top_listrow} - $arg->{maxrows};
+                            $arg->{begin_page}  = $arg->{top_listrow};
+                            $arg->{end_page}    = $arg->{begin_page} + $arg->{maxrows} - 1;
+                        }
+                        else {
+                            $arg->{begin_page} = $arg->{top_listrow};
+                            $arg->{end_page}   = $#{$arg->{rowcol2list}};
+                        }
+                        _wr_screen( $arg );
+                    }
+                }
+                else {
+                    if ( $arg->{this_cell}[COL] == $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]} && $arg->{this_cell}[ROW] == $#{$arg->{rowcol2list}} ) {
+                        _beep( $arg );
+                    }
+                    else {
+                        $arg->{top_listrow}    = $arg->{maxrows} * ( int( @{$arg->{rowcol2list}} / $arg->{maxrows} ) );
+                        $arg->{this_cell}[ROW] = $#{$arg->{rowcol2list}};
+                        $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
+                        $arg->{begin_page}     = $arg->{top_listrow};
+                        $arg->{end_page}       = $#{$arg->{rowcol2list}};
+                        _wr_screen( $arg );   
+                    }
+                }
+            }
             when ( $c == KEY_q || $c == CONTROL_D ) {
                 _end_win( $arg );
                 return;
@@ -715,7 +775,7 @@ sub choose {
                 _end_win( $arg );
                 return if ! defined $arg->{wantarray};
                 if ( $arg->{wantarray} ) {
-                    if ( $arg->{order} ) {
+                    if ( $arg->{order} == 1 ) {
                         for my $col ( 0 .. $#{$arg->{rowcol2list}[0]} ) {
                             for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
                                 if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
@@ -898,7 +958,7 @@ sub _size_and_layout {
         $cols_per_row = 1 if $cols_per_row < 1;
         my $rows = int( ( $#{$arg->{list}} + $cols_per_row ) / $cols_per_row );
         $arg->{rest} = @{$arg->{list}} % $cols_per_row;
-        if ( $arg->{order} ) {
+        if ( $arg->{order} == 1 ) {
             my @rearranged_idx;
             my $begin = 0;
             my $end = $rows - 1;
@@ -1076,7 +1136,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.022
+Version 1.023
 
 =cut
 
@@ -1156,7 +1216,9 @@ The "q" key returns I<undef> or an empty list in list context.
 
 With a I<mouse_mode> enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
-Keys to move around: arrow keys (or hjkl), Tab, BackSpace (or Shift-Tab or Ctrl-H), PageUp and PageDown (or Ctrl+B/Ctrl+F).
+Keys to move around: arrow keys (or hjkl), Tab (or Ctrl-I), BackSpace (or Ctrl-H, Shift-Tab), PageUp and PageDown (or Ctrl+B/Ctrl+F).
+
+Experimental: Home key (or Ctrl-A) - jump to the beginning of the list. End key (or Ctrl-E) - jump to the end of the list.
 
 =head3 Modifications for the output
 
