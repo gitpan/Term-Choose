@@ -1,5 +1,12 @@
 Revision history for Term::Choose
 
+
+1.024   2013-02-09
+        - "Home-key" and "End-key": removed status "experimental".
+        - Updated documentation.
+        - Example: bug fixes.
+        - Example: code refactoring.
+
 1.023   2013-02-06
         - Added support for the "Home-key" and the "End-key" (experimental).
         - Updated documentation.

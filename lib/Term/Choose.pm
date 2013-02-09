@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.023';
+our $VERSION = '1.024';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -1136,7 +1136,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.023
+Version 1.024
 
 =cut
 
@@ -1216,9 +1216,7 @@ The "q" key returns I<undef> or an empty list in list context.
 
 With a I<mouse_mode> enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
-Keys to move around: arrow keys (or hjkl), Tab (or Ctrl-I), BackSpace (or Ctrl-H, Shift-Tab), PageUp and PageDown (or Ctrl+B/Ctrl+F).
-
-Experimental: Home key (or Ctrl-A) - jump to the beginning of the list. End key (or Ctrl-E) - jump to the end of the list.
+Keys to move around: arrow keys (or h,j,k,l), Tab (or Ctrl-I), BackSpace (or Ctrl-H, Shift-Tab), PageUp and PageDown key (or Ctrl+B/Ctrl+F), Home key (or Ctrl-A) to jump to the beginning of the list, End key (or Ctrl-E) to jump to the end of the list.
 
 =head3 Modifications for the output
 
