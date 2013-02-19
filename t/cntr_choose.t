@@ -8,7 +8,7 @@ unless ( $ENV{RELEASE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 else {
-    plan tests => 1;
+    plan tests => 2;
     
 }
 
@@ -28,3 +28,20 @@ while ( my $line = readline $fh1 ) {
 close $fh1;
 is( $test_env, 0, "OK - test environment in $file disabled." );
 
+
+
+
+my $c = 0;
+my $pad_before_pad_one_row = 0;
+open my $fh2, '<', $file;
+while ( my $line = readline $fh2 ) {
+    if ( $line =~ /\Asub _set_layout/ .. $line =~ /\A\}/ ) {
+        $c++ if $line =~ /\A\s*\$\Qconfig->{pad}\E/;
+        if ( $line =~ /\A\s*\$\Qconfig->{pad_one_row}\E/ ) {
+            $pad_before_pad_one_row = 1 if $c;
+            last;
+        }
+    }      
+}
+close $fh2;
+is( $pad_before_pad_one_row, 1, "OK - option \"pad\" is set before option \"pad_one_row\"." );

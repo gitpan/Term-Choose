@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.024';
+our $VERSION = '1.025';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -63,16 +63,16 @@ use constant {
 
 use constant {
     NEXT_getch      => -1,
-    
+
     # Key code is ord key :
     CONTROL_A       => 0x01,
     CONTROL_B       => 0x02,
     CONTROL_C       => 0x03,
     CONTROL_D       => 0x04,
-    CONTROL_E       => 0x05,   
+    CONTROL_E       => 0x05,
     CONTROL_F       => 0x06,
     CONTROL_H       => 0x08,
-    CONTROL_I       => 0x09,    
+    CONTROL_I       => 0x09,
     KEY_TAB         => 0x09,
     KEY_ENTER       => 0x0d,
     KEY_ESC         => 0x1b,
@@ -84,12 +84,12 @@ use constant {
     KEY_q           => 0x71,
     KEY_Tilde       => 0x7e,
     KEY_BSPACE      => 0x7f,
-    
-    # Arbitrary key codes : 
+
+    # Arbitrary key codes :
     KEY_PAGE_UP     => 0x21,
     KEY_PAGE_DOWN   => 0x22,
     KEY_END         => 0x23,
-    KEY_HOME        => 0x24,  
+    KEY_HOME        => 0x24,
     KEY_LEFT        => 0x25,
     KEY_UP          => 0x26,
     KEY_RIGHT       => 0x27,
@@ -110,7 +110,7 @@ sub _getch {
         elsif ( $c eq 'C' ) { return KEY_RIGHT; }
         elsif ( $c eq 'D' ) { return KEY_LEFT; }
         elsif ( $c eq 'F' ) { return KEY_END; }
-        elsif ( $c eq 'H' ) { return KEY_HOME; } 
+        elsif ( $c eq 'H' ) { return KEY_HOME; }
         elsif ( $c eq 'Z' ) { return KEY_BTAB; }
         elsif ( $c eq '5' ) { return KEY_PAGE_UP; }
         elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
@@ -121,7 +121,7 @@ sub _getch {
             elsif ( $c eq 'C' ) { return KEY_RIGHT; }
             elsif ( $c eq 'D' ) { return KEY_LEFT; }
             elsif ( $c eq 'F' ) { return KEY_END; }
-            elsif ( $c eq 'H' ) { return KEY_HOME; } 
+            elsif ( $c eq 'H' ) { return KEY_HOME; }
             elsif ( $c eq 'Z' ) { return KEY_BTAB; }
             elsif ( $c =~ /\d/ ) {
                 my $c1 = ReadKey 0;
@@ -317,7 +317,7 @@ sub _validate_option {
     my $warn = 0;
     for my $key ( keys %$config ) {
         if ( $validate->{$key} ) {
-            if ( defined $config->{$key} && ( $config->{$key} !~ m/\A\d+\z/ || $config->{$key} < $validate->{$key}[MIN] || $config->{$key} > $validate->{$key}[MAX] ) ) {
+            if ( defined $config->{$key} && ( $config->{$key} !~ m/^\d+\z/ || $config->{$key} < $validate->{$key}[MIN] || $config->{$key} > $validate->{$key}[MAX] ) ) {
                 carp "choose: \"$config->{$key}\" not a valid value for option \"$key\". Falling back to default value.";
                 $config->{$key} = undef;
                 ++$warn;
@@ -354,7 +354,7 @@ sub _set_layout {
     $config->{mouse_mode}       //= 0;
     $config->{order}            //= 1;
     $config->{pad}              //= 2;
-    $config->{pad_one_row}      //= 3;
+    $config->{pad_one_row}      //= $config->{pad};
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
     #$config->{screen_width}    //= undef;
@@ -487,15 +487,60 @@ sub _write_first_screen {
 
 sub choose {
     my ( $orig_list, $config ) = @_;
-    croak "choose: First argument is not a ARRAY reference" if ! defined $orig_list;
-    croak "choose: First argument is not a ARRAY reference" if ! reftype( $orig_list );
-    croak "choose: First argument is not a ARRAY reference" if reftype( $orig_list ) ne 'ARRAY';
+
+    if ( @_ < 1 ) {
+        my $message;
+        $message .= "choose: called without arguments.\n";
+        $message .= "choose: expects 1 or 2 arguments.\n";
+        $message .= "->";
+        croak $message;
+    }
+    if ( @_ > 2 ) {
+        my $message;
+        $message .= "choose: called with " . scalar @_ . " arguments.\n";
+        $message .= "choose: expects 1 or 2 arguments.\n";
+        $message .= "->";
+        croak $message;
+    }
+    if ( ! defined $orig_list ) {
+        my $message;
+        $message .= "choose: The first argument is not defined.\n";
+        $message .= "choose: The first argument has to be an ARRAY reference.\n";
+        $message .= "->";
+        croak $message;
+    }
+    if ( ! reftype( $orig_list ) ) {
+        my $message;
+        $message .= "choose: The first argument is not a reference.\n";
+        $message .= "choose: The first argument has to be an ARRAY reference.\n";
+        $message .="->";
+        croak $message;
+    }
+    if ( reftype( $orig_list ) ne 'ARRAY' ) {
+        my $message;
+        $message .= "choose: The first argument is not an ARRAY reference.\n";
+        $message .= "choose: The first argument has to be an ARRAY reference.\n";
+        $message .= "->";
+        croak $message;
+    }
     if ( defined $config ) {
-        croak "choose: Second argument is not a HASH reference." if ! reftype( $config );
-        croak "choose: Second argument is not a HASH reference." if reftype( $config ) ne 'HASH'
+        if ( ! reftype( $config ) ) {
+            my $message;
+            $message .= "choose: The second argument is not a reference.\n";
+            $message .= "choose: The (optional) second argument has to be a HASH reference.\n";
+            $message .= "->";
+            croak $message;
+        }
+        if ( reftype( $config ) ne 'HASH' ) {
+            my $message;
+            $message .= "choose: The second argument is not a HASH reference.\n";
+            $message .= "choose: The (optional) second argument has to be a HASH reference.\n";
+            $message .= "->";
+            croak $message;
+        }
     }
     if ( ! @$orig_list ) {
-        carp "choose: First argument refers to an empty list!";
+        carp "choose: The first argument refers to an empty list!";
         return;
     }
     my $wantarray;
@@ -503,7 +548,12 @@ sub choose {
     my $arg = _set_layout( $wantarray, $config );
     if ( @$orig_list > $arg->{limit} ) {
         my $list_length = scalar @$orig_list;
-        carp "choose: List has $list_length items.\nchoose: \"limit\" is set to $arg->{limit} items!\nchoose: The first $arg->{limit} itmes are used by choose.";
+        my $message;
+        $message .= "choose: The list has $list_length items.\n";
+        $message .= "choose: Option \"limit\" is set to $arg->{limit}.\n";
+        $message .= "choose: The first $arg->{limit} itmes are used by choose.\n";
+        $message .= "->";
+        carp $message;
         $arg->{list_to_long} = 1;
         print "Press a key to continue";
         my $dummy = <STDIN>;
@@ -597,7 +647,7 @@ sub choose {
                     }
                 }
             }
-            when ( $c == KEY_TAB || $c == CONTROL_I ) { 
+            when ( $c == KEY_TAB || $c == CONTROL_I ) {
                 if ( $arg->{this_cell}[COL] == $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]} && $arg->{this_cell}[ROW] == $#{$arg->{rowcol2list}} ) {
                     _beep( $arg );
                 }
@@ -733,7 +783,7 @@ sub choose {
                     else {
                         $arg->{top_listrow}    = $arg->{maxrows} * ( int( @{$arg->{rowcol2list}} / $arg->{maxrows} ) );
                         $arg->{this_cell}[ROW] = $#{$arg->{rowcol2list}} - 1;
-                        $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};  
+                        $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                         if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} ) {
                             $arg->{top_listrow} = $arg->{top_listrow} - $arg->{maxrows};
                             $arg->{begin_page}  = $arg->{top_listrow};
@@ -756,7 +806,7 @@ sub choose {
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                         $arg->{begin_page}     = $arg->{top_listrow};
                         $arg->{end_page}       = $#{$arg->{rowcol2list}};
-                        _wr_screen( $arg );   
+                        _wr_screen( $arg );
                     }
                 }
             }
@@ -1002,7 +1052,7 @@ sub _unicode_cut {
         my $length = $arg->{maxcols} - 3;
         my $max_length = int( $length / 2 ) + 1;
         while ( 1 ) {
-            #my( $tmp ) = $unicode =~ /\A(\X{0,$max_length})/;
+            #my( $tmp ) = $unicode =~ /^(\X{0,$max_length})/;
             my $tmp = substr( $unicode, 0, $max_length );
             my $gcs = Unicode::GCString->new( $tmp );
             $colwidth = $gcs->columns();
@@ -1033,7 +1083,7 @@ sub _unicode_sprintf {
     if ( $colwidth > $arg->{length_longest} ) {
         my $max_length = int( $arg->{length_longest} / 2 ) + 1;
         while ( 1 ) {
-            #my( $tmp ) = $unicode =~ /\A(\X{0,$max_length})/;
+            #my( $tmp ) = $unicode =~ /^(\X{0,$max_length})/;
             my $tmp = substr( $unicode, 0, $max_length );
             my $gcs = Unicode::GCString->new( $tmp );
             $colwidth = $gcs->columns();
@@ -1136,7 +1186,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.024
+Version 1.025
 
 =cut
 
@@ -1216,7 +1266,28 @@ The "q" key returns I<undef> or an empty list in list context.
 
 With a I<mouse_mode> enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
-Keys to move around: arrow keys (or h,j,k,l), Tab (or Ctrl-I), BackSpace (or Ctrl-H, Shift-Tab), PageUp and PageDown key (or Ctrl+B/Ctrl+F), Home key (or Ctrl-A) to jump to the beginning of the list, End key (or Ctrl-E) to jump to the end of the list.
+=head3 Keys to move around:
+
+=over
+
+=item *
+
+Arrow keys (or hjkl),
+
+=item *
+
+Tab key (or Ctrl-I) to move forward, BackSpace key (or Ctrl-H, Shift-Tab) to move backward,
+
+=item *
+
+PageUp key (or Ctrl+B) to go backward one page, PageDown key (or Ctrl+F) to go forward one page,
+
+=item *
+
+Home key (or Ctrl-A) to jump to the beginning of the list, End key (or Ctrl-E) to jump to the end of the list.
+
+=back
+
 
 =head3 Modifications for the output
 
@@ -1373,7 +1444,7 @@ Allowed values:  0 or greater
 
 =head4 pad_one_row
 
-Sets the number of whitespaces between elements if we have only one row. (default: 3)
+Sets the number of whitespaces between elements if we have only one row. (default: value of the option I<pad>)
 
 Allowed values:  0 or greater
 

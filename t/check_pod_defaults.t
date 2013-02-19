@@ -56,11 +56,21 @@ for my $key ( @simple ) {
     }
 }
 
-for my $key ( @long ) {
-    for my $line ( @{$pod{$key}} ) {
-        if ( $line =~ /default:\s('[^']+'|[\w]+)(?:\)|\s*)/ ) {
-            $pod_default{$key} = $1;
-            last;
+for my $key ( @long ) {          
+    if ( $key eq 'pad_one_row' ) {
+        for my $line ( @{$pod{$key}} ) {
+            if ( $line =~ /default:\s([^)]+)\)/ ) {
+                $pod_default{$key} = $1;
+                last;
+            }
+        }   
+    }
+    else {
+        for my $line ( @{$pod{$key}} ) {
+            if ( $line =~ /default:\s('[^']+'|\w+)(?:\)|\s*)/ ) {
+                $pod_default{$key} = $1;
+                last;
+            }
         }
     }
 }
@@ -72,7 +82,16 @@ is( scalar keys %pod_default, scalar keys %option_default, 'scalar keys %pod_def
  
  
 for my $key ( sort keys %option_default ) {
-    is( $option_default{$key}, $pod_default{$key}, "option $key: default value in pod matches default value in code" );
+    if ( $key eq 'pad_one_row' ) {
+        my $por = 0;
+        if ( $option_default{$key} eq '$config->{pad}' and $pod_default{$key} eq 'value of the option I<pad>' ) {
+            $por = 1;
+        }
+        is( $por, '1', "option $key: default value in pod OK" );
+    }
+    else {
+        is( $option_default{$key}, $pod_default{$key}, "option $key: default value in pod matches default value in code" );
+    }
 }
 
 

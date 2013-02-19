@@ -43,20 +43,17 @@ is( $data, 0, 'OK - __DATA__ section in $file is clean' );
 
 
 
+
 my $test_username_passwd = 0;
 open my $fh3, '<', $file;
 while ( my $line = readline $fh3 ) {
-    if ( $line =~ /\A\s+mysql_user\s+=>\sundef,/ ) {
-        $test_username_passwd++;
-    }
-    if ( $line =~ /\A\s+mysql_passwd\s+=>\sundef,/ ) {
-        $test_username_passwd++;
-    }    
-    if ( $line =~ /\A\s+postgres_user\s+=>\sundef,/ ) {
-        $test_username_passwd++;
-    }    
-    if ( $line =~ /\A\s+postgres_passwd\s+=>\sundef,/ ) {
-        $test_username_passwd++;
+    if ( $line =~ /\Amy\s\$info\s=\s\{\s*\z/ .. $line =~ /\A\};\s*\z/ ) {
+        if ( $line =~ /\A\s+user\s+=>\sundef,/ ) {
+            $test_username_passwd++;
+        }
+        if ( $line =~ /\A\s+passwd\s+=>\sundef,/ ) {
+            $test_username_passwd++;
+        }
     }
 }
 close $fh3;

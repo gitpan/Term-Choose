@@ -1,6 +1,13 @@
 Revision history for Term::Choose
 
 
+1.025   2013-02-19
+        - Option "pad_one_row" defaults to the value of the option "pad".
+        - Modified "croak" messages.
+        - Code refactoring.
+        - Updated documentation.
+        - Updated example.
+
 1.024   2013-02-09
         - "Home-key" and "End-key": removed status "experimental".
         - Updated documentation.
