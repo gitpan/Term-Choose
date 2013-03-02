@@ -4,7 +4,7 @@ use 5.10.1;
 use utf8;
 package Term::Choose;
 
-our $VERSION = '1.025';
+our $VERSION = '1.026';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -318,13 +318,13 @@ sub _validate_option {
     for my $key ( keys %$config ) {
         if ( $validate->{$key} ) {
             if ( defined $config->{$key} && ( $config->{$key} !~ m/^\d+\z/ || $config->{$key} < $validate->{$key}[MIN] || $config->{$key} > $validate->{$key}[MAX] ) ) {
-                carp "choose: \"$config->{$key}\" not a valid value for option \"$key\". Falling back to default value.";
+                carp "choose: '$config->{$key}' is not a valid value for the option '$key'. Falling back to the default value.";
                 $config->{$key} = undef;
                 ++$warn;
             }
         }
         elsif ( ! exists $validate->{$key} ) {
-            carp "choose: \"$key\": no such option";
+            carp "choose: '$key' is not a valid option";
             delete $config->{$key};
             ++$warn;
         }
@@ -487,57 +487,14 @@ sub _write_first_screen {
 
 sub choose {
     my ( $orig_list, $config ) = @_;
-
-    if ( @_ < 1 ) {
-        my $message;
-        $message .= "choose: called without arguments.\n";
-        $message .= "choose: expects 1 or 2 arguments.\n";
-        $message .= "->";
-        croak $message;
-    }
-    if ( @_ > 2 ) {
-        my $message;
-        $message .= "choose: called with " . scalar @_ . " arguments.\n";
-        $message .= "choose: expects 1 or 2 arguments.\n";
-        $message .= "->";
-        croak $message;
-    }
-    if ( ! defined $orig_list ) {
-        my $message;
-        $message .= "choose: The first argument is not defined.\n";
-        $message .= "choose: The first argument has to be an ARRAY reference.\n";
-        $message .= "->";
-        croak $message;
-    }
-    if ( ! reftype( $orig_list ) ) {
-        my $message;
-        $message .= "choose: The first argument is not a reference.\n";
-        $message .= "choose: The first argument has to be an ARRAY reference.\n";
-        $message .="->";
-        croak $message;
-    }
-    if ( reftype( $orig_list ) ne 'ARRAY' ) {
-        my $message;
-        $message .= "choose: The first argument is not an ARRAY reference.\n";
-        $message .= "choose: The first argument has to be an ARRAY reference.\n";
-        $message .= "->";
-        croak $message;
-    }
+    croak "choose: called without arguments. 'choose' expects 1 or 2 arguments." if @_ < 1;
+    croak "choose: called with " . scalar @_ . " arguments. 'choose' expects 1 or 2 arguments." if @_ > 2;
+    croak "choose: The first argument is not defined. The first argument has to be an ARRAY reference." if ! defined $orig_list;
+    croak "choose: The first argument is not a reference. The first argument has to be an ARRAY reference." if ! reftype( $orig_list );
+    croak "choose: The first argument is not an ARRAY reference. The first argument has to be an ARRAY reference." if reftype( $orig_list ) ne 'ARRAY';
     if ( defined $config ) {
-        if ( ! reftype( $config ) ) {
-            my $message;
-            $message .= "choose: The second argument is not a reference.\n";
-            $message .= "choose: The (optional) second argument has to be a HASH reference.\n";
-            $message .= "->";
-            croak $message;
-        }
-        if ( reftype( $config ) ne 'HASH' ) {
-            my $message;
-            $message .= "choose: The second argument is not a HASH reference.\n";
-            $message .= "choose: The (optional) second argument has to be a HASH reference.\n";
-            $message .= "->";
-            croak $message;
-        }
+        croak "choose: The second argument is not a reference. The (optional) second argument has to be a HASH reference." if ! reftype( $config );
+        croak "choose: The second argument is not a HASH reference. The (optional) second argument has to be a HASH reference." if reftype( $config ) ne 'HASH';
     }
     if ( ! @$orig_list ) {
         carp "choose: The first argument refers to an empty list!";
@@ -548,12 +505,7 @@ sub choose {
     my $arg = _set_layout( $wantarray, $config );
     if ( @$orig_list > $arg->{limit} ) {
         my $list_length = scalar @$orig_list;
-        my $message;
-        $message .= "choose: The list has $list_length items.\n";
-        $message .= "choose: Option \"limit\" is set to $arg->{limit}.\n";
-        $message .= "choose: The first $arg->{limit} itmes are used by choose.\n";
-        $message .= "->";
-        carp $message;
+        carp "choose: The list has $list_length items. Option 'limit' is set to $arg->{limit}. The first $arg->{limit} itmes are used by choose.";
         $arg->{list_to_long} = 1;
         print "Press a key to continue";
         my $dummy = <STDIN>;
@@ -1186,7 +1138,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.025
+Version 1.026
 
 =cut
 
@@ -1280,7 +1232,7 @@ Tab key (or Ctrl-I) to move forward, BackSpace key (or Ctrl-H, Shift-Tab) to mov
 
 =item *
 
-PageUp key (or Ctrl+B) to go backward one page, PageDown key (or Ctrl+F) to go forward one page,
+PageUp key (or Ctrl+B) to go back one page, PageDown key (or Ctrl+F) to go forward one page,
 
 =item *
 
@@ -1544,13 +1496,15 @@ Allowed values:  1 or greater
 
 =item * With no arguments I<choose> dies.
 
+=item * With more than two arguments I<choose> dies.
+
 =item * If the first argument is not a array reference I<choose> dies.
 
 =item * If the array referred by the first argument is empty I<choose> returns  I<undef> resp. an empty list and issues a warning.
 
 =item * If the array referred by the first argument has more than I<limit> elements (default 100_000) I<choose> warns and uses the first I<limit> array elements.
 
-=item * If the (optional) second argument is not a hash reference I<choose> dies.
+=item * If the (optional) second argument is defined and not a hash reference I<choose> dies.
 
 =item * If an option does not exist I<choose> warns.
 

@@ -1,6 +1,11 @@
 Revision history for Term::Choose
 
 
+1.026   2013-03-02
+        - Code refactoring.
+        - Imporved documentation.
+        - Example: update.
+
 1.025   2013-02-19
         - Option "pad_one_row" defaults to the value of the option "pad".
         - Modified "croak" messages.
