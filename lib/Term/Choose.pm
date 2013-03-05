@@ -1,10 +1,10 @@
 use warnings;
 use strict;
 use 5.10.1;
-use utf8;
+
 package Term::Choose;
 
-our $VERSION = '1.026';
+our $VERSION = '1.027';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -42,8 +42,8 @@ use constant {
     UNSET_EXT_MODE_MOUSE_1005       => "\e[?1005l",
     UNSET_SGR_EXT_MODE_MOUSE_1006   => "\e[?1006l",
 
-    MAX_MOUSE_1003_ROW              => 224,
-    MAX_MOUSE_1003_COL              => 224,
+    MAX_ROW_MOUSE_1003              => 224,
+    MAX_COL_MOUSE_1003              => 224,
 
     BEEP                            => "\07",
     CLEAR_SCREEN                    => "\e[2J",
@@ -451,8 +451,8 @@ sub _write_first_screen {
         $arg->{maxcols} = 1 if $arg->{maxcols} == 0;
     }
     if ( $arg->{mouse_mode} == 2 ) {
-        $arg->{maxcols} = MAX_MOUSE_1003_COL if $arg->{maxcols} > MAX_MOUSE_1003_COL;
-        $arg->{maxrows} = MAX_MOUSE_1003_ROW if $arg->{maxrows} > MAX_MOUSE_1003_ROW;
+        $arg->{maxcols} = MAX_COL_MOUSE_1003 if $arg->{maxcols} > MAX_COL_MOUSE_1003;
+        $arg->{maxrows} = MAX_ROW_MOUSE_1003 if $arg->{maxrows} > MAX_ROW_MOUSE_1003;
     }
     $arg->{head} = 0;
     $arg->{tail} = 0;
@@ -1138,7 +1138,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.026
+Version 1.027
 
 =cut
 

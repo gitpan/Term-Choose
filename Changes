@@ -1,6 +1,9 @@
 Revision history for Term::Choose
 
-
+1.027   2013-03-05
+        - Removed "utf8" pragma: only ASCII sourcecode and "utf8::upgrade" does not need "use utf8".
+        - Example: added option "sssc_mode".
+        
 1.026   2013-03-02
         - Code refactoring.
         - Imporved documentation.
