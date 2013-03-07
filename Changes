@@ -1,5 +1,17 @@
 Revision history for Term::Choose
 
+
+1.028   2013-03-07
+        - Fixed bug in "_handle_mouse" (all_in_one_row).
+        - Updated "_handle_mouse".
+        - Options: replaced "mouse_mode" with "mouse".
+        - Options: replaced "empty_string" with "empty".        - 
+        - Code refactoring.
+        - Code cleanup.
+        - Imporved documentation.
+        - Example: bug fixes.
+        - Example: updated function "choose_a_number".
+        
 1.027   2013-03-05
         - Removed "utf8" pragma: only ASCII sourcecode and "utf8::upgrade" does not need "use utf8".
         - Example: added option "sssc_mode".
@@ -31,23 +43,23 @@ Revision history for Term::Choose
         - Example: update and bug fixes.
 
 1.021   2013-01-28
-        -Removed deprecated options "right_justify" and "vertical".
-        -Updated documentation.
-        -Updated copyright.
-        -Example: switched back to "File::Find".
-        -Example: added postgres.
+        - Removed deprecated options "right_justify" and "vertical".
+        - Updated documentation.
+        - Updated copyright.
+        - Example: switched back to "File::Find".
+        - Example: added postgres.
 
 1.020   2013-01-02
-        -Added option "index".
-        -Updated documentation.
-        -Updated example. 
+        - Added option "index".
+        - Updated documentation.
+        - Updated example. 
 
 1.019   2012-12-26
-        -The "layout" "1" starts more broadly now (if more than one row). 
-        -Options: replaced "right_justify" with "justify" (with new value "centered").
-        -Options: replaced "vertical" with "order".
-        -Updated documentation.
-        -Updated example.
+        - The "layout" "1" starts more broadly now (if more than one row). 
+        - Options: replaced "right_justify" with "justify" (with new value "centered").
+        - Options: replaced "vertical" with "order".
+        - Updated documentation.
+        - Updated example.
 
 1.018   2012-11-28
         - warn "EOT" if "_getch" returns "undef".

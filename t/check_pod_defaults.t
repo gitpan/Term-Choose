@@ -8,8 +8,8 @@ unless ( $ENV{RELEASE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 
-my @long = ( qw( pad pad_one_row empty_string undef length_longest default limit screen_width ) );
-my @simple = ( qw( justify layout order clear_screen page mouse_mode beep hide_cursor index ) ); # prompt
+my @long = ( qw( pad pad_one_row empty undef length_longest default limit screen_width ) );
+my @simple = ( qw( justify layout order clear_screen page mouse beep hide_cursor index ) ); # prompt
 my @all = ( @long, @simple );
 
 plan tests => 2 + scalar @all;

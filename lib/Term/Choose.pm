@@ -4,7 +4,7 @@ use 5.10.1;
 
 package Term::Choose;
 
-our $VERSION = '1.027';
+our $VERSION = '1.028';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -64,37 +64,36 @@ use constant {
 use constant {
     NEXT_getch      => -1,
 
-    # Key code is ord key :
-    CONTROL_A       => 0x01,
-    CONTROL_B       => 0x02,
-    CONTROL_C       => 0x03,
-    CONTROL_D       => 0x04,
-    CONTROL_E       => 0x05,
-    CONTROL_F       => 0x06,
-    CONTROL_H       => 0x08,
-    CONTROL_I       => 0x09,
-    KEY_TAB         => 0x09,
-    KEY_ENTER       => 0x0d,
-    KEY_ESC         => 0x1b,
-    KEY_SPACE       => 0x20,
-    KEY_h           => 0x68,
-    KEY_j           => 0x6a,
-    KEY_k           => 0x6b,
-    KEY_l           => 0x6c,
-    KEY_q           => 0x71,
-    KEY_Tilde       => 0x7e,
-    KEY_BSPACE      => 0x7f,
-
-    # Arbitrary key codes :
-    KEY_PAGE_UP     => 0x21,
-    KEY_PAGE_DOWN   => 0x22,
-    KEY_END         => 0x23,
-    KEY_HOME        => 0x24,
-    KEY_LEFT        => 0x25,
-    KEY_UP          => 0x26,
-    KEY_RIGHT       => 0x27,
-    KEY_DOWN        => 0x28,
-    KEY_BTAB        => 0x08,
+    # Key codes:
+    CONTROL_A       => 0x01,    # ord key
+    CONTROL_B       => 0x02,    # ord key
+    CONTROL_C       => 0x03,    # ord key
+    CONTROL_D       => 0x04,    # ord key
+    CONTROL_E       => 0x05,    # ord key
+    CONTROL_F       => 0x06,    # ord key
+    CONTROL_H       => 0x08,    # ord key
+    KEY_BTAB        => 0x08,    # *
+    CONTROL_I       => 0x09,    # ord key
+    KEY_TAB         => 0x09,    # ord key
+    KEY_ENTER       => 0x0d,    # ord key
+    KEY_ESC         => 0x1b,    # ord key
+    KEY_SPACE       => 0x20,    # ord key
+    KEY_PAGE_UP     => 0x21,    # *
+    KEY_PAGE_DOWN   => 0x22,    # *
+    KEY_END         => 0x23,    # *
+    KEY_HOME        => 0x24,    # *
+    KEY_LEFT        => 0x25,    # *
+    KEY_UP          => 0x26,    # *
+    KEY_RIGHT       => 0x27,    # *
+    KEY_DOWN        => 0x28,    # *
+    KEY_h           => 0x68,    # ord key
+    KEY_j           => 0x6a,    # ord key
+    KEY_k           => 0x6b,    # ord key
+    KEY_l           => 0x6c,    # ord key
+    KEY_q           => 0x71,    # ord key
+    KEY_Tilde       => 0x7e,    # ord key
+    KEY_BSPACE      => 0x7f,    # ord key
+    # * arbitray key code
 };
 
 
@@ -154,7 +153,7 @@ sub _getch {
             }
             elsif ( $c eq '5' ) { return KEY_PAGE_UP; }
             elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
-            elsif ( $c eq 'M' && $arg->{mouse_mode} ) {
+            elsif ( $c eq 'M' && $arg->{mouse} ) {
                 # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
                 # http://leonerds-code.blogspot.co.uk/2012/04/wide-mouse-support-in-libvterm.html
                 my $event_type  = ord( ReadKey 0 ) - 32;        # byte 4
@@ -194,27 +193,27 @@ sub _init_scr {
     my ( $arg ) = @_;
     $arg->{old_handle} = select( $arg->{handle_out} );
     $|++;
-    if ( $arg->{mouse_mode} ) {
-        if ( $arg->{mouse_mode} == 3 ) {
+    if ( $arg->{mouse} ) {
+        if ( $arg->{mouse} == 3 ) {
             my $return = binmode STDIN, ':utf8';
             if ( $return ) {
                 print SET_ANY_EVENT_MOUSE_1003;
                 print SET_EXT_MODE_MOUSE_1005;
             }
             else {
-                $arg->{mouse_mode} = 0;
+                $arg->{mouse} = 0;
                 warn "binmode STDIN, :utf8: $!\n";
                 warn "mouse-mode disabled\n";
             }
         }
-        elsif ( $arg->{mouse_mode} == 4 ) {
+        elsif ( $arg->{mouse} == 4 ) {
             my $return = binmode STDIN, ':raw';
             if ( $return ) {
                 print SET_ANY_EVENT_MOUSE_1003;
                 print SET_SGR_EXT_MODE_MOUSE_1006;
             }
             else {
-                $arg->{mouse_mode} = 0;
+                $arg->{mouse} = 0;
                 warn "binmode STDIN, :raw: $!\n";
                 warn "mouse-mode disabled\n";
             }
@@ -225,7 +224,7 @@ sub _init_scr {
                 print SET_ANY_EVENT_MOUSE_1003;
             }
             else {
-                $arg->{mouse_mode} = 0;
+                $arg->{mouse} = 0;
                 warn "binmode STDIN, :raw: $!\n";
                 warn "mouse-mode disabled\n";
             }
@@ -241,10 +240,10 @@ sub _end_win {
     print CR, UP x ( $arg->{this_cell}[ROW] + $arg->{head} );
     _clear_to_end_of_screen( $arg );
     print RESET;
-    if ( $arg->{mouse_mode} ) {
+    if ( $arg->{mouse} ) {
         binmode STDIN, ':encoding(UTF-8)' or warn "binmode STDIN, :encoding(UTF-8): $!\n";
-        print UNSET_EXT_MODE_MOUSE_1005     if $arg->{mouse_mode} == 3;
-        print UNSET_SGR_EXT_MODE_MOUSE_1006 if $arg->{mouse_mode} == 4;
+        print UNSET_EXT_MODE_MOUSE_1005     if $arg->{mouse} == 3;
+        print UNSET_SGR_EXT_MODE_MOUSE_1006 if $arg->{mouse} == 4;
         print UNSET_ANY_EVENT_MOUSE_1003;
     }
     Term::ReadKey::ReadMode 'restore';
@@ -273,8 +272,8 @@ sub _copy_orig_list {
     if ( $arg->{list_to_long} ) {
         return [ map {
             my $copy = $_;
-            $copy = ( ! defined $copy ) ? $arg->{undef}        : $copy;
-            $copy = ( $copy eq '' )     ? $arg->{empty_string} : $copy;
+            $copy = $arg->{undef} if ! defined $copy;
+            $copy = $arg->{empty} if $copy eq '';
             $copy =~ s/\p{Space}/ /g;
             $copy =~ s/\p{Cntrl}//g;
             $copy;
@@ -282,8 +281,8 @@ sub _copy_orig_list {
     }
     return [ map {
         my $copy = $_;
-        $copy = ( ! defined $copy ) ? $arg->{undef}        : $copy;
-        $copy = ( $copy eq '' )     ? $arg->{empty_string} : $copy;
+        $copy = $arg->{undef} if ! defined $copy;
+        $copy = $arg->{empty} if $copy eq '';
         $copy =~ s/\p{Space}/ /g;
         $copy =~ s/\p{Cntrl}//g;
         $copy;
@@ -298,14 +297,16 @@ sub _validate_option {
         beep            => [ 0,       1 ],
         clear_screen    => [ 0,       1 ],
         default         => [ 0,  $limit ],
-        empty_string    => '',
+        empty           => '',              # NOTE: NEW -> replaces "empty_string"
+        empty_string    => '',              # NOTE: deprecated -> replaced be "empty"
         hide_cursor     => [ 0,       1 ],
         index           => [ 0,       1 ],
         justify         => [ 0,       2 ],
         layout          => [ 0,       3 ],
         length_longest  => [ 1,  $limit ],
         limit           => [ 1,  $limit ],
-        mouse_mode      => [ 0,       4 ],
+        mouse           => [ 0,       4 ],  # NOTE: NEW -> replaces "mouse_mode"
+        mouse_mode      => [ 0,       4 ],  # NOTE: deprecated -> replaced by "mouse"
         order           => [ 0,       1 ],
         pad             => [ 0,  $limit ],
         pad_one_row     => [ 0,  $limit ],
@@ -339,19 +340,29 @@ sub _validate_option {
 
 sub _set_layout {
     my ( $wantarray, $config ) = @_;
-    my $prompt = ( defined $wantarray ) ? 'Your choice:' : 'Close with ENTER';
+    my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
+
+    # ### #####
+    if ( defined $config->{empty_string} && ! defined $config->{empty} ) {
+        $config->{empty} = $config->{empty_string};
+    }
+    if ( defined $config->{mouse_mode} && ! defined $config->{mouse} ) {
+        $config->{mouse} = $config->{mouse_mode};
+    }
+    # ### #####
+
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
     #$config->{default}         //= undef;
-    $config->{empty_string}     //= '<empty>';
+    $config->{empty}            //= '<empty>';
     $config->{hide_cursor}      //= 1;
     $config->{index}            //= 0;
     $config->{justify}          //= 0;
     $config->{layout}           //= 1;
     #$config->{length_longest}  //= undef;
     $config->{limit}            //= 100_000;
-    $config->{mouse_mode}       //= 0;
+    $config->{mouse}            //= 0;
     $config->{order}            //= 1;
     $config->{pad}              //= 2;
     $config->{pad_one_row}      //= $config->{pad};
@@ -398,7 +409,7 @@ sub _prepare_page_number {
         if ( length sprintf( $arg->{prompt_printf_template}, $arg->{length_total_pages}, $arg->{total_pages}, $arg->{total_pages} )  > $arg->{maxcols} ) {
             $arg->{prompt_printf_template} = "%0*d/%d";
             if ( length sprintf( $arg->{prompt_printf_template}, $arg->{length_total_pages}, $arg->{total_pages}, $arg->{total_pages} )  > $arg->{maxcols} ) {
-                $arg->{length_total_pages} = ( $arg->{length_total_pages} > $arg->{maxcols} ) ? $arg->{maxcols} : $arg->{length_total_pages};
+                $arg->{length_total_pages} = $arg->{maxcols} if $arg->{length_total_pages} > $arg->{maxcols};
                 $arg->{prompt_printf_template} = "%0*.*s";
                 $arg->{prompt_arguments} = 1;
             }
@@ -450,7 +461,7 @@ sub _write_first_screen {
         $arg->{maxcols} = int( ( $arg->{maxcols} / 100 ) * $arg->{screen_width} );
         $arg->{maxcols} = 1 if $arg->{maxcols} == 0;
     }
-    if ( $arg->{mouse_mode} == 2 ) {
+    if ( $arg->{mouse} == 2 ) {
         $arg->{maxcols} = MAX_COL_MOUSE_1003 if $arg->{maxcols} > MAX_COL_MOUSE_1003;
         $arg->{maxrows} = MAX_ROW_MOUSE_1003 if $arg->{maxrows} > MAX_ROW_MOUSE_1003;
     }
@@ -480,8 +491,8 @@ sub _write_first_screen {
     _wr_screen( $arg );
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
-    print GET_CURSOR_POSITION if $arg->{mouse_mode};        # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
-    $arg->{cursor_row} = $arg->{screen_row} - $arg->{head}; # needed by handle_mouse
+    print GET_CURSOR_POSITION if $arg->{mouse};             # in: $arg->{abs_curs_X}, $arg->{abs_curs_Y}
+    $arg->{cursor_row} = $arg->{screen_row} - $arg->{head}; # needed by _handle_mouse
 }
 
 
@@ -782,7 +793,7 @@ sub choose {
                             for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
                                 if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
-                                    push @chosen, ( $arg->{index} ? $i : $arg->{orig_list}[$i] );
+                                    push @chosen, $arg->{index} ? $i : $arg->{orig_list}[$i];
                                 }
                             }
                         }
@@ -792,7 +803,7 @@ sub choose {
                             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
                                 if ( $arg->{marked}[$row][$col] || $row == $arg->{this_cell}[ROW] && $col == $arg->{this_cell}[COL] ) {
                                     my $i = $arg->{rowcol2list}[$row][$col];
-                                    push @chosen, ( $arg->{index} ? $i : $arg->{orig_list}[$i] );
+                                    push @chosen, $arg->{index} ? $i : $arg->{orig_list}[$i];
                                 }
                             }
                         }
@@ -951,7 +962,7 @@ sub _size_and_layout {
             $tmc *= $arg->{col_width};
             if ( $tmc < $maxcls ) {
                 $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 1.5 ) ) if $arg->{layout} == 1;
-                $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 6 ) ) if $arg->{layout} == 2;
+                $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 6 ) )   if $arg->{layout} == 2;
                 $maxcls = $tmc;
             }
         }
@@ -1089,14 +1100,50 @@ sub _handle_mouse {
     my $mouse_col = $x;
     my( $found_row, $found_col );
     my $found = 0;
-    for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
+#    if ( $#{$arg->{rowcol2list}} == 0 ) {
+    if ( $arg->{all_in_first_row} ) {
+        my $row = 0;
         if ( $row == $mouse_row ) {
+            my $end_last_col = 0;
             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
-                if ( ( $col * $arg->{col_width} < $mouse_col ) && ( ( $col + 1 ) * $arg->{col_width} >= $mouse_col ) ) {
+                utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
+                my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
+                my $end_this_col = $end_last_col + $gcs->columns() + $arg->{pad_one_row};
+                if ( $col == 0 ) {
+                    $end_this_col -= int( $arg->{pad_one_row} / 2 );
+                }
+                if ( $col == $#{$arg->{rowcol2list}[$row]} ) {
+                    $end_this_col = $arg->{maxcols} if $end_this_col > $arg->{maxcols};
+                }
+                if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
                     $found = 1;
                     $found_row = $row + $arg->{top_listrow};
                     $found_col = $col;
                     last;
+                }
+                $end_last_col = $end_this_col;
+            }
+        }
+    }
+    else {
+        for my $row ( 0 .. $#{$arg->{rowcol2list}} ) {
+            if ( $row == $mouse_row ) {
+                my $end_last_col = 0;
+                for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
+                    my $end_this_col = $end_last_col + $arg->{col_width};
+                    if ( $col == 0 ) {
+                        $end_this_col -= int( $arg->{pad} / 2 );
+                    }
+                    if ( $col == $#{$arg->{rowcol2list}[$row]} ) {
+                        $end_this_col = $arg->{maxcols} if $end_this_col > $arg->{maxcols};
+                    }
+                    if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
+                        $found = 1;
+                        $found_row = $row + $arg->{top_listrow};
+                        $found_col = $col;
+                        last;
+                    }
+                    $end_last_col = $end_this_col;
                 }
             }
         }
@@ -1138,7 +1185,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.027
+Version 1.028
 
 =cut
 
@@ -1216,7 +1263,7 @@ If the window size is changed, then as soon as the user enters a keystroke I<cho
 
 The "q" key returns I<undef> or an empty list in list context.
 
-With a I<mouse_mode> enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
+With a I<mouse> mode enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
 =head3 Keys to move around:
 
@@ -1228,7 +1275,7 @@ Arrow keys (or hjkl),
 
 =item *
 
-Tab key (or Ctrl-I) to move forward, BackSpace key (or Ctrl-H, Shift-Tab) to move backward,
+Tab key (or Ctrl-I) to move forward, BackSpace key (or Ctrl-H or Shift-Tab) to move backward,
 
 =item *
 
@@ -1253,7 +1300,7 @@ if an element is not defined the value from the option I<undef> is assigned to t
 
 =item *
 
-if an element holds an empty string the value from the option I<empty_string> is assigned to the element.
+if an element holds an empty string the value from the option I<empty> is assigned to the element.
 
 =item *
 
@@ -1448,7 +1495,22 @@ Allowed values:  0 or greater
 
 1 - print the page number on the bottom of the screen if there is more then one page. (default)
 
-=head4 mouse_mode
+
+=head4 mouse_mode DEPRECATED
+
+This option will be removed - use I<mouse> instead.
+
+0 - no mouse mode (default)
+
+1 - mouse mode 1003 enabled
+
+2 - mouse mode 1003 enabled; maxcols/maxrows limited to 224 (mouse mode 1003 doesn't work above 224)
+
+3 - extended mouse mode (1005) - uses utf8
+
+4 - extended SGR mouse mode (1006) - mouse mode 1003 is used if mouse mode 1006 is not supported
+
+=head4 mouse
 
 0 - no mouse mode (default)
 
@@ -1466,7 +1528,15 @@ Sets the string displayed on the screen instead an undefined element.
 
 default: '<undef>'
 
-=head4 empty_string
+=head4 empty_string DEPRECATED
+
+This option will be removed - use I<empty> instead.
+
+Sets the string displayed on the screen instead an empty string.
+
+default: '<empty>'
+
+=head4 empty
 
 Sets the string displayed on the screen instead an empty string.
 
@@ -1577,7 +1647,7 @@ If the option "clear_screen" is enabled:
 
     "\e[1;1H"   Go to Top Left (Cursor Position)
 
-If a "mouse_mode" is enabled:
+If a "mouse" mode is enabled:
 
     "\e[6n"     Get Cursor Position (Device Status Report)
 
@@ -1613,7 +1683,7 @@ Strings with characters where I<length(>characterI<)>* is not equal to the numbe
 
 L<Term::Clui>'s I<choose> prints and returns the chosen items while I<choose> from L<Term::Choose> only returns the chosen items.
 
-L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> is set to I<off>. In L<Term::Choose> the mouse mode is set with the option I<mouse_mode>.
+L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> is set to I<off>. In L<Term::Choose> the mouse mode is set with the option I<mouse>.
 
 =item Only in L<Term::Clui>
 

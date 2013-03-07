@@ -6,7 +6,7 @@ use open qw(:utf8 :std);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.027
+# Version 1.028
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -29,9 +29,10 @@ use Unicode::GCString;
 use constant {
     GO_TO_TOP_LEFT => "\e[1;1H",
     CLEAR_EOS      => "\e[0J",
-
-    v       => 0,
-    chs     => 1,
+};
+use constant {
+    v   => 0,
+    chs => 1,
 };
 
 my $home = File::HomeDir->my_home();
@@ -592,7 +593,7 @@ sub union_tables {
             $union_statement .= " " . join( ', ', map { $dbh->quote_identifier( $_ ) } @{$cols->{$table}} );
         }
         $union_statement .= " FROM " . $dbh->quote_identifier( undef, $schema, $table );
-        $union_statement .= ( $count < @$used_tables ? " UNION ALL " : " )" );
+        $union_statement .= $count < @$used_tables ? " UNION ALL " : " )";
     }
     my $derived_table_name = join '_', @$used_tables;
     $union_statement .= " AS $derived_table_name";
@@ -607,9 +608,9 @@ sub print_union_statement {
     for my $table ( @$used_tables ) {
         $count++;
         $print_string .= "  SELECT ";
-        $print_string .= ( defined $cols->{$table} ? join( ', ', @{$cols->{$table}} ) : '?' );
+        $print_string .= defined $cols->{$table} ? join( ', ', @{$cols->{$table}} ) : '?';
         $print_string .= " FROM $table";
-        $print_string .= ( $count < @$used_tables ? " UNION ALL" : "" );
+        $print_string .= $count < @$used_tables ? " UNION ALL" : "";
         $print_string .= "\n";
     }
     my $derived_table_name = join '_', @$used_tables;
@@ -1457,10 +1458,17 @@ sub read_table {
                         { prompt => 'Choose: ', %lyt_stmt }
                     );
                     if ( ! defined $choice ) {
-                        $sql->{quote}{limit_args} = [];
-                        $sql->{quote}{limit_stmt} = '';
-                        $sql->{print}{limit_stmt} = '';
-                        last LIMIT;
+                        if ( @{$sql->{quote}{limit_args}} ) {
+                            $sql->{quote}{limit_args} = [];
+                            $sql->{quote}{limit_stmt} = " LIMIT";
+                            $sql->{print}{limit_stmt} = " LIMIT";
+                            next LIMIT;
+                        }
+                        else {
+                            $sql->{quote}{limit_stmt} = '';
+                            $sql->{print}{limit_stmt} = '';
+                            last LIMIT;
+                        }
                     }
                     if ( $choice eq $info->{ok} ) {
                         if ( ! @{$sql->{quote}{limit_args}} ) {
@@ -1469,14 +1477,13 @@ sub read_table {
                         }
                         last LIMIT;
                     }
-                    $sql->{quote}{limit_args} = [];
-                    $sql->{quote}{limit_stmt} = " LIMIT";
-                    $sql->{print}{limit_stmt} = " LIMIT";
                     if ( $choice eq $offset_and_limit ) {
                         print_select_statement( $sql, $table );
                         # Choose
-                        my $offset = choose_a_number( $info, $opt, $digits, 'Compose OFFSET:' );
+                        my $offset = choose_a_number( $info, $opt, $digits, '"OFFSET"' );
                         if ( ! defined $offset ) {
+                            $sql->{quote}{limit_stmt} = " LIMIT";
+                            $sql->{print}{limit_stmt} = " LIMIT";
                             next LIMIT;
                         }
                         push @{$sql->{quote}{limit_args}}, $offset;
@@ -1485,7 +1492,7 @@ sub read_table {
                     }
                     print_select_statement( $sql, $table );
                     # Choose
-                    my $limit = choose_a_number( $info, $opt, $digits, 'Compose LIMIT:' );
+                    my $limit = choose_a_number( $info, $opt, $digits, '"LIMIT"' );
                     if ( ! defined $limit ) {
                         $sql->{quote}{limit_args} = [];
                         $sql->{quote}{limit_stmt} = " LIMIT";
@@ -1678,7 +1685,7 @@ sub print_loop {
         $rows -= $opt->{print}{limit}[v];
         while ( $rows > 0 ) {
             $begin += $opt->{print}{limit}[v];
-            $end   += ( $rows > $opt->{print}{limit}[v] ) ? $opt->{print}{limit}[v] : $rows;
+            $end   += $rows > $opt->{print}{limit}[v] ? $opt->{print}{limit}[v] : $rows;
             push @choices, sprintf "  %${lr}d - %${lr}d  ", $begin, $end;
             $rows -= $opt->{print}{limit}[v];
         }
@@ -1964,15 +1971,14 @@ sub options {
                     { prompt => 'Enable Binary Filter [' . $current_value . ']:', %lyt_bol }
                 );
                 next SWITCH if ! defined $choice;
-                $opt->{print}{binary_filter}[v] = ( $choice eq $true ) ? 1 : 0;
+                $opt->{print}{binary_filter}[v] = $choice eq $true ? 1 : 0;
                 $change++;
             }
             when ( $opt->{"print"}{'limit'}[chs] ) {
                 my $current_value = $opt->{print}{limit}[v];
                 $current_value =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
-                my $prompt = 'Compose new "limit" [' . $current_value . ']:';
                 # Choose
-                my $choice = choose_a_number( $info, $opt, 7, $prompt );
+                my $choice = choose_a_number( $info, $opt, 7, '"Max rows"', $current_value );
                 next SWITCH if ! defined $choice;
                 $opt->{print}{limit}[v] = $choice;
                 $change++;
@@ -1986,7 +1992,7 @@ sub options {
                     { prompt => 'Keep statement: set the default value [' . $current_value . ']:', %lyt_bol }
                 );
                 next SWITCH if ! defined $choice;
-                $opt->{sql}{lock_stmt}[v] = ( $choice eq $lk1 ) ? 1 : 0;
+                $opt->{sql}{lock_stmt}[v] = $choice eq $lk1 ? 1 : 0;
                 $change++;
             }
             when ( $opt->{"sql"}{'system_info'}[chs] ) {
@@ -1997,7 +2003,7 @@ sub options {
                     { prompt => 'Enable system DBs/schemas/tables [' . $current_value . ']:', %lyt_bol }
                 );
                 next SWITCH if ! defined $choice;
-                $opt->{sql}{system_info}[v] = ( $choice eq $true ) ? 1 : 0;
+                $opt->{sql}{system_info}[v] = $choice eq $true ? 1 : 0;
                 $change++;
             }
             when ( $opt->{"sql"}{'regexp_case'}[chs] ) {
@@ -2008,7 +2014,7 @@ sub options {
                     { prompt => 'REGEXP matches case sensitiv [' . $current_value . ']:', %lyt_bol }
                 );
                 next SWITCH if ! defined $choice;
-                $opt->{sql}{regexp_case}[v] = ( $choice eq $true ) ? 1 : 0;
+                $opt->{sql}{regexp_case}[v] = $choice eq $true ? 1 : 0;
                 $change++;
             }
             when ( $opt->{"dbs"}{'db_login'}[chs] ) {
@@ -2019,7 +2025,7 @@ sub options {
                     { prompt => 'Ask for every new DB connection [' . $current_value . ']:', %lyt_bol }
                 );
                 next SWITCH if ! defined $choice;
-                $opt->{dbs}{db_login}[v] = ( $choice eq $true ) ? 1 : 0;
+                $opt->{dbs}{db_login}[v] = $choice eq $true ? 1 : 0;
                 $change++;
             }
             when ( $opt->{"dbs"}{'db_defaults'}[chs] ) {
@@ -2054,7 +2060,7 @@ sub options {
                     { prompt => 'sssc mode [' . $current_value . ']:',  %lyt_bol }
                 );
                 next SWITCH if ! defined $choice;
-                $opt->{menu}{sssc_mode}[v] = $choice ? $compat : $simple;
+                $opt->{menu}{sssc_mode}[v] = $choice eq $compat ? 1 : 0;
                 $change++;
             }
             when ( $opt->{"menu"}{'operators'}[chs] ) {
@@ -2153,7 +2159,7 @@ sub database_setting {
                         delete $new->{$section}{$key};
                         next SQLITE;
                     }
-                    $new->{$section}{$key} = ( $choice eq $true ) ? 1 : 0;
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
                     $change++;
                 }
                 when ( $opt->{'sqlite'}{see_if_its_a_number}[chs] ) {
@@ -2168,16 +2174,15 @@ sub database_setting {
                         delete $new->{$section}{$key};
                         next SQLITE;
                     }
-                    $new->{$section}{$key} = ( $choice eq $true ) ? 1 : 0;
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
                     $change++;
                 }
                 when ( $opt->{'sqlite'}{busy_timeout}[chs] ) {
                     my $key = 'busy_timeout';
                     my $busy_timeout = current_value( $key, $db_type, $db );
                     $busy_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
-                    my $prompt = 'Compose new "Busy timeout (ms)" [' . $busy_timeout . ']:';
                     # Choose
-                    my $choice = choose_a_number( $info, $opt, 6, $prompt );
+                    my $choice = choose_a_number( $info, $opt, 6, '"Busy timeout"', $busy_timeout );
                     if ( ! defined $choice ) {
                         delete $new->{$section}{$key};
                         next SQLITE;
@@ -2189,9 +2194,8 @@ sub database_setting {
                     my $key = 'cache_size';
                     my $cache_size = current_value( $key, $db_type, $db );
                     $cache_size =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
-                    my $prompt = 'Compose new "Cache size (kb)" [' . $cache_size . ']:';
                     # Choose
-                    my $choice = choose_a_number( $info, $opt, 8, $prompt );
+                    my $choice = choose_a_number( $info, $opt, 8, '"Cache size (kb)"', $cache_size );
                     if ( ! defined $choice ) {
                         delete $new->{$section}{$key};
                         next SQLITE;
@@ -2216,7 +2220,7 @@ sub database_setting {
                         delete $new->{$section}{$key};
                         next MYSQL;
                     }
-                    $new->{$section}{$key} = ( $choice eq $true ) ? 1 : 0;
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
                     $change++;
                 }
                 when ( $opt->{'mysql'}{bind_type_guessing}[chs] ) {
@@ -2231,7 +2235,7 @@ sub database_setting {
                         delete $new->{$section}{$key};
                         next MYSQL;
                     }
-                    $new->{$section}{$key} = ( $choice eq $true ) ? 1 : 0;
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
                     $change++;
                 }
                 when ( $opt->{'mysql'}{ChopBlanks}[chs] ) {
@@ -2246,16 +2250,15 @@ sub database_setting {
                         delete $new->{$section}{$key};
                         next MYSQL;
                     }
-                    $new->{$section}{$key} = ( $choice eq $true ) ? 1 : 0;
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
                     $change++;
                 }
                 when ( $opt->{'mysql'}{connect_timeout}[chs] ) {
                     my $key = 'connect_timeout';
                     my $connect_timeout = current_value( $key, $db_type, $db );
                     $connect_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
-                    my $prompt = 'Compose new "Busy timeout (s)" [' . $connect_timeout . ']:';
                     # Choose
-                    my $choice = choose_a_number( $info, $opt, 4, $prompt );
+                    my $choice = choose_a_number( $info, $opt, 4, '"Busy timeout"', $connect_timeout );
                     if ( ! defined $choice ) {
                         delete $new->{$section}{$key};
                         next MYSQL;
@@ -2280,7 +2283,7 @@ sub database_setting {
                         delete $new->{$section}{$key};
                         next POSTGRES;
                     }
-                    $new->{$section}{$key} = ( $choice eq $true ) ? 1 : 0;
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
                     $change++;
                 }
                 default { die "$option: no such value in the hash \%opt"; }
@@ -2376,7 +2379,7 @@ sub read_json {
 
 
 sub choose_a_number {
-    my ( $info, $opt, $digits, $prompt ) = @_;
+    my ( $info, $opt, $digits, $name, $current ) = @_;
     my %hash;
     my $number;
     my $reset = 'reset';
@@ -2384,33 +2387,80 @@ sub choose_a_number {
     NUMBER: while ( 1 ) {
         my $longest = $digits;
         $longest += int( ( $digits - 1 ) / 3 ) if $opt->{menu}{kilo_sep}[v] ne '';
+        my $tab = '  -  ';
+        my $length_tab = length $tab;
         my @list = ();
         for my $di ( 0 .. $digits - 1 ) {
             my $begin = 1 . '0' x $di;
             $begin =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
             ( my $end = $begin ) =~ s/^1/9/;
-            unshift @list, sprintf " %*s  -  %*s", $longest, $begin, $longest, $end;
+            unshift @list, sprintf " %*s%s%*s", $longest, $begin, $tab, $longest, $end;
         }
-        my $confirm;
-        if ( $number ) {
-            $confirm = "Confirm: $number";
-            push @list, $confirm;
+        my $confirm = sprintf "%-*s", $longest * 2 + $length_tab, $info->{confirm};
+        my $back    = sprintf "%-*s", $longest * 2 + $length_tab, $info->{back};
+        my ( $terminal_width ) = GetTerminalSize( *STDOUT );
+        if ( length $list[0] > $terminal_width ) {
+             @list = ();
+            for my $di ( 0 .. $digits - 1 ) {
+                my $begin = 1 . '0' x $di;
+                $begin =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
+                unshift @list, sprintf "%*s", $longest, $begin;
+            }
+            $confirm = $info->{confirm};
+            $back    = $info->{back};
         }
+        my $new_number = $number // '--';
+        my ( $old, $new );
+        if ( defined $current ) {
+            $old = sprintf "%s%*s", 'Current ' . $name . ': ', $longest, $current;
+            $new = sprintf "%s%*s", '    New ' . $name . ': ', $longest, $new_number;
+            utf8::upgrade( $old );
+            my $gcs = Unicode::GCString->new( $old );
+            if ( $gcs->columns() > $terminal_width ) {
+                $old = sprintf "%s%*s", 'Cur: ', $longest, $current;
+                $new = sprintf "%s%*s", 'New: ', $longest, $new_number;
+                if ( length $old > $terminal_width ) {
+                    $old = undef;
+                    $new = $new_number;
+                }
+            }
+        }
+        else {
+            $new = sprintf "%s%*s", $name . ': ', $longest, $new_number;
+            utf8::upgrade( $new );
+            my $gcs = Unicode::GCString->new( $new );
+            if ( $gcs->columns() > $terminal_width ) {
+                $new = $new_number;
+            }
+        }
+
+        print GO_TO_TOP_LEFT;
+        print CLEAR_EOS;
+        say $old if defined $old;
+        say $new;
+        say "";
         # Choose
         my $range = choose(
-            [ undef, @list ],
-            { prompt => $prompt, layout => 3, justify => 1, undef => $info->{back} . ' ' x ( $longest * 2 + 1 ) }
+            [ undef, @list, $confirm ],
+            { prompt => 0, layout => 3, justify => 1, undef => $back }
         );
         return if ! defined $range;
-        last if $confirm && $range eq $confirm;
+        return if $range eq $confirm && ! defined $number;
+        last if $range eq $confirm;
         $range = ( split /\s*-\s*/, $range )[0];
         $range =~ s/^\s*\d//;
         ( my $range_no_sep = $range ) =~ s/\Q$opt->{menu}{kilo_sep}[v]\E//g if $opt->{menu}{kilo_sep}[v] ne '';
         my $key = length $range_no_sep;
+
+        print GO_TO_TOP_LEFT;
+        print CLEAR_EOS;
+        say $old if defined $old;
+        say $new;
+        say "";
         # Choose
         my $choice = choose(
             [ undef, map( $_ . $range, 1 .. 9 ), $reset ],
-            { %{$info->{lyt_h}}, undef => '<<' }
+            { prompt => 0, %{$info->{lyt_h}}, undef => '<<' }
         );
         next if ! defined $choice;
         if ( $choice eq $reset ) {
