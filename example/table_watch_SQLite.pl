@@ -2,11 +2,11 @@
 use warnings;
 use strict;
 use 5.10.1;
-use open qw(:utf8 :std);
+use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.028
+# Version 1.029
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -41,7 +41,7 @@ if ( $home ) {
     $config_dir = catdir( $home, $config_dir );
 }
 else {
-    say "Could not find home directory!";
+    say "Could not find the home directory!";
     exit;
 }
 
@@ -69,16 +69,17 @@ my $info = {
     avilable_operators  => [ "REGEXP", "NOT REGEXP", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL", "IN", "NOT IN",
                              "BETWEEN", "NOT BETWEEN", " = ", " != ", " <> ", " < ", " > ", " >= ", " <= " ],
     avilable_db_types   => [ 'sqlite', 'mysql', 'postgres' ],
-    mysql => {
-        user   => undef,
-        passwd => undef,
-    },
-    postgres => {
-        user   => undef,
-        passwd => undef,
-    },
+    login => {
+        mysql => {
+            user   => undef,
+            passwd => undef,
+        },
+        postgres => {
+            user   => undef,
+            passwd => undef,
+        },
+    }
 };
-
 
 utf8::upgrade( $info->{binary_string} );
 my $gcs = Unicode::GCString->new( $info->{binary_string} );
@@ -105,7 +106,6 @@ Options:
     Tab width      : Set the number of spaces between columns.
     Min col width  : Set the width the columns should have at least when printed.
     Undef          : Set the string that will be shown on the screen if a table value is undefined.
-    Binary filter  : Print "BNRY" instead of binary data (printing binary data could break the output).
     Max rows       : Set the maximum number of table rows available at once.
 
     Database types : Choose the needed database types.
@@ -116,13 +116,16 @@ Options:
                      and choose '- OK -' or use the "q" key.
 
     Keep statement : Set the default value: Lk0 or Lk1.
-    Metadata       : If enabled system tables/schemas/databases are appended to the respective list.
-    Regexp case    : If enabled REGEXP will match case sensitiv.
+    Show metadata  : If enabled system tables/schemas/databases are appended to the respective list.
+    Regexp case    : If enabled REGEXP will match case sensitive.
                      With MySQL
-                         if enabled the BINARY operator is used to achieve a case sensitiv match.
+                         if enabled the BINARY operator is used to achieve a case sensitive match.
                          if disabled the default case sensitivity is used.
 
     DB defaults    : Set Database defaults.
+                        Binary filter: Print "BNRY" instead of arbitrary binary data (printing arbitrary binary data could break the output).
+                        Different other settings.
+                        "DB defaults" can be overwritten for each Database with the "Database settings".
     DB login       : If enabled username and password are asked for each new DB connection.
                      If not enabled username and password are asked once and used for all connections.
 
@@ -133,12 +136,6 @@ Options:
 HELP
 }
 
-
-#----------------------------------------------------------------------------------------------------#
-#--------------------------------------------   options   -------------------------------------------#
-#----------------------------------------------------------------------------------------------------#
-
-
 my $default_db_types  = [ 'sqlite', 'mysql', 'postgres' ];
 my $default_operators = [ "REGEXP", "NOT REGEXP", " = ", " != ", " < ", " > ", "IS NULL", "IS NOT NULL", "IN" ];
 
@@ -147,16 +144,15 @@ my $opt = {
         tab_width      => [ 2,      '- Tab width' ],
         min_col_width  => [ 30,     '- Min col width' ],
         undef          => [ '',     '- Undef' ],
-        binary_filter  => [ 1,      '- Binary filter' ],
         limit          => [ 50_000, '- Max rows' ],
     },
     sql => {
         lock_stmt      => [ 0, '- Keep statement' ],
-        system_info    => [ 0, '- Metadata' ],
+        system_info    => [ 0, '- Show metadata' ],
         regexp_case    => [ 0, '- Regexp case' ],
     },
     menu => {
-        kilo_sep       => [ ',',                '- Thousands sep' ],
+        thsd_sep       => [ ',',                '- Thousands sep' ],
         database_types => [ $default_db_types,  '- Database types' ],
         operators      => [ $default_operators, '- Operators' ],
         sssc_mode      => [ 0, '- sssc mode' ],
@@ -172,28 +168,40 @@ my $opt = {
         see_if_its_a_number => [ 1,       '- See if its a number' ],
         busy_timeout        => [ 3_000,   '- Busy timeout (ms)' ],
         cache_size          => [ 500_000, '- Cache size (kb)' ],
+        
+        binary_filter  => [ 1,      '- Binary filter' ],
+        
     },
     mysql => {
         enable_utf8         => [ 1, '- Enable utf8' ],
         connect_timeout     => [ 4, '- Connect timeout' ],
         bind_type_guessing  => [ 1, '- Bind type guessing' ],
         ChopBlanks          => [ 1, '- Chop blanks off' ],
+        
+        binary_filter  => [ 1,      '- Binary filter' ],
+        
     },
     postgres => {
         pg_enable_utf8      => [ 1, '- Enable utf8' ],
+        
+        binary_filter  => [ 1,      '- Binary filter' ],
+        
     }
 };
 
 $info->{option_sections} = [ qw( print sql menu dbs ) ];
-$info->{print}{keys}     = [ qw( tab_width min_col_width undef binary_filter limit ) ];
+$info->{print}{keys}     = [ qw( tab_width min_col_width undef limit ) ];
+
 $info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case ) ];
 $info->{dbs}{keys}       = [ qw( db_login db_defaults ) ];
-$info->{menu}{keys}      = [ qw( kilo_sep database_types operators sssc_mode ) ];
+$info->{menu}{keys}      = [ qw( thsd_sep database_types operators sssc_mode ) ];
 
 $info->{db_sections}     = [ qw( sqlite mysql postgres ) ];
-$info->{sqlite}{keys}    = [ qw( reset_cache max_depth unicode see_if_its_a_number busy_timeout cache_size ) ];
-$info->{mysql}{keys}     = [ qw( enable_utf8 connect_timeout bind_type_guessing ChopBlanks ) ];
-$info->{postgres}{keys}  = [ qw( pg_enable_utf8 ) ];
+$info->{sqlite}{keys}    = [ qw( reset_cache max_depth unicode see_if_its_a_number busy_timeout cache_size binary_filter ) ];
+$info->{mysql}{keys}     = [ qw( enable_utf8 connect_timeout bind_type_guessing ChopBlanks binary_filter ) ];
+$info->{postgres}{keys}  = [ qw( pg_enable_utf8 binary_filter ) ];
+
+
 
 $info->{sqlite}{commandline_only} = [ qw( reset_cache max_depth ) ];
 
@@ -229,7 +237,6 @@ if ( $opt->{menu}{sssc_mode}[v] ) {
 
 
 ################################################################################################################
-#--------------------------------------------------   MAIN   --------------------------------------------------#
 ################################################################################################################
 
 
@@ -242,28 +249,30 @@ DB_TYPES: while ( 1 ) {
     last DB_TYPES if ! defined $info->{db_type};
     $info->{db_type} =~ s/^\s|\s\z//g;
 
+    my $db_type = $info->{db_type};
     my $databases = [];
     if ( ! eval {
         $databases = available_databases( $info, $opt );
         1 }
     ) {
-        say 'Available databases:';
+        say 'Available databases:';    
+        delete $info->{login}{$db_type};
         print_error_message( $@ );
         choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
     }
     if ( ! @$databases ) {
-        say 'no ' . $info->{db_type} . '-databases found';
+        say 'no ' . $db_type . '-databases found';
         choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
         next DB_TYPES;
     }
     if ( $opt->{sql}{system_info}[v] ) {
-        my $system_databases = system_databases( $info );
+        my $system_databases = system_databases( $db_type );
         my @system;
         for my $system_db ( @$system_databases ) {
             my $i = first_index{ $_ eq $system_db } @$databases;
             push @system, splice( @$databases, $i, 1 );
         }
-        if ( $info->{db_type} eq 'sqlite' ) {
+        if ( $db_type eq 'sqlite' ) {
             @$databases = ( @$databases, @system );
         }
         else {
@@ -271,7 +280,7 @@ DB_TYPES: while ( 1 ) {
         }
     }
     else {
-        if ( $info->{db_type} ne 'sqlite' ) {
+        if ( $db_type ne 'sqlite' ) {
             @$databases = map{ "- $_" } @$databases;
         }
     }
@@ -284,14 +293,14 @@ DB_TYPES: while ( 1 ) {
     DATABASES: while ( 1 ) {
 
         if ( ! $new_db_settings ) {
+            # $data = {};
             # Choose
             $db = choose(
                 [ undef, @$databases ],
                 { prompt => 'Choose Database' . $info->{cached}, %lyt_v_cs, undef => 'BACK' }
             );
             next DB_TYPES if ! defined $db;
-            $db =~ s/^[-\ ]\s// if $info->{db_type} ne 'sqlite';
-            # $data = {};
+            $db =~ s/^[-\ ]\s// if $db_type ne 'sqlite';
         }
         else {
             $new_db_settings = 0;
@@ -303,6 +312,9 @@ DB_TYPES: while ( 1 ) {
             1 }
         ) {
             say 'Get database handle and schema names:';
+            if ( $opt->{dbs}{db_login}[v] ) {
+                delete $info->{login}{$db_type}{$db};
+            }
             print_error_message( $@ );
             choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
             # remove database from @databases
@@ -316,7 +328,7 @@ DB_TYPES: while ( 1 ) {
                 $schema = $data->{$db}{schemas}[0];
             }
             elsif ( @{$data->{$db}{schemas}} > 1 ) {
-                if ( $opt->{sql}{system_info}[v] && $info->{db_type} eq 'postgres' ) {
+                if ( $opt->{sql}{system_info}[v] && $db_type eq 'postgres' ) {
                     my @system;
                     my @normal;
                     for my $schema ( @{$data->{$db}{schemas}} ) {
@@ -359,7 +371,7 @@ DB_TYPES: while ( 1 ) {
             my $db_setting   = '  Database settings';
             my @tables = ();
             push @tables, map { "- $_" } @{$data->{$db}{$schema}{tables}};
-            push @tables, '  sqlite_master' if $info->{db_type} eq 'sqlite' && $opt->{sql}{system_info}[v];
+            push @tables, '  sqlite_master' if $db_type eq 'sqlite' && $opt->{sql}{system_info}[v];
 
             TABLES: while ( 1 ) {
 
@@ -454,9 +466,9 @@ DB_TYPES: while ( 1 ) {
                     }
 
                     MAIN_LOOP: while ( 1 ) {
-                        my ( $all_arrayref, $print_cols, $col_types ) = read_table( $info, $opt, $sql, $dbh, $table, $from_stmt, $default_cols_sql, $quote_cols, $print_cols );
+                        my ( $all_arrayref, $print_cols ) = read_table( $info, $opt, $sql, $dbh, $table, $from_stmt, $default_cols_sql, $quote_cols, $print_cols );
                         last MAIN_LOOP if ! defined $all_arrayref;
-                        print_loop( $info, $opt, $dbh, $all_arrayref, $print_cols, $col_types );
+                        print_loop( $info, $opt, $dbh, $db, $all_arrayref, $print_cols );
                     }
 
                     1 }
@@ -470,9 +482,9 @@ DB_TYPES: while ( 1 ) {
     }
 }
 
-#----------------------------------------------------------------------------------------------------#
-#-- 111 ---------------------------------   union routines   ----------------------------------------#
-#----------------------------------------------------------------------------------------------------#
+
+######################################################################################################
+######################################################################################################
 
 
 sub union_tables {
@@ -557,7 +569,8 @@ sub union_tables {
                 last UNION_COLUMNS;
             }
             if ( $col eq $all_cols ) {
-                push @{$cols->{$union_table}}, '*';
+                #push @{$cols->{$union_table}}, '*';
+                push @{$cols->{$union_table}}, @{$data->{$db}{$schema}{col_names}{$union_table}};
                 next UNION_COLUMNS if $opt->{menu}{sssc_mode}[v];
                 last UNION_COLUMNS;
             }
@@ -620,11 +633,6 @@ sub print_union_statement {
     print CLEAR_EOS;
     print $print_string;
 }
-
-
-#----------------------------------------------------------------------------------------------------#
-#-- 222 ---------------------------------   join routines   -----------------------------------------#
-#----------------------------------------------------------------------------------------------------#
 
 
 sub get_tables_info {
@@ -900,9 +908,8 @@ sub print_join_statement {
 }
 
 
-#----------------------------------------------------------------------------------------------------#
-#-- 333 -------------------------------   statement routine   ---------------------------------------#
-#----------------------------------------------------------------------------------------------------#
+######################################################################################################
+######################################################################################################
 
 
 sub print_select_statement {
@@ -1538,14 +1545,13 @@ sub read_table {
                     $work_around = 0;
                 }
                 my $col_names = $sth->{NAME};
-                my $col_types = $sth->{db_TYPE_string( $info )};
                 if ( $info->{db_type} eq 'sqlite' && $table eq 'union_tables' && @{$sql->{quote}{chosen_columns}} ) {
                     $col_names = [ map { s/^"([^"]+)"\z/$1/; $_ } @$col_names ];
                 }
                 my $all_arrayref = $sth->fetchall_arrayref;
                 print GO_TO_TOP_LEFT;
                 print CLEAR_EOS;
-                return $all_arrayref, $col_names, $col_types;
+                return $all_arrayref, $col_names;
             }
             default {
                 die "$custom: no such value in the hash \%customize";
@@ -1668,13 +1674,12 @@ sub set_operator_sql {
 }
 
 
-#----------------------------------------------------------------------------------------------------#
-#-- 444 -----------------------------   prepare print routines   ------------------------------------#
-#----------------------------------------------------------------------------------------------------#
+######################################################################################################
+######################################################################################################
 
 
 sub print_loop {
-    my ( $info, $opt, $dbh, $all_arrayref, $col_names, $col_types ) = @_;
+    my ( $info, $opt, $dbh, $db, $all_arrayref, $col_names ) = @_;
     my $begin = 0;
     my $end = $opt->{print}{limit}[v] - 1;
     my @choices;
@@ -1705,10 +1710,10 @@ sub print_loop {
             $start =~ s/^\s+//;
             $stop = $start + $opt->{print}{limit}[v] - 1;
             $stop = $#$all_arrayref if $stop > $#$all_arrayref;
-            print_table( $info, $opt, [ @{$all_arrayref}[ $start .. $stop ] ], $col_names, $col_types );
+            print_table( $info, $opt, $db, [ @{$all_arrayref}[ $start .. $stop ] ], $col_names );
         }
         else {
-            print_table( $info, $opt, $all_arrayref, $col_names, $col_types );
+            print_table( $info, $opt, $db, $all_arrayref, $col_names );
             last PRINT;
         }
     }
@@ -1716,10 +1721,12 @@ sub print_loop {
 
 
 sub calc_widths {
-    my ( $info, $opt, $a_ref, $col_types, $terminal_width ) = @_;
-    my ( $cols_head_width, $width_columns, $is_binary_datatype, $not_a_number );
+    my ( $info, $opt, $db, $a_ref, $terminal_width ) = @_;
+    my ( $cols_head_width, $width_columns, $not_a_number );
     my $count = 0;
     say 'Computing: ...';
+    my $binary_filter = $opt->{$db}{binary_filter}[v] // $opt->{$info->{db_type}}{binary_filter}[v];
+    my $binray_regexp = qr/[\x00-\x08\x0B-\x0C\x0E-\x1F]/;
     for my $row ( @$a_ref ) {
         $count++;
         for my $i ( 0 .. $#$row ) {
@@ -1732,19 +1739,19 @@ sub calc_widths {
                 utf8::upgrade( $row->[$i] );
                 my $gcstring = Unicode::GCString->new( $row->[$i] );
                 $cols_head_width->[$i] = $gcstring->columns();
-                my $binary_datatype_regexp = binary_datatypes_regexp( $info );
-                if ( $col_types->[$i] =~ $binary_datatype_regexp ) {
-                    $width_columns->[$i] = $info->{binary_length} if $info->{binary_length} > $width_columns->[$i];
-                    $is_binary_datatype->[$i] = 1;
-                }
             }
             else {
                 # normal row
-                if ( $opt->{print}{binary_filter}[v] ) {
-                    if ( $is_binary_datatype->[$i] ) {
-                        $row->[$i] = $info->{binary_string};
-                    }
-                    elsif ( $info->{db_type} eq 'sqlite' && substr( $row->[$i], 0, 100 ) =~ /\0/ ) {
+                if ( $binary_filter ) {
+                    #my $is_binary = 0;
+                    #if ( ! eval {
+                    #    my $dummy = decode( 'utf8', $row->[$i], 1 );
+                    #    1 }
+                    #) {
+                    #    $is_binary = 1 if substr( $row->[$i], 0, 100 ) =~ $binray_regexp
+                    #}
+                    #if ( $is_binary  ) {
+                    if ( substr( $row->[$i], 0, 100 ) =~ $binray_regexp) {
                         $row->[$i] = $info->{binary_string};
                         $width_columns->[$i] = $info->{binary_length} if $info->{binary_length} > $width_columns->[$i];
                     }
@@ -1792,8 +1799,8 @@ sub minus_x_percent {
 }
 
 sub recalc_widths {
-    my ( $info, $opt, $terminal_width, $a_ref, $col_types ) = @_;
-    my ( $width_columns, $not_a_number ) = calc_widths( $info, $opt, $a_ref, $col_types, $terminal_width );
+    my ( $info, $opt, $db, $terminal_width, $a_ref ) = @_;
+    my ( $width_columns, $not_a_number ) = calc_widths( $info, $opt, $db, $a_ref, $terminal_width );
     return if ! defined $width_columns || ! @$width_columns;
     my $sum = sum( @$width_columns ) + $opt->{print}{tab_width}[v] * ( @$width_columns - 1 );
     my @tmp_width_columns = @$width_columns;
@@ -1840,17 +1847,12 @@ sub recalc_widths {
 }
 
 
-#----------------------------------------------------------------------------------------------------#
-#-- 555 ----------------------------------   print routine   ----------------------------------------#
-#----------------------------------------------------------------------------------------------------#
-
-
 sub print_table {
-    my ( $info, $opt, $a_ref, $col_names, $col_types ) = @_;
+    my ( $info, $opt, $db, $a_ref, $col_names ) = @_;
     my ( $terminal_width ) = GetTerminalSize( *STDOUT );
     return if ! defined $a_ref;
     unshift @$a_ref, $col_names if defined $col_names;
-    my ( $width_columns, $not_a_number ) = recalc_widths( $info, $opt, $terminal_width, $a_ref, $col_types );
+    my ( $width_columns, $not_a_number ) = recalc_widths( $info, $opt, $db, $terminal_width, $a_ref );
     return if ! defined $width_columns;
     my $items = @$a_ref * @{$a_ref->[0]};     #
     my $start = 10_000;                       #
@@ -1898,11 +1900,6 @@ sub print_table {
     );
     return;
 }
-
-
-#----------------------------------------------------------------------------------------------------#
-#-- 666 --------------------------------    option routines     -------------------------------------#
-#----------------------------------------------------------------------------------------------------#
 
 
 sub options {
@@ -1963,20 +1960,9 @@ sub options {
                 $opt->{print}{undef}[v] = $choice;
                 $change++;
             }
-            when ( $opt->{"print"}{'binary_filter'}[chs] ) {
-                # Choose
-                my $current_value = $opt->{print}{binary_filter}[v] ? 'YES' : 'NO';
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'Enable Binary Filter [' . $current_value . ']:', %lyt_bol }
-                );
-                next SWITCH if ! defined $choice;
-                $opt->{print}{binary_filter}[v] = $choice eq $true ? 1 : 0;
-                $change++;
-            }
             when ( $opt->{"print"}{'limit'}[chs] ) {
                 my $current_value = $opt->{print}{limit}[v];
-                $current_value =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
+                $current_value =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
                 # Choose
                 my $choice = choose_a_number( $info, $opt, 7, '"Max rows"', $current_value );
                 next SWITCH if ! defined $choice;
@@ -2032,7 +2018,7 @@ sub options {
                 my $ret = database_setting( $info, $opt );
                 $change++ if $ret;
             }
-            when ( $opt->{"menu"}{'kilo_sep'}[chs] ) {
+            when ( $opt->{"menu"}{'thsd_sep'}[chs] ) {
                 my ( $comma, $full_stop, $underscore, $space, $none ) = ( 'comma', 'full stop', 'underscore', 'space', 'none' );
                 my %sep_h = (
                     $comma      => ',',
@@ -2042,13 +2028,13 @@ sub options {
                     $none       => '',
                 );
                 # Choose
-                my $current_value = $opt->{menu}{kilo_sep}[v];
+                my $current_value = $opt->{menu}{thsd_sep}[v];
                 my $choice = choose(
                     [ undef, $comma, $full_stop, $underscore, $space, $none ],
                     { prompt => 'Thousands separator [' . $current_value . ']:',  %lyt_bol }
                 );
                 next SWITCH if ! defined $choice;
-                $opt->{menu}{kilo_sep}[v] = $sep_h{$choice};
+                $opt->{menu}{thsd_sep}[v] = $sep_h{$choice};
                 $change++;
             }
             when ( $opt->{"menu"}{'sssc_mode'}[chs] ) {
@@ -2180,7 +2166,7 @@ sub database_setting {
                 when ( $opt->{'sqlite'}{busy_timeout}[chs] ) {
                     my $key = 'busy_timeout';
                     my $busy_timeout = current_value( $key, $db_type, $db );
-                    $busy_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
+                    $busy_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
                     # Choose
                     my $choice = choose_a_number( $info, $opt, 6, '"Busy timeout"', $busy_timeout );
                     if ( ! defined $choice ) {
@@ -2193,7 +2179,7 @@ sub database_setting {
                 when ( $opt->{'sqlite'}{cache_size}[chs] ) {
                     my $key = 'cache_size';
                     my $cache_size = current_value( $key, $db_type, $db );
-                    $cache_size =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
+                    $cache_size =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
                     # Choose
                     my $choice = choose_a_number( $info, $opt, 8, '"Cache size (kb)"', $cache_size );
                     if ( ! defined $choice ) {
@@ -2201,6 +2187,21 @@ sub database_setting {
                         next SQLITE;
                     }
                     $new->{$section}{$key} = $choice;
+                    $change++;
+                }
+                when ( $opt->{'sqlite'}{binary_filter}[chs] ) {
+                    my $key = 'binary_filter';
+                    my $binary_filter = current_value( $key, $db_type, $db );
+                    # Choose
+                    my $choice = choose(
+                        [ undef, $true, $false ],
+                        { prompt => 'Enable Binary Filter [' . ( $binary_filter ? 'YES' : 'NO' ) . ']:', %lyt_bol }
+                    );
+                    if ( ! defined $choice ) {
+                        delete $new->{$section}{$key};
+                        next SQLITE;
+                    }
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
                     $change++;
                 }
                 default { die "$option: no such value in the hash \%opt"; }
@@ -2256,7 +2257,7 @@ sub database_setting {
                 when ( $opt->{'mysql'}{connect_timeout}[chs] ) {
                     my $key = 'connect_timeout';
                     my $connect_timeout = current_value( $key, $db_type, $db );
-                    $connect_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
+                    $connect_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
                     # Choose
                     my $choice = choose_a_number( $info, $opt, 4, '"Busy timeout"', $connect_timeout );
                     if ( ! defined $choice ) {
@@ -2264,6 +2265,21 @@ sub database_setting {
                         next MYSQL;
                     }
                     $new->{$section}{$key} = $choice;
+                    $change++;
+                }
+                when ( $opt->{'mysql'}{binary_filter}[chs] ) {
+                    my $key = 'binary_filter';
+                    my $binary_filter = current_value( $key, $db_type, $db );
+                    # Choose
+                    my $choice = choose(
+                        [ undef, $true, $false ],
+                        { prompt => 'Enable Binary Filter [' . ( $binary_filter ? 'YES' : 'NO' ) . ']:', %lyt_bol }
+                    );
+                    if ( ! defined $choice ) {
+                        delete $new->{$section}{$key};
+                        next MYSQL;
+                    }
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
                     $change++;
                 }
                 default { die "$option: no such value in the hash \%opt"; }
@@ -2278,6 +2294,21 @@ sub database_setting {
                     my $choice = choose(
                         [ undef, $true, $false ],
                         { prompt => 'Enable utf8 [' . ( $utf8 ? 'YES' : 'NO' ) . ']:', %lyt_bol }
+                    );
+                    if ( ! defined $choice ) {
+                        delete $new->{$section}{$key};
+                        next POSTGRES;
+                    }
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
+                    $change++;
+                }
+                when ( $opt->{'postgres'}{binary_filter}[chs] ) {
+                    my $key = 'binary_filter';
+                    my $binary_filter = current_value( $key, $db_type, $db );
+                    # Choose
+                    my $choice = choose(
+                        [ undef, $true, $false ],
+                        { prompt => 'Enable Binary Filter [' . ( $binary_filter ? 'YES' : 'NO' ) . ']:', %lyt_bol }
                     );
                     if ( ! defined $choice ) {
                         delete $new->{$section}{$key};
@@ -2302,11 +2333,6 @@ sub current_value {
         return $opt->{$db}{$key}[v] // $opt->{$db_type}{$key}[v];
     }
 }
-
-
-#----------------------------------------------------------------------------------------------------#
-#-- 777 --------------------------------    helper routines     -------------------------------------#
-#----------------------------------------------------------------------------------------------------#
 
 
 sub print_error_message {
@@ -2380,19 +2406,19 @@ sub read_json {
 
 sub choose_a_number {
     my ( $info, $opt, $digits, $name, $current ) = @_;
-    my %hash;
+    my %choices;
     my $number;
     my $reset = 'reset';
 
     NUMBER: while ( 1 ) {
         my $longest = $digits;
-        $longest += int( ( $digits - 1 ) / 3 ) if $opt->{menu}{kilo_sep}[v] ne '';
+        $longest += int( ( $digits - 1 ) / 3 ) if $opt->{menu}{thsd_sep}[v] ne '';
         my $tab = '  -  ';
         my $length_tab = length $tab;
         my @list = ();
         for my $di ( 0 .. $digits - 1 ) {
             my $begin = 1 . '0' x $di;
-            $begin =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
+            $begin =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
             ( my $end = $begin ) =~ s/^1/9/;
             unshift @list, sprintf " %*s%s%*s", $longest, $begin, $tab, $longest, $end;
         }
@@ -2403,7 +2429,7 @@ sub choose_a_number {
              @list = ();
             for my $di ( 0 .. $digits - 1 ) {
                 my $begin = 1 . '0' x $di;
-                $begin =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
+                $begin =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
                 unshift @list, sprintf "%*s", $longest, $begin;
             }
             $confirm = $info->{confirm};
@@ -2449,8 +2475,8 @@ sub choose_a_number {
         last if $range eq $confirm;
         $range = ( split /\s*-\s*/, $range )[0];
         $range =~ s/^\s*\d//;
-        ( my $range_no_sep = $range ) =~ s/\Q$opt->{menu}{kilo_sep}[v]\E//g if $opt->{menu}{kilo_sep}[v] ne '';
-        my $key = length $range_no_sep;
+        ( my $range_no_sep = $range ) =~ s/\Q$opt->{menu}{thsd_sep}[v]\E//g if $opt->{menu}{thsd_sep}[v] ne '';
+        my $length_choice = length $range_no_sep;
 
         print GO_TO_TOP_LEFT;
         print CLEAR_EOS;
@@ -2464,16 +2490,16 @@ sub choose_a_number {
         );
         next if ! defined $choice;
         if ( $choice eq $reset ) {
-            $hash{$key} = 0;
+            $choices{$length_choice} = 0;
         }
         else {
-            $choice =~ s/\Q$opt->{menu}{kilo_sep}[v]\E//g if $opt->{menu}{kilo_sep}[v] ne '';
-            $hash{$key} = $choice;
+            $choice =~ s/\Q$opt->{menu}{thsd_sep}[v]\E//g if $opt->{menu}{thsd_sep}[v] ne '';
+            $choices{$length_choice} = $choice;
         }
-        $number = sum( @hash{keys %hash} );
-        $number =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{kilo_sep}[v]/g;
+        $number = sum( @choices{keys %choices} );
+        $number =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
     }
-    $number =~ s/\Q$opt->{menu}{kilo_sep}[v]\E//g if $opt->{menu}{kilo_sep}[v] ne '';
+    $number =~ s/\Q$opt->{menu}{thsd_sep}[v]\E//g if $opt->{menu}{thsd_sep}[v] ne '';
     return $number;
 }
 
@@ -2567,14 +2593,14 @@ sub set_credentials {
         print GO_TO_TOP_LEFT;
         print CLEAR_EOS;
         say "Database: $db";
-        $info->{$db_type}{$db}{user}   = local_read_line( prompt => 'Username: ' )               if ! defined $info->{$db_type}{$db}{user};
-        $info->{$db_type}{$db}{passwd} = local_read_line( prompt => 'Password: ', no_echo => 1 ) if ! defined $info->{$db_type}{$db}{passwd};
-        return $info->{$db_type}{$db}{user}, $info->{$db_type}{$db}{passwd};
+        $info->{login}{$db_type}{$db}{user}   = local_read_line( prompt => 'Username: ' )               if ! defined $info->{login}{$db_type}{$db}{user};
+        $info->{login}{$db_type}{$db}{passwd} = local_read_line( prompt => 'Password: ', no_echo => 1 ) if ! defined $info->{login}{$db_type}{$db}{passwd};
+        return $info->{login}{$db_type}{$db}{user}, $info->{login}{$db_type}{$db}{passwd};
     }
     else {
-        $info->{$db_type}{user}   = local_read_line( prompt => 'Enter username: ' )               if ! defined $info->{$db_type}{user};
-        $info->{$db_type}{passwd} = local_read_line( prompt => 'Enter password: ', no_echo => 1 ) if ! defined $info->{$db_type}{passwd};
-        return $info->{$db_type}{user}, $info->{$db_type}{passwd};
+        $info->{login}{$db_type}{user}   = local_read_line( prompt => 'Enter username: ' )               if ! defined $info->{login}{$db_type}{user};
+        $info->{login}{$db_type}{passwd} = local_read_line( prompt => 'Enter password: ', no_echo => 1 ) if ! defined $info->{login}{$db_type}{passwd};
+        return $info->{login}{$db_type}{user}, $info->{login}{$db_type}{passwd};
     }
 }
 
@@ -2728,7 +2754,7 @@ sub available_databases {
         $databases = $dbh->selectcol_arrayref( $stmt, {} );
     }
     else {
-        no_entry_for_db_type( $info );;
+        no_entry_for_db_type( $info->{db_type} );
     }
     return $databases;
 }
@@ -2753,7 +2779,7 @@ sub get_schema_names {
         my $schemas = $dbh->selectcol_arrayref( $stmt, {} );
         return $schemas;
     }
-    no_entry_for_db_type( $info );;
+    no_entry_for_db_type( $info->{db_type} );
 }
 
 
@@ -2772,24 +2798,15 @@ sub get_table_names {
 
 
 sub system_databases {
-    my ( $info ) = @_;
+    my ( $db_type ) = @_;
     my $system_databases;
-    if ( $info->{db_type} eq 'mysql' ) {
+    if ( $db_type eq 'mysql' ) {
         $system_databases = [ qw( mysql information_schema performance_schema ) ];
     }
-    elsif ( $info->{db_type} eq 'postgres' ) {
+    elsif ( $db_type eq 'postgres' ) {
         $system_databases = [ qw( postgres template0 template1 ) ];
     }
     return $system_databases;
-}
-
-
-sub db_TYPE_string {
-    my ( $info ) = @_;
-    return 'TYPE'            if $info->{db_type} eq 'sqlite';
-    return 'mysql_type_name' if $info->{db_type} eq 'mysql';
-    return 'pg_type'         if $info->{db_type} eq 'postgres';
-    no_entry_for_db_type( $info );;
 }
 
 
@@ -2844,7 +2861,6 @@ sub primary_and_foreign_keys {
                     $foreign_keys->{$table}{$i}{reference_table}   = $2;
                 }
             }
-            $primary_key_columns->{$table} = [ $dbh->primary_key( undef, undef  , $table ) ];
         }
         elsif ( $info->{db_type} eq 'mysql' ) {
             $sth->execute( $schema, $table );
@@ -2853,7 +2869,6 @@ sub primary_and_foreign_keys {
                 $foreign_keys->{$table}{$row->{constraint_name}}{reference_key_col}[$row->{position_in_unique_constraint}-1] = $row->{referenced_column_name};
                 $foreign_keys->{$table}{$row->{constraint_name}}{reference_table} = $row->{referenced_table_name} if ! $foreign_keys->{$table}{$row->{constraint_name}}{reference_table};
             }
-            $primary_key_columns->{$table} = [ $dbh->primary_key( undef, $schema, $table ) ];
         }
         elsif ( $info->{db_type} eq 'postgres' ) {
             my $sth = $dbh->foreign_key_info( undef, undef, undef, undef, $schema, $table );
@@ -2864,8 +2879,8 @@ sub primary_and_foreign_keys {
                     $foreign_keys->{$table}{$row->{FK_NAME}}{reference_table} = $row->{UK_TABLE_NAME} if ! $foreign_keys->{$table}{$row->{FK_NAME}}{reference_table};
                 }
             }
-            $primary_key_columns->{$table} = [ $dbh->primary_key( undef, $schema, $table ) ];
         }
+        $primary_key_columns->{$table} = [ $dbh->primary_key( undef, $schema, $table ) ];
     }
     return $primary_key_columns, $foreign_keys;
 }
@@ -2908,27 +2923,14 @@ sub sql_regexp {
             return ' REGEXP_LIKE( ' . $quote_col . ', ? )'        if   $opt->{sql}{regexp_case}[v];
         }
     }
-    no_entry_for_db_type( $info );;
-}
-
-
-sub binary_datatypes_regexp {
-    my ( $info ) = @_;
-    return qr/^blob\z/i           if $info->{db_type} eq 'sqlite';
-    return qr/binary|blob\z/i     if $info->{db_type} eq 'mysql';
-    return qr/^(?:bytea|oid)\z/i  if $info->{db_type} eq 'postgres';
-    no_entry_for_db_type( $info );
+    no_entry_for_db_type( $info->{db_type} );
 }
 
 
 sub no_entry_for_db_type {
-    my ( $info ) = @_;
-    die "No entry for \"$info->{db_type}\"!";
+    my ( $db_type ) = @_;
+    die "No entry for \"$db_type\"!";
 }
 
 
-
 __DATA__
-
-
-

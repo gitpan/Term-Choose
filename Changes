@@ -1,11 +1,18 @@
 Revision history for Term::Choose
 
 
+1.029   2013-04-01
+        - Added experimental feature: "Ctrl-SpaceBar" inverts the choices.
+        - "choose": set "$\" and "$," to "undef".
+        - Code refactoring.
+        - Removed deprecated options from documentation.
+        - Example: Modified "binary filter".
+
 1.028   2013-03-07
         - Fixed bug in "_handle_mouse" (all_in_one_row).
         - Updated "_handle_mouse".
         - Options: replaced "mouse_mode" with "mouse".
-        - Options: replaced "empty_string" with "empty".        - 
+        - Options: replaced "empty_string" with "empty".
         - Code refactoring.
         - Code cleanup.
         - Imporved documentation.

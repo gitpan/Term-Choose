@@ -4,7 +4,7 @@ use 5.10.1;
 
 package Term::Choose;
 
-our $VERSION = '1.028';
+our $VERSION = '1.029';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -15,7 +15,7 @@ use Unicode::GCString;
 
 #use warnings FATAL => qw(all);
 #use Log::Log4perl qw(get_logger);
-#my $log = get_logger("Term::Choose");
+#my $log = get_logger( 'Term::Choose' );
 
 use constant {
     ROW     => 0,
@@ -65,6 +65,9 @@ use constant {
     NEXT_getch      => -1,
 
     # Key codes:
+########################################### ###
+    CONTROL_SPACE   => 0x00,     # ord key
+########################################### ###
     CONTROL_A       => 0x01,    # ord key
     CONTROL_B       => 0x02,    # ord key
     CONTROL_C       => 0x03,    # ord key
@@ -122,13 +125,13 @@ sub _getch {
             elsif ( $c eq 'F' ) { return KEY_END; }
             elsif ( $c eq 'H' ) { return KEY_HOME; }
             elsif ( $c eq 'Z' ) { return KEY_BTAB; }
-            elsif ( $c =~ /\d/ ) {
+            elsif ( $c =~ /[0-9]/ ) {
                 my $c1 = ReadKey 0;
                 if ( $c1 eq '~' ) {
                        if ( $c eq '5' ) { return KEY_PAGE_UP; }
                     elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
                 }
-                elsif ( $c1 =~ /[;\d]/ ) {   # cursor-position report, response to \e[6n
+                elsif ( $c1 =~ /[;0-9]/ ) {   # cursor-position report, response to "\e[6n"
                     my $abs_curs_Y = 0 + $c;
                     while ( 1 ) {
                         last if $c1 eq ';';
@@ -138,7 +141,7 @@ sub _getch {
                     my $abs_curs_X = 0; # $arg->{abs_curs_X} never used
                     while ( 1 ) {
                         $c1 = ReadKey 0;
-                        last if $c1 !~ /\d/;
+                        last if $c1 !~ /[0-9]/;
                         $abs_curs_X = 10 * $abs_curs_X + $c1;
                     }
                     if ( $c1 eq 'R' ) {
@@ -298,7 +301,7 @@ sub _validate_option {
         clear_screen    => [ 0,       1 ],
         default         => [ 0,  $limit ],
         empty           => '',              # NOTE: NEW -> replaces "empty_string"
-        empty_string    => '',              # NOTE: deprecated -> replaced be "empty"
+        empty_string    => '',              # NOTE: deprecated -> replaced by "empty"
         hide_cursor     => [ 0,       1 ],
         index           => [ 0,       1 ],
         justify         => [ 0,       2 ],
@@ -317,17 +320,17 @@ sub _validate_option {
     };
     my $warn = 0;
     for my $key ( keys %$config ) {
-        if ( $validate->{$key} ) {
-            if ( defined $config->{$key} && ( $config->{$key} !~ m/^\d+\z/ || $config->{$key} < $validate->{$key}[MIN] || $config->{$key} > $validate->{$key}[MAX] ) ) {
-                carp "choose: '$config->{$key}' is not a valid value for the option '$key'. Falling back to the default value.";
+        if ( ! exists $validate->{$key} ) {
+            carp "choose: \"$key\" is not a valid option";
+            delete $config->{$key};
+            ++$warn;
+        }
+        elsif ( $validate->{$key} ) {  # an empty string is not true
+            if ( defined $config->{$key} && ( $config->{$key} !~ m/^[0-9]+\z/ || $config->{$key} < $validate->{$key}[MIN] || $config->{$key} > $validate->{$key}[MAX] ) ) {
+                carp "choose: \"$config->{$key}\" is not a valid value for the option \"$key\". Falling back to the default value.";
                 $config->{$key} = undef;
                 ++$warn;
             }
-        }
-        elsif ( ! exists $validate->{$key} ) {
-            carp "choose: '$key' is not a valid option";
-            delete $config->{$key};
-            ++$warn;
         }
     }
     if ( $warn ) {
@@ -345,9 +348,15 @@ sub _set_layout {
     # ### #####
     if ( defined $config->{empty_string} && ! defined $config->{empty} ) {
         $config->{empty} = $config->{empty_string};
+        say "The the option name \"empty_string\" is deprecated and will be removed - use \"empty\" instead"; 
+        print "Press a key to continue";
+        my $dummy = <STDIN>;
     }
     if ( defined $config->{mouse_mode} && ! defined $config->{mouse} ) {
         $config->{mouse} = $config->{mouse_mode};
+        say "The the option name \"mouse_mode\" is deprecated and will be removed - use \"mouse\" instead"; 
+        print "Press a key to continue";
+        my $dummy = <STDIN>;
     }
     # ### #####
 
@@ -429,7 +438,7 @@ sub _prepare_promptline {
     $arg->{prompt_line} = $arg->{prompt};
     if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
         if ( $arg->{prompt} ) {
-            $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)';
+            $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)'; # ###
             my $prompt_length;
             utf8::upgrade( $arg->{prompt_line} );
             my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
@@ -498,6 +507,8 @@ sub _write_first_screen {
 
 sub choose {
     my ( $orig_list, $config ) = @_;
+    local $\ = undef;
+    local $, = undef;
     croak "choose: called without arguments. 'choose' expects 1 or 2 arguments." if @_ < 1;
     croak "choose: called with " . scalar @_ . " arguments. 'choose' expects 1 or 2 arguments." if @_ > 2;
     croak "choose: The first argument is not defined. The first argument has to be an ARRAY reference." if ! defined $orig_list;
@@ -516,7 +527,7 @@ sub choose {
     my $arg = _set_layout( $wantarray, $config );
     if ( @$orig_list > $arg->{limit} ) {
         my $list_length = scalar @$orig_list;
-        carp "choose: The list has $list_length items. Option 'limit' is set to $arg->{limit}. The first $arg->{limit} itmes are used by choose.";
+        carp "choose: The list has $list_length items. Option \"limit\" is set to $arg->{limit}. The first $arg->{limit} itmes are used by choose.";
         $arg->{list_to_long} = 1;
         print "Press a key to continue";
         my $dummy = <STDIN>;
@@ -773,6 +784,18 @@ sub choose {
                     }
                 }
             }
+############################################################################################ ###
+            when ( $c == CONTROL_SPACE ) {
+                if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
+                    for my $i ( 0 .. $#{$arg->{rowcol2list}} ) {
+                        for my $j ( 0 .. $#{$arg->{rowcol2list}[$i]} ) {
+                            $arg->{marked}[$i][$j] = $arg->{marked}[$i][$j] ? 0 : 1;
+                        }
+                    }
+                    _wr_screen( $arg );
+                }
+            }
+############################################################################################ ###
             when ( $c == KEY_q || $c == CONTROL_D ) {
                 _end_win( $arg );
                 return;
@@ -890,14 +913,15 @@ sub _wr_screen {
 
 sub _wr_cell {
     my( $arg, $row, $col ) = @_;
-    if ( $arg->{all_in_first_row} ) {
+    if ( $#{$arg->{rowcol2list}} == 0 ) {
+    #if ( $arg->{all_in_first_row} ) {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
                 utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
                 my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
                 $lngth += $gcs->columns();
-                $lngth += $arg->{pad_one_row} // 0;
+                $lngth += $arg->{pad_one_row} // 0; # ###
             }
         }
         _goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $lngth );
@@ -919,7 +943,7 @@ sub _size_and_layout {
     my ( $arg ) = @_;
     my $layout = $arg->{layout};
     $arg->{rowcol2list} = [];
-    $arg->{all_in_first_row} = 0;
+    #$arg->{all_in_first_row} = 0;
     if ( $arg->{length_longest} > $arg->{maxcols} ) {
         $arg->{length_longest} = $arg->{maxcols}; # needed for _unicode_sprintf
         $layout = 3;
@@ -944,7 +968,7 @@ sub _size_and_layout {
         }
     }
     if ( $all_in_first_row ) {
-        $arg->{all_in_first_row} = 1;
+        #$arg->{all_in_first_row} = 1;
         $arg->{rowcol2list}[0] = [ 0 .. $#{$arg->{list}} ];
     }
     elsif ( $layout == 3 ) {
@@ -1100,8 +1124,8 @@ sub _handle_mouse {
     my $mouse_col = $x;
     my( $found_row, $found_col );
     my $found = 0;
-#    if ( $#{$arg->{rowcol2list}} == 0 ) {
-    if ( $arg->{all_in_first_row} ) {
+    if ( $#{$arg->{rowcol2list}} == 0 ) {
+#    if ( $arg->{all_in_first_row} ) {
         my $row = 0;
         if ( $row == $mouse_row ) {
             my $end_last_col = 0;
@@ -1185,7 +1209,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.028
+Version 1.029
 
 =cut
 
@@ -1247,6 +1271,8 @@ I<choose> then returns the chosen item.
 
 If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar".
 
+In I<list context> "Ctrl-SpaceBar" inverts the choices: marked items are unmarked and unmarked items are marked (experimental).
+
 I<choose> then returns - when "Return" is pressed - the list of marked items including the highlighted item.
 
 =item
@@ -1279,7 +1305,7 @@ Tab key (or Ctrl-I) to move forward, BackSpace key (or Ctrl-H or Shift-Tab) to m
 
 =item *
 
-PageUp key (or Ctrl+B) to go back one page, PageDown key (or Ctrl+F) to go forward one page,
+PageUp key (or Ctrl-B) to go back one page, PageDown key (or Ctrl-F) to go forward one page,
 
 =item *
 
@@ -1495,21 +1521,6 @@ Allowed values:  0 or greater
 
 1 - print the page number on the bottom of the screen if there is more then one page. (default)
 
-
-=head4 mouse_mode DEPRECATED
-
-This option will be removed - use I<mouse> instead.
-
-0 - no mouse mode (default)
-
-1 - mouse mode 1003 enabled
-
-2 - mouse mode 1003 enabled; maxcols/maxrows limited to 224 (mouse mode 1003 doesn't work above 224)
-
-3 - extended mouse mode (1005) - uses utf8
-
-4 - extended SGR mouse mode (1006) - mouse mode 1003 is used if mouse mode 1006 is not supported
-
 =head4 mouse
 
 0 - no mouse mode (default)
@@ -1527,14 +1538,6 @@ This option will be removed - use I<mouse> instead.
 Sets the string displayed on the screen instead an undefined element.
 
 default: '<undef>'
-
-=head4 empty_string DEPRECATED
-
-This option will be removed - use I<empty> instead.
-
-Sets the string displayed on the screen instead an empty string.
-
-default: '<empty>'
 
 =head4 empty
 
