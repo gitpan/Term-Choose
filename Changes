@@ -1,6 +1,12 @@
 Revision history for Term::Choose
 
 
+1.030   2013-04-04
+        - Removed the undocumented appending of "(multiple choice ...)" to the promptstring in listcontext.
+        - Code cleanup.
+        - Updated documentation.
+        - Example: Added option "expand".
+
 1.029   2013-04-01
         - Added experimental feature: "Ctrl-SpaceBar" inverts the choices.
         - "choose": set "$\" and "$," to "undef".
@@ -18,14 +24,14 @@ Revision history for Term::Choose
         - Imporved documentation.
         - Example: bug fixes.
         - Example: updated function "choose_a_number".
-        
+
 1.027   2013-03-05
         - Removed "utf8" pragma: only ASCII sourcecode and "utf8::upgrade" does not need "use utf8".
         - Example: added option "sssc_mode".
-        
+
 1.026   2013-03-02
         - Code refactoring.
-        - Imporved documentation.
+        - Improved documentation.
         - Example: update.
 
 1.025   2013-02-19

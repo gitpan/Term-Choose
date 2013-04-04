@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.029
+# Version 1.030
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -44,7 +44,6 @@ else {
     say "Could not find the home directory!";
     exit;
 }
-
 mkdir $config_dir or die $! if ! -d $config_dir;
 
 my $info = {
@@ -145,6 +144,7 @@ my $opt = {
         min_col_width  => [ 30,     '- Min col width' ],
         undef          => [ '',     '- Undef' ],
         limit          => [ 50_000, '- Max rows' ],
+        expand         => [ 0,      '- Expand' ],
     },
     sql => {
         lock_stmt      => [ 0, '- Keep statement' ],
@@ -168,29 +168,23 @@ my $opt = {
         see_if_its_a_number => [ 1,       '- See if its a number' ],
         busy_timeout        => [ 3_000,   '- Busy timeout (ms)' ],
         cache_size          => [ 500_000, '- Cache size (kb)' ],
-        
-        binary_filter  => [ 1,      '- Binary filter' ],
-        
+        binary_filter       => [ 1,       '- Binary filter' ],
     },
     mysql => {
         enable_utf8         => [ 1, '- Enable utf8' ],
         connect_timeout     => [ 4, '- Connect timeout' ],
         bind_type_guessing  => [ 1, '- Bind type guessing' ],
         ChopBlanks          => [ 1, '- Chop blanks off' ],
-        
-        binary_filter  => [ 1,      '- Binary filter' ],
-        
+        binary_filter       => [ 1, '- Binary filter' ],
     },
     postgres => {
         pg_enable_utf8      => [ 1, '- Enable utf8' ],
-        
-        binary_filter  => [ 1,      '- Binary filter' ],
-        
+        binary_filter       => [ 1, '- Binary filter' ],
     }
 };
 
 $info->{option_sections} = [ qw( print sql menu dbs ) ];
-$info->{print}{keys}     = [ qw( tab_width min_col_width undef limit ) ];
+$info->{print}{keys}     = [ qw( tab_width min_col_width undef limit expand ) ];
 
 $info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case ) ];
 $info->{dbs}{keys}       = [ qw( db_login db_defaults ) ];
@@ -235,9 +229,6 @@ if ( $opt->{menu}{sssc_mode}[v] ) {
     $info->{ok} = '<OK>';
 }
 
-
-################################################################################################################
-################################################################################################################
 
 
 DB_TYPES: while ( 1 ) {
@@ -483,9 +474,6 @@ DB_TYPES: while ( 1 ) {
 }
 
 
-######################################################################################################
-######################################################################################################
-
 
 sub union_tables {
     my ( $info, $dbh, $db, $schema, $data ) = @_;
@@ -569,7 +557,6 @@ sub union_tables {
                 last UNION_COLUMNS;
             }
             if ( $col eq $all_cols ) {
-                #push @{$cols->{$union_table}}, '*';
                 push @{$cols->{$union_table}}, @{$data->{$db}{$schema}{col_names}{$union_table}};
                 next UNION_COLUMNS if $opt->{menu}{sssc_mode}[v];
                 last UNION_COLUMNS;
@@ -664,6 +651,7 @@ sub get_tables_info {
             }
         }
     }
+
     my $longest = 10;
     my ( $terminal_width ) = GetTerminalSize( *STDOUT );
     my $col_max = $terminal_width - $longest;
@@ -908,9 +896,6 @@ sub print_join_statement {
 }
 
 
-######################################################################################################
-######################################################################################################
-
 
 sub print_select_statement {
     my ( $sql, $table ) = @_;
@@ -943,6 +928,7 @@ sub read_table {
     my @keys = ( qw( print_table columns aggregate distinct where group_by having order_by limit lock ) );
     my $lock = [ '  Lk0', '  Lk1' ];
     my %customize = (
+        hidden          => 'Customize:',
         print_table     => 'Print TABLE',
         columns         => '- COLUMNS',
         aggregate       => '- AGGREGATE',
@@ -967,8 +953,10 @@ sub read_table {
         print_select_statement( $sql, $table );
         # Choose
         my $custom = choose(
-            [ undef, @customize{@keys} ],
-            { prompt => 'Customize:', layout => 3, undef => $info->{back} }
+            #[ undef, @customize{@keys} ],
+            #{ prompt => 'Customize:', layout => 3, undef => $info->{back} }
+            [ $customize{hidden}, undef, @customize{@keys} ],
+            { prompt => 0, layout => 3, default => 1, undef => $info->{back} }
         );
         for ( $custom ) {
             when ( ! defined ) {
@@ -1511,6 +1499,11 @@ sub read_table {
                     $sql->{print}{limit_stmt} .= ' ' . $limit;
                 }
             }
+            when ( $customize{'hidden'} ) {
+                $opt->{print}{expand}[v] = $opt->{print}{expand}[v] ? 0 : 1;
+                $custom = $customize{'print_table'};
+                redo;
+            }
             when( $customize{'print_table'} ) {
                 my $cols_sql = '';
                 if ( @{$sql->{quote}{chosen_columns}} ) {
@@ -1549,9 +1542,10 @@ sub read_table {
                     $col_names = [ map { s/^"([^"]+)"\z/$1/; $_ } @$col_names ];
                 }
                 my $all_arrayref = $sth->fetchall_arrayref;
+                unshift @$all_arrayref, $col_names;
                 print GO_TO_TOP_LEFT;
                 print CLEAR_EOS;
-                return $all_arrayref, $col_names;
+                return $all_arrayref;
             }
             default {
                 die "$custom: no such value in the hash \%customize";
@@ -1674,12 +1668,9 @@ sub set_operator_sql {
 }
 
 
-######################################################################################################
-######################################################################################################
-
 
 sub print_loop {
-    my ( $info, $opt, $dbh, $db, $all_arrayref, $col_names ) = @_;
+    my ( $info, $opt, $dbh, $db, $all_arrayref ) = @_;
     my $begin = 0;
     my $end = $opt->{print}{limit}[v] - 1;
     my @choices;
@@ -1710,10 +1701,10 @@ sub print_loop {
             $start =~ s/^\s+//;
             $stop = $start + $opt->{print}{limit}[v] - 1;
             $stop = $#$all_arrayref if $stop > $#$all_arrayref;
-            print_table( $info, $opt, $db, [ @{$all_arrayref}[ $start .. $stop ] ], $col_names );
+            print_table( $info, $opt, $db, [ @{$all_arrayref}[ $start .. $stop ] ] );
         }
         else {
-            print_table( $info, $opt, $db, $all_arrayref, $col_names );
+            print_table( $info, $opt, $db, $all_arrayref );
             last PRINT;
         }
     }
@@ -1789,7 +1780,7 @@ sub calc_widths {
             last MAX if $count == 0;
         }
     }
-    return $width_columns, $not_a_number;
+    return $cols_head_width, $width_columns, $not_a_number;
 }
 
 
@@ -1800,7 +1791,7 @@ sub minus_x_percent {
 
 sub recalc_widths {
     my ( $info, $opt, $db, $terminal_width, $a_ref ) = @_;
-    my ( $width_columns, $not_a_number ) = calc_widths( $info, $opt, $db, $a_ref, $terminal_width );
+    my ( $cols_head_width, $width_columns, $not_a_number ) = calc_widths( $info, $opt, $db, $a_ref, $terminal_width );
     return if ! defined $width_columns || ! @$width_columns;
     my $sum = sum( @$width_columns ) + $opt->{print}{tab_width}[v] * ( @$width_columns - 1 );
     my @tmp_width_columns = @$width_columns;
@@ -1843,16 +1834,15 @@ sub recalc_widths {
         last if $count == 0;
     }
     $width_columns = [ @tmp_width_columns ] if @tmp_width_columns;
-    return $width_columns, $not_a_number;
+    return $cols_head_width, $width_columns, $not_a_number;
 }
 
 
 sub print_table {
-    my ( $info, $opt, $db, $a_ref, $col_names ) = @_;
+    my ( $info, $opt, $db, $a_ref ) = @_;
     my ( $terminal_width ) = GetTerminalSize( *STDOUT );
     return if ! defined $a_ref;
-    unshift @$a_ref, $col_names if defined $col_names;
-    my ( $width_columns, $not_a_number ) = recalc_widths( $info, $opt, $db, $terminal_width, $a_ref );
+    my ( $cols_head_width, $width_columns, $not_a_number ) = recalc_widths( $info, $opt, $db, $terminal_width, $a_ref );
     return if ! defined $width_columns;
     my $items = @$a_ref * @{$a_ref->[0]};     #
     my $start = 10_000;                       #
@@ -1894,11 +1884,74 @@ sub print_table {
     }
     $progress->update( $total ) if $total >= $next_update && $items > $start; #
     say 'Computing: ...' if $items > $start * 2;                              #
-    choose( \@list, {
-        prompt => 0, layout => 3, clear_screen => 1, limit => $opt->{print}{limit}[v] + 1,
-        length_longest => sum( @$width_columns, $opt->{print}{tab_width}[v] * $#{$width_columns} ) }
-    );
-    return;
+    my $length_longest = sum( @$width_columns, $opt->{print}{tab_width}[v] * $#{$width_columns} );
+
+    if ( $opt->{print}{expand}[v] ) {
+        my $length_key = 0;
+        for my $width ( @$cols_head_width ) {
+            $length_key = $width if $width > $length_key;
+        }
+        $length_key += 1;
+        my $separator = ': ';
+        utf8::upgrade( $separator );
+        my $gcs = Unicode::GCString->new( $separator );
+        my $length_sep = $gcs->columns();
+        my $idx_old = 0;
+
+        while ( 1 ) {
+            if ( ( GetTerminalSize( *STDOUT ) )[0] != $terminal_width ) {
+                print_table( $info, $opt, $db, $a_ref );
+                return;
+            }
+            my $idx_row = choose(
+                \@list,
+                { prompt => 0, layout => 3, index => 1, default => $idx_old, clear_screen => 1, limit => $opt->{print}{limit}[v] + 1, length_longest => $length_longest }
+            );
+            return if ! defined $idx_row;
+            return if $idx_row == 0;
+            if ( $idx_old != 0 && $idx_old == $idx_row ) {
+                $idx_old = 0;
+                next;
+            }
+            $idx_old = $idx_row;
+            ( $terminal_width ) = GetTerminalSize( *STDOUT );
+            $length_key = int( $terminal_width * 1/100 * 33 ) if $length_key > int( $terminal_width * 1/100 * 33 );
+            my $col_max = $terminal_width - ( $length_key + $length_sep );
+            my $line_fold = Text::LineFold->new(
+                Charset       => 'utf-8',
+                ColMax        => $col_max,
+                OutputCharset => '_UNICODE_',
+                Urgent        => 'FORCE',
+            );
+            my $row_data = [ ' Close with ENTER' ];
+            for my $idx_col ( 0 .. $#{$a_ref->[0]} ) {
+                my $key = $a_ref->[0][$idx_col];
+                my $sep = $separator;
+                if ( ! defined $a_ref->[$idx_row][$idx_col] || $a_ref->[$idx_row][$idx_col] eq '' ) { 
+                    push @{$row_data}, sprintf "%*.*s%*s%s", $length_key, $length_key, $key, $length_sep, $sep, '';
+                }
+                else {
+                    my $text = $line_fold->fold( '' , '', $a_ref->[$idx_row][$idx_col] );
+                    for my $row ( split /\R+/, $text ) {
+                        push @{$row_data}, sprintf "%*.*s%*s%s", $length_key, $length_key, $key, $length_sep, $sep, $row;
+                        $key = '' if $key;
+                        $sep = '' if $sep;
+                    }
+                }
+            }
+            choose(
+                $row_data,
+                { prompt => 0, layout => 3, clear_screen => 1 }
+            );
+        }
+    }
+    else {
+        choose(
+            \@list,
+            { prompt => 0, layout => 3, clear_screen => 1, limit => $opt->{print}{limit}[v] + 1, length_longest => $length_longest }
+        );
+        return;
+    }
 }
 
 
@@ -1935,7 +1988,7 @@ sub options {
                 my $current_value = $opt->{print}{tab_width}[v];
                 my $choice = choose(
                     [ undef, 0 .. 99 ],
-                    { prompt => 'Tab width [' . $current_value . ']:',  %lyt_nr }
+                    { prompt => 'Tab width [' . $current_value . ']:', %lyt_nr }
                 );
                 next SWITCH if ! defined $choice;
                 $opt->{print}{tab_width}[v] = $choice;
@@ -1946,7 +1999,7 @@ sub options {
                 my $current_value = $opt->{print}{min_col_width}[v];
                 my $choice = choose(
                     [ undef, 0 .. 99 ],
-                    { prompt => 'Minimum Column width [' . $current_value . ']:',  %lyt_nr }
+                    { prompt => 'Minimum Column width [' . $current_value . ']:', %lyt_nr }
                 );
                 next SWITCH if ! defined $choice;
                 $opt->{print}{min_col_width}[v] = $choice;
@@ -1967,6 +2020,17 @@ sub options {
                 my $choice = choose_a_number( $info, $opt, 7, '"Max rows"', $current_value );
                 next SWITCH if ! defined $choice;
                 $opt->{print}{limit}[v] = $choice;
+                $change++;
+            }
+            when ( $opt->{"print"}{'expand'}[chs] ) {
+                # Choose
+                my $current_value = $opt->{print}{expand}[v] ? 'YES' : 'NO';
+                my $choice = choose(
+                    [ undef, $true, $false ],
+                    { prompt => 'Expand [' . $current_value . ']:', %lyt_bol  }
+                );
+                next SWITCH if ! defined $choice;
+                $opt->{print}{expand}[v] = $choice eq $true ? 1 : 0;
                 $change++;
             }
             when ( $opt->{"sql"}{'lock_stmt'}[chs] ) {
@@ -2031,7 +2095,7 @@ sub options {
                 my $current_value = $opt->{menu}{thsd_sep}[v];
                 my $choice = choose(
                     [ undef, $comma, $full_stop, $underscore, $space, $none ],
-                    { prompt => 'Thousands separator [' . $current_value . ']:',  %lyt_bol }
+                    { prompt => 'Thousands separator [' . $current_value . ']:', %lyt_bol }
                 );
                 next SWITCH if ! defined $choice;
                 $opt->{menu}{thsd_sep}[v] = $sep_h{$choice};
@@ -2043,7 +2107,7 @@ sub options {
                 my $current_value = $opt->{menu}{sssc_mode}[v] ? $compat : $simple;
                 my $choice = choose(
                     [ undef, $simple, $compat ],
-                    { prompt => 'sssc mode [' . $current_value . ']:',  %lyt_bol }
+                    { prompt => 'sssc mode [' . $current_value . ']:', %lyt_bol }
                 );
                 next SWITCH if ! defined $choice;
                 $opt->{menu}{sssc_mode}[v] = $choice eq $compat ? 1 : 0;
@@ -2373,7 +2437,7 @@ sub read_config_file {
     my $tmp = read_json( $file );
     for my $section ( keys %$tmp ) {
         for my $key ( keys %{$tmp->{$section}} ) {
-            $opt->{$section}{$key}[v] = $tmp->{$section}{$key};
+            $opt->{$section}{$key}[v] = $tmp->{$section}{$key} if exists $opt->{$section}{$key};
         }
     }
     return $opt;
@@ -2605,9 +2669,9 @@ sub set_credentials {
 }
 
 
-##########################################################################################################################
+
 ###########################################   database specific subroutines   ############################################
-##########################################################################################################################
+
 
 
 sub get_db_handle {
@@ -2932,5 +2996,15 @@ sub no_entry_for_db_type {
     die "No entry for \"$db_type\"!";
 }
 
-
 __DATA__
+
+
+
+
+
+
+
+
+
+
+

@@ -4,7 +4,7 @@ use 5.10.1;
 
 package Term::Choose;
 
-our $VERSION = '1.029';
+our $VERSION = '1.030';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -63,11 +63,8 @@ use constant {
 
 use constant {
     NEXT_getch      => -1,
-
     # Key codes:
-########################################### ###
-    CONTROL_SPACE   => 0x00,     # ord key
-########################################### ###
+    CONTROL_SPACE   => 0x00,    # ord key
     CONTROL_A       => 0x01,    # ord key
     CONTROL_B       => 0x02,    # ord key
     CONTROL_C       => 0x03,    # ord key
@@ -125,13 +122,13 @@ sub _getch {
             elsif ( $c eq 'F' ) { return KEY_END; }
             elsif ( $c eq 'H' ) { return KEY_HOME; }
             elsif ( $c eq 'Z' ) { return KEY_BTAB; }
-            elsif ( $c =~ /[0-9]/ ) {
+            elsif ( $c =~ /^[0-9]$/ ) {
                 my $c1 = ReadKey 0;
                 if ( $c1 eq '~' ) {
                        if ( $c eq '5' ) { return KEY_PAGE_UP; }
                     elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
                 }
-                elsif ( $c1 =~ /[;0-9]/ ) {   # cursor-position report, response to "\e[6n"
+                elsif ( $c1 =~ /^[;0-9]$/ ) {   # cursor-position report, response to "\e[6n"
                     my $abs_curs_Y = 0 + $c;
                     while ( 1 ) {
                         last if $c1 eq ';';
@@ -141,7 +138,7 @@ sub _getch {
                     my $abs_curs_X = 0; # $arg->{abs_curs_X} never used
                     while ( 1 ) {
                         $c1 = ReadKey 0;
-                        last if $c1 !~ /[0-9]/;
+                        last if $c1 !~ /^[0-9]$/;
                         $abs_curs_X = 10 * $abs_curs_X + $c1;
                     }
                     if ( $c1 eq 'R' ) {
@@ -195,7 +192,7 @@ sub _getch {
 sub _init_scr {
     my ( $arg ) = @_;
     $arg->{old_handle} = select( $arg->{handle_out} );
-    $|++;
+    $| = 1;
     if ( $arg->{mouse} ) {
         if ( $arg->{mouse} == 3 ) {
             my $return = binmode STDIN, ':utf8';
@@ -346,17 +343,20 @@ sub _set_layout {
     my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
 
     # ### #####
+    my $stop = 0;
     if ( defined $config->{empty_string} && ! defined $config->{empty} ) {
         $config->{empty} = $config->{empty_string};
-        say "The the option name \"empty_string\" is deprecated and will be removed - use \"empty\" instead"; 
-        print "Press a key to continue";
-        my $dummy = <STDIN>;
+        say "The the option name \"empty_string\" is deprecated and will be removed - use \"empty\" instead."; 
+        $stop++;
     }
     if ( defined $config->{mouse_mode} && ! defined $config->{mouse} ) {
         $config->{mouse} = $config->{mouse_mode};
-        say "The the option name \"mouse_mode\" is deprecated and will be removed - use \"mouse\" instead"; 
+        say "The the option name \"mouse_mode\" is deprecated and will be removed - use \"mouse\" instead."; 
+        $stop++;
+    }
+    if ( $stop ) {
         print "Press a key to continue";
-        my $dummy = <STDIN>;
+        my $dummy = <STDIN> if $stop;
     }
     # ### #####
 
@@ -436,19 +436,19 @@ sub _prepare_promptline {
     $arg->{prompt} =~ s/\p{Space}/ /g;
     $arg->{prompt} =~ s/\p{Cntrl}//g;
     $arg->{prompt_line} = $arg->{prompt};
-    if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
-        if ( $arg->{prompt} ) {
-            $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)'; # ###
-            my $prompt_length;
-            utf8::upgrade( $arg->{prompt_line} );
-            my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
-            $prompt_length = $gcs->columns();
-            $arg->{prompt_line} = $arg->{prompt} . ' (multiple choice)' if $prompt_length > $arg->{maxcols};
-        }
-        else {
-            $arg->{prompt_line} = '';
-        }
-    }
+#    if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
+#        if ( $arg->{prompt} ) {
+#            $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)';
+#            my $prompt_length;
+#            utf8::upgrade( $arg->{prompt_line} );
+#            my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
+#            $prompt_length = $gcs->columns();
+#            $arg->{prompt_line} = $arg->{prompt} . ' (multiple choice)' if $prompt_length > $arg->{maxcols};
+#        }
+#        else {
+#            $arg->{prompt_line} = '';
+#        }
+#    }
     my $prompt_length;
     utf8::upgrade( $arg->{prompt_line} );
     my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
@@ -697,7 +697,7 @@ sub choose {
                     $arg->{this_cell}[COL]--;
                     _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] + 1 );
                     _wr_cell( $arg, $arg->{this_cell}[ROW], $arg->{this_cell}[COL] );
-                    $arg->{backup_col} = undef if defined $arg->{backup_col}; # don't remember col if col is changed deliberately
+                    $arg->{backup_col} = undef if defined $arg->{backup_col}; # don't memorize col if col is changed deliberately
                 }
             }
             when ( $c == CONTROL_B || $c == KEY_PAGE_UP ) {
@@ -784,7 +784,6 @@ sub choose {
                     }
                 }
             }
-############################################################################################ ###
             when ( $c == CONTROL_SPACE ) {
                 if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
                     for my $i ( 0 .. $#{$arg->{rowcol2list}} ) {
@@ -795,7 +794,6 @@ sub choose {
                     _wr_screen( $arg );
                 }
             }
-############################################################################################ ###
             when ( $c == KEY_q || $c == CONTROL_D ) {
                 _end_win( $arg );
                 return;
@@ -914,14 +912,13 @@ sub _wr_screen {
 sub _wr_cell {
     my( $arg, $row, $col ) = @_;
     if ( $#{$arg->{rowcol2list}} == 0 ) {
-    #if ( $arg->{all_in_first_row} ) {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
                 utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
                 my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
                 $lngth += $gcs->columns();
-                $lngth += $arg->{pad_one_row} // 0; # ###
+                $lngth += $arg->{pad_one_row};
             }
         }
         _goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $lngth );
@@ -943,7 +940,6 @@ sub _size_and_layout {
     my ( $arg ) = @_;
     my $layout = $arg->{layout};
     $arg->{rowcol2list} = [];
-    #$arg->{all_in_first_row} = 0;
     if ( $arg->{length_longest} > $arg->{maxcols} ) {
         $arg->{length_longest} = $arg->{maxcols}; # needed for _unicode_sprintf
         $layout = 3;
@@ -968,7 +964,6 @@ sub _size_and_layout {
         }
     }
     if ( $all_in_first_row ) {
-        #$arg->{all_in_first_row} = 1;
         $arg->{rowcol2list}[0] = [ 0 .. $#{$arg->{list}} ];
     }
     elsif ( $layout == 3 ) {
@@ -1125,7 +1120,6 @@ sub _handle_mouse {
     my( $found_row, $found_col );
     my $found = 0;
     if ( $#{$arg->{rowcol2list}} == 0 ) {
-#    if ( $arg->{all_in_first_row} ) {
         my $row = 0;
         if ( $row == $mouse_row ) {
             my $end_last_col = 0;
@@ -1209,7 +1203,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.029
+Version 1.030
 
 =cut
 
@@ -1271,7 +1265,7 @@ I<choose> then returns the chosen item.
 
 If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar".
 
-In I<list context> "Ctrl-SpaceBar" inverts the choices: marked items are unmarked and unmarked items are marked (experimental).
+In I<list context> "Ctrl-SpaceBar" inverts the choices: marked items are unmarked and unmarked items are marked.
 
 I<choose> then returns - when "Return" is pressed - the list of marked items including the highlighted item.
 
