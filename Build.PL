@@ -1,4 +1,4 @@
-use 5.010001;
+use 5.010000;
 use warnings;
 use strict;
 use utf8;
@@ -18,7 +18,7 @@ my $builder = Module::Build->new(
         'Test::More' => 0,
     },
     requires => {
-        'perl'              => '5.010001',
+        'perl'              => '5.010000',
         'Carp'              => 0,
         'Scalar::Util'      => 0,
         'Term::ReadKey'     => '2.30', 

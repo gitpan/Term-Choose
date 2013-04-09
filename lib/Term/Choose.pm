@@ -1,10 +1,10 @@
 use warnings;
 use strict;
-use 5.10.1;
+use 5.10.0;
 
 package Term::Choose;
 
-our $VERSION = '1.030';
+our $VERSION = '1.031';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -274,7 +274,7 @@ sub _copy_orig_list {
             my $copy = $_;
             $copy = $arg->{undef} if ! defined $copy;
             $copy = $arg->{empty} if $copy eq '';
-            $copy =~ s/\p{Space}/ /g;
+            $copy =~ s/\p{Space}/ /g;   # replace, but don't squash sequences of spaces
             $copy =~ s/\p{Cntrl}//g;
             $copy;
         } @{$arg->{orig_list}}[ 0 .. $arg->{limit} - 1 ] ];
@@ -283,7 +283,7 @@ sub _copy_orig_list {
         my $copy = $_;
         $copy = $arg->{undef} if ! defined $copy;
         $copy = $arg->{empty} if $copy eq '';
-        $copy =~ s/\p{Space}/ /g;
+        $copy =~ s/\p{Space}/ /g;   # replace, but don't squash sequences of spaces
         $copy =~ s/\p{Cntrl}//g;
         $copy;
     } @{$arg->{orig_list}} ];
@@ -303,7 +303,8 @@ sub _validate_option {
         index           => [ 0,       1 ],
         justify         => [ 0,       2 ],
         layout          => [ 0,       3 ],
-        length_longest  => [ 1,  $limit ],
+        ll              => [ 1,  $limit ],  # NOTE: NEW -> replaces "length_longest"
+        length_longest  => [ 1,  $limit ],  # NOTE: deprecated -> replaced by "ll"
         limit           => [ 1,  $limit ],
         mouse           => [ 0,       4 ],  # NOTE: NEW -> replaces "mouse_mode"
         mouse_mode      => [ 0,       4 ],  # NOTE: deprecated -> replaced by "mouse"
@@ -343,6 +344,10 @@ sub _set_layout {
     my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
 
     # ### #####
+    if ( defined $config->{length_longest} && ! defined $config->{ll} ) {
+        $config->{ll} = $config->{length_longest};
+    }
+    # ### #####
     my $stop = 0;
     if ( defined $config->{empty_string} && ! defined $config->{empty} ) {
         $config->{empty} = $config->{empty_string};
@@ -369,7 +374,7 @@ sub _set_layout {
     $config->{index}            //= 0;
     $config->{justify}          //= 0;
     $config->{layout}           //= 1;
-    #$config->{length_longest}  //= undef;
+    #$config->{ll}              //= undef;
     $config->{limit}            //= 100_000;
     $config->{mouse}            //= 0;
     $config->{order}            //= 1;
@@ -436,19 +441,6 @@ sub _prepare_promptline {
     $arg->{prompt} =~ s/\p{Space}/ /g;
     $arg->{prompt} =~ s/\p{Cntrl}//g;
     $arg->{prompt_line} = $arg->{prompt};
-#    if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
-#        if ( $arg->{prompt} ) {
-#            $arg->{prompt_line} = $arg->{prompt} . '  (multiple choice with spacebar)';
-#            my $prompt_length;
-#            utf8::upgrade( $arg->{prompt_line} );
-#            my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
-#            $prompt_length = $gcs->columns();
-#            $arg->{prompt_line} = $arg->{prompt} . ' (multiple choice)' if $prompt_length > $arg->{maxcols};
-#        }
-#        else {
-#            $arg->{prompt_line} = '';
-#        }
-#    }
     my $prompt_length;
     utf8::upgrade( $arg->{prompt_line} );
     my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
@@ -476,11 +468,11 @@ sub _write_first_screen {
     }
     $arg->{head} = 0;
     $arg->{tail} = 0;
-    $arg->{head} = 1 if $arg->{prompt} ne '0';
+    $arg->{head} = 1 if $arg->{prompt} ne '' && $arg->{prompt} ne '0'; # ### this will be "$arg->{head} = 1 if $arg->{prompt} ne '';" in the next release
     $arg->{tail} = 1 if $arg->{page};
     $arg->{maxrows} -= $arg->{head} + $arg->{tail};
     _size_and_layout( $arg );
-    _prepare_promptline( $arg ) if $arg->{prompt} ne '0';
+    _prepare_promptline( $arg ) if $arg->{prompt} ne '' && $arg->{prompt} ne '0'; # ### this will be "_prepare_promptline( $arg ) if $arg->{prompt} ne '';" in the next release
     _prepare_page_number( $arg ) if $arg->{page};
     $arg->{maxrows_index} = $arg->{maxrows} - 1;
     $arg->{maxrows_index} = 0 if $arg->{maxrows_index} < 0;
@@ -535,7 +527,12 @@ sub choose {
     $arg->{orig_list} = $orig_list;
     $arg->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
     $arg->{list} = _copy_orig_list( $arg );
-    $arg->{length_longest} = _length_longest( $arg->{list} ) if ! defined $arg->{length_longest};
+    if ( defined $arg->{ll} ) {
+        $arg->{length_longest} = $arg->{ll}
+    }
+    else {
+        $arg->{length_longest} = _length_longest( $arg->{list} );
+    }
     $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
     $arg->{wantarray} = $wantarray;
     _init_scr( $arg );
@@ -941,8 +938,11 @@ sub _size_and_layout {
     my $layout = $arg->{layout};
     $arg->{rowcol2list} = [];
     if ( $arg->{length_longest} > $arg->{maxcols} ) {
-        $arg->{length_longest} = $arg->{maxcols}; # needed for _unicode_sprintf
+        $arg->{available_column_width} = $arg->{maxcols};
         $layout = 3;
+    }
+    else {
+        $arg->{available_column_width} = $arg->{length_longest};
     }
     ### layout
     my $all_in_first_row;
@@ -967,9 +967,16 @@ sub _size_and_layout {
         $arg->{rowcol2list}[0] = [ 0 .. $#{$arg->{list}} ];
     }
     elsif ( $layout == 3 ) {
-        for my $idx ( 0 .. $#{$arg->{list}} ) {
-            $arg->{list}[$idx] = _unicode_cut( $arg, $arg->{list}[$idx] );
-            $arg->{rowcol2list}[$idx][0] = $idx;
+        if ( $arg->{length_longest} <= $arg->{maxcols} ) {
+            for my $idx ( 0 .. $#{$arg->{list}} ) {
+                $arg->{rowcol2list}[$idx][0] = $idx;
+            }
+        }
+        else {
+            for my $idx ( 0 .. $#{$arg->{list}} ) {
+                $arg->{list}[$idx] = _unicode_cut( $arg, $arg->{list}[$idx] );
+                $arg->{rowcol2list}[$idx][0] = $idx;
+            }
         }
     }
     else {
@@ -1029,28 +1036,28 @@ sub _unicode_cut {
     my ( $arg, $unicode ) = @_;
     utf8::upgrade( $unicode );
     my $gcs = Unicode::GCString->new( $unicode );
-    my $colwidth = $gcs->columns();
-    if ( $colwidth > $arg->{maxcols} ) {
-        my $length = $arg->{maxcols} - 3;
-        my $max_length = int( $length / 2 ) + 1;
+    my $string_width = $gcs->columns();
+    if ( $string_width > $arg->{maxcols} ) {
+        my $available_terminal_width = $arg->{maxcols} - 3;
+        my $max_length = int( $available_terminal_width / 2 ) + 1;
         while ( 1 ) {
             #my( $tmp ) = $unicode =~ /^(\X{0,$max_length})/;
             my $tmp = substr( $unicode, 0, $max_length );
             my $gcs = Unicode::GCString->new( $tmp );
-            $colwidth = $gcs->columns();
-            if ( $colwidth > $length ) {
-                # As soon as the string is longer than length_longest again:
+            $string_width = $gcs->columns();
+            if ( $string_width > $available_terminal_width ) {
+                # As soon as the string is longer than the available terminal width again:
                 $unicode = $tmp;
                 last;
             }
             $max_length += 10;
         }
-        while ( $colwidth > $length ) {
+        while ( $string_width > $available_terminal_width ) {
             $unicode =~ s/\X\z//;
             my $gcs = Unicode::GCString->new( $unicode );
-            $colwidth = $gcs->columns();
+            $string_width = $gcs->columns();
         }
-        $unicode .= ' ' if $colwidth < $length;
+        $unicode .= ' ' if $string_width < $available_terminal_width;
         $unicode .= '...';
     }
     return $unicode;
@@ -1061,41 +1068,40 @@ sub _unicode_sprintf {
     my ( $arg, $unicode ) = @_;
     utf8::upgrade( $unicode );
     my $gcs = Unicode::GCString->new( $unicode );
-    my $colwidth = $gcs->columns();
-    if ( $colwidth > $arg->{length_longest} ) {
-        my $max_length = int( $arg->{length_longest} / 2 ) + 1;
+    my $string_width = $gcs->columns();
+    if ( $string_width > $arg->{available_column_width} ) {
+        my $max_length = int( $arg->{available_column_width} / 2 ) + 1;
         while ( 1 ) {
             #my( $tmp ) = $unicode =~ /^(\X{0,$max_length})/;
             my $tmp = substr( $unicode, 0, $max_length );
             my $gcs = Unicode::GCString->new( $tmp );
-            $colwidth = $gcs->columns();
-            if ( $colwidth > $arg->{length_longest} ) {
-                # As soon as the string is longer than length_longest again:
+            $string_width = $gcs->columns();
+            if ( $string_width > $arg->{available_column_width} ) {
+                # As soon as the string is longer than the available column width again:
                 $unicode = $tmp;
                 last;
             }
             $max_length += 10;
         }
-        while ( $colwidth > $arg->{length_longest} ) {
+        while ( $string_width > $arg->{available_column_width} ) {
             $unicode =~ s/\X\z//;
             my $gcs = Unicode::GCString->new( $unicode );
-            $colwidth = $gcs->columns();
+            $string_width = $gcs->columns();
         }
-        $unicode .= ' ' if $colwidth < $arg->{length_longest};
+        $unicode .= ' ' if $string_width < $arg->{available_column_width};
     }
-    elsif ( $colwidth < $arg->{length_longest} ) {
+    elsif ( $string_width < $arg->{available_column_width} ) {
         if ( $arg->{justify} == 0 ) {
-            $unicode = $unicode . " " x ( $arg->{length_longest} - $colwidth );
+            $unicode = $unicode . " " x ( $arg->{available_column_width} - $string_width );
         }
         elsif ( $arg->{justify} == 1 ) {
-            $unicode = " " x ( $arg->{length_longest} - $colwidth ) . $unicode;
+            $unicode = " " x ( $arg->{available_column_width} - $string_width ) . $unicode;
         }
         elsif ( $arg->{justify} == 2 ) {
-            my $all = $arg->{length_longest} - $colwidth;
+            my $all = $arg->{available_column_width} - $string_width;
             my $half = int( $all / 2 );
             $unicode = " " x $half . $unicode . " " x ( $all - $half );
         }
-
     }
     return $unicode;
 }
@@ -1203,13 +1209,13 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.030
+Version 1.031
 
 =cut
 
 =head1 SYNOPSIS
 
-    use 5.10.1;
+    use 5.10.0;
     use Term::Choose qw(choose);
 
     my $array_ref = [ qw( one two three four five ) ];
@@ -1217,10 +1223,10 @@ Version 1.030
     my $choice = choose( $array_ref );                            # single choice
     say $choice;
 
-    my @choices = choose( [ 1 .. 100 ], { right_justify => 1 } ); # multiple choice
+    my @choices = choose( [ 1 .. 100 ], { justify => 1 } );       # multiple choice
     say "@choices";
 
-    choose( [ 'Press ENTER to continue' ], { prompt => 0 } );     # no choice
+    choose( [ 'Press ENTER to continue' ], { prompt => '' } );    # no choice
 
 
 =head1 DESCRIPTION
@@ -1265,9 +1271,9 @@ I<choose> then returns the chosen item.
 
 If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar".
 
-In I<list context> "Ctrl-SpaceBar" inverts the choices: marked items are unmarked and unmarked items are marked.
-
 I<choose> then returns - when "Return" is pressed - the list of marked items including the highlighted item.
+
+In I<list context> "Ctrl-SpaceBar" inverts the choices: marked items are unmarked and unmarked items are marked.
 
 =item
 
@@ -1360,7 +1366,7 @@ There is a general upper limit of 1_000_000_000 for options which expect a numbe
 
 If I<prompt> is undefined a default prompt-string will be shown.
 
-If I<prompt> is 0 no prompt-line will be shown.
+If the I<prompt> value is  an empty string ("") no prompt-line will be shown (until the next relese a "0" will have the same effect).
 
 default in list and scalar context: 'Your choice:'
 
@@ -1473,24 +1479,6 @@ Allowed values:  0 or greater
 
 1 - clears the screen before printing the choices
 
-=head4 length_longest
-
-If the length* of the element with the largest length is known before calling I<choose> it can be passed with this option.
-
-If I<length_longest> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
-
-If I<length_longest> is set to a value less than the length of the longest element all elements which a length greater than this value will be cut.
-
-A larger value than the length of the longest element wastes space on the screen.
-
-If the value of I<length_longest> is greater than the screen width I<length_longest> will be set to the screen width.
-
-* length means the number of print columns the element will use on the terminal.
-
-Allowed values: 1 or greater
-
-(default: undef)
-
 =head4 default
 
 With the option I<default> can be selected an element, which will be highlighted as the default instead of the first element.
@@ -1557,6 +1545,31 @@ Sets the maximal allowed length of the array. (default: 100_000)
 
 Allowed values:  1 or greater
 
+=head4 length_longest or ll
+
+This option is experimental.
+
+If the length of the element with the largest length is known before calling I<choose> it can be passed with this option.
+
+I<length> refers here to the number of print columns the element will use on the terminal.
+
+A way to determine the number of print colunms is the use of the function I<colunms> from L<Unicode::GCString>.
+
+Calculating the largest length by using the number of bytes or the number of characters of the strings instead of using the numer of print columns could break the output.
+
+If I<ll> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
+
+If I<ll> is set to a value less than the length of the longest element all elements which a length greater than this value will be cut.
+
+A larger value than the length of the longest element wastes space on the screen.
+
+If the value of I<ll> is greater than the screen width I<ll> will be set to the screen width.
+
+Allowed values: 1 or greater
+
+(default: undef)
+
+
 =head3 Error handling
 
 =over
@@ -1583,7 +1596,7 @@ Allowed values:  1 or greater
 
 =head2 Perl Version
 
-Requires Perl Version 5.10.1 or greater.
+Requires Perl Version 5.10.0 or greater.
 
 =head2 Modules
 

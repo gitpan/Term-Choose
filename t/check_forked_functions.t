@@ -1,4 +1,4 @@
-use 5.010001;
+use 5.010000;
 use strict;
 use warnings;
 use autodie;
@@ -29,8 +29,7 @@ while ( readline $fh ) {
 close $fh;
 
 
-
-my @c = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ } @unicode_cut[7..25];
-my @s = map { s/\A\s+//; s/\$arg->\{length_longest\}/---/; s/\$arg->\{maxcols\}/---/; s/\$length/---/; $_ } @unicode_sprintf[6..24];
+my @c = map { s/\A\s+//; s/\$available_terminal_width/---/;        s/ terminal / --- /; $_ } @unicode_cut[7..25];
+my @s = map { s/\A\s+//; s/\$arg->\{available_column_width\}/---/; s/ column / --- /;   $_ } @unicode_sprintf[6..24];
 
 ok( @c ~~ @s, '_unicode... cut ok' );

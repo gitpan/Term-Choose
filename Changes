@@ -1,6 +1,15 @@
 Revision history for Term::Choose
 
 
+1.031   2013-04-09
+        - Option "prompt": the value '' (empty string) means now no promptline.
+        - Skip checking string-length in layout "3" if "length_longest" <= "maxcols".
+        - The opton "length_longest" is now called also "ll".
+        - Changed mininum Perl version from "5.10.1" to "5.10.0".
+        - Code cleanup.
+        - Updated documentation.
+        - Updated example.
+
 1.030   2013-04-04
         - Removed the undocumented appending of "(multiple choice ...)" to the promptstring in listcontext.
         - Code cleanup.

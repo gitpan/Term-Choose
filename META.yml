@@ -16,13 +16,13 @@ name: Term-Choose
 provides:
   Term::Choose:
     file: lib/Term/Choose.pm
-    version: 1.030
+    version: 1.031
 requires:
   Carp: 0
   Scalar::Util: 0
   Term::ReadKey: 2.30
   Unicode::GCString: 2012.04
-  perl: 5.010001
+  perl: 5.010000
 resources:
   license: http://dev.perl.org/licenses/
-version: 1.030
+version: 1.031

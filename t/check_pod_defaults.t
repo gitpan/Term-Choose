@@ -1,4 +1,4 @@
-use 5.010001;
+use 5.010000;
 use strict;
 use warnings;
 use autodie;
@@ -11,6 +11,7 @@ unless ( $ENV{RELEASE_TESTING} ) {
 my @long = ( qw( pad pad_one_row empty undef length_longest default limit screen_width ) );
 my @simple = ( qw( justify layout order clear_screen page mouse beep hide_cursor index ) ); # prompt
 my @all = ( @long, @simple );
+my @deprecated = ( qw() );
 
 plan tests => 2 + scalar @all;
 
@@ -23,8 +24,11 @@ open $fh, '<', $file;
 while ( my $line = readline $fh ) {
     if ( $line =~ /\Asub _set_layout {/ .. $line =~ /\A\s+return\s\$config;/ ) {
         if ( $line =~ m|\A\s+#?\s*\$config->{(\w+)}\s+//=\s(.*);| ) {
-            next if $1 eq 'prompt';
-            $option_default{$1} = $2;
+            my $op = $1;
+            next if $op eq 'prompt';
+            next if $op ~~ @deprecated;
+            $op = 'length_longest' if $op eq 'll'; # ll -> length_longest
+            $option_default{$op} = $2;
          }
     }
 }
@@ -35,6 +39,7 @@ my %pod_default;
 my %pod;
 
 for my $key ( @all ) {
+    next if $key ~~ @deprecated;
     open $fh, '<', $file;
     while ( my $line = readline $fh ) {
         if ( $line =~ /\A=head4\s\Q$key\E/ ... $line =~ /\A=head/ ) {
@@ -47,6 +52,7 @@ for my $key ( @all ) {
 }
 
 for my $key ( @simple ) {
+    next if $key ~~ @deprecated;
     my $opt;
     for my $line ( @{$pod{$key}} ) {
         if ( $line =~ /(\d).*\(default\)/ ) {
@@ -56,7 +62,8 @@ for my $key ( @simple ) {
     }
 }
 
-for my $key ( @long ) {          
+for my $key ( @long ) {
+    next if $key ~~ @deprecated;
     if ( $key eq 'pad_one_row' ) {
         for my $line ( @{$pod{$key}} ) {
             if ( $line =~ /default:\s([^)]+)\)/ ) {
@@ -82,6 +89,7 @@ is( scalar keys %pod_default, scalar keys %option_default, 'scalar keys %pod_def
  
  
 for my $key ( sort keys %option_default ) {
+    next if $key ~~ @deprecated;
     if ( $key eq 'pad_one_row' ) {
         my $por = 0;
         if ( $option_default{$key} eq '$config->{pad}' and $pod_default{$key} eq 'value of the option I<pad>' ) {

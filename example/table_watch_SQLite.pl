@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.030
+# Version 1.031
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -106,6 +106,7 @@ Options:
     Min col width  : Set the width the columns should have at least when printed.
     Undef          : Set the string that will be shown on the screen if a table value is undefined.
     Max rows       : Set the maximum number of table rows available at once.
+    Expand
 
     Database types : Choose the needed database types.
     Operators      : Choose the needed operators.
@@ -195,8 +196,6 @@ $info->{sqlite}{keys}    = [ qw( reset_cache max_depth unicode see_if_its_a_numb
 $info->{mysql}{keys}     = [ qw( enable_utf8 connect_timeout bind_type_guessing ChopBlanks binary_filter ) ];
 $info->{postgres}{keys}  = [ qw( pg_enable_utf8 binary_filter ) ];
 
-
-
 $info->{sqlite}{commandline_only} = [ qw( reset_cache max_depth ) ];
 
 for my $section ( @{$info->{option_sections}}, @{$info->{db_sections}} ) {
@@ -217,11 +216,12 @@ if ( ! eval {
         'm|max-depth:i' => \$opt->{sqlite}{max_depth}[v],
     );
     $opt = options( $info, $opt ) if $help;
+    # ###
     1 }
 ) {
     say 'Configfile/Options:';
     print_error_message( $@ );
-    choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+    choose( [ 'Press ENTER to continue' ], { prompt => '' } );
 }
 
 
@@ -240,6 +240,7 @@ DB_TYPES: while ( 1 ) {
     last DB_TYPES if ! defined $info->{db_type};
     $info->{db_type} =~ s/^\s|\s\z//g;
 
+    $info->{cached} = '';
     my $db_type = $info->{db_type};
     my $databases = [];
     if ( ! eval {
@@ -249,11 +250,11 @@ DB_TYPES: while ( 1 ) {
         say 'Available databases:';    
         delete $info->{login}{$db_type};
         print_error_message( $@ );
-        choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+        choose( [ 'Press ENTER to continue' ], { prompt => '' } );
     }
     if ( ! @$databases ) {
         say 'no ' . $db_type . '-databases found';
-        choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+        choose( [ 'Press ENTER to continue' ], { prompt => '' } );
         next DB_TYPES;
     }
     if ( $opt->{sql}{system_info}[v] ) {
@@ -307,7 +308,7 @@ DB_TYPES: while ( 1 ) {
                 delete $info->{login}{$db_type}{$db};
             }
             print_error_message( $@ );
-            choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+            choose( [ 'Press ENTER to continue' ], { prompt => '' } );
             # remove database from @databases
             next DATABASES;
         }
@@ -353,7 +354,7 @@ DB_TYPES: while ( 1 ) {
             ) {
                 say 'Get table names:';
                 print_error_message( $@ );
-                choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+                choose( [ 'Press ENTER to continue' ], { prompt => '' } );
                 next DATABASES;
             }
 
@@ -387,7 +388,7 @@ DB_TYPES: while ( 1 ) {
                     ) {
                         say 'Database settings:';
                         print_error_message( $@ );
-                        choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+                        choose( [ 'Press ENTER to continue' ], { prompt => '' } );
                     }
                     next DATABASES if $new_db_settings;
                     next TABLES;
@@ -400,7 +401,7 @@ DB_TYPES: while ( 1 ) {
                     ) {
                         say 'Join tables:';
                         print_error_message( $@ );
-                        choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+                        choose( [ 'Press ENTER to continue' ], { prompt => '' } );
                     }
                     next TABLES if ! defined $select_from_stmt;
                 }
@@ -412,7 +413,7 @@ DB_TYPES: while ( 1 ) {
                     ) {
                         say 'Union tables:';
                         print_error_message( $@ );
-                        choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+                        choose( [ 'Press ENTER to continue' ], { prompt => '' } );
                     }
                     next TABLES if ! defined $select_from_stmt;
                 }
@@ -466,7 +467,7 @@ DB_TYPES: while ( 1 ) {
                 ) {
                     say 'Print table:';
                     print_error_message( $@ );
-                    choose( [ 'Press ENTER to continue' ], { prompt => 0 } );
+                    choose( [ 'Press ENTER to continue' ], { prompt => '' } );
                 }
             }
         }
@@ -498,7 +499,7 @@ sub union_tables {
             if ( ! defined $data->{$db}{$schema}{tables_info} ) {
                 $data->{$db}{$schema}{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
             }
-            choose( $data->{$db}{$schema}{tables_info}, { prompt => 0, layout => 3, clear_screen => 1 } );
+            choose( $data->{$db}{$schema}{tables_info}, { prompt => '', layout => 3, clear_screen => 1 } );
             next UNION_TABLE;
         }
         if ( $union_table eq $enough_tables ) {
@@ -700,7 +701,7 @@ sub join_tables {
             if ( ! defined $data->{$db}{$schema}{tables_info} ) {
                 $data->{$db}{$schema}{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
             }
-            choose( $data->{$db}{$schema}{tables_info}, { prompt => 0, layout => 3, clear_screen => 1 } );
+            choose( $data->{$db}{$schema}{tables_info}, { prompt => '', layout => 3, clear_screen => 1 } );
             next MASTER;
         }
         my $idx = first_index { $_ eq $mastertable } @tables;
@@ -754,7 +755,7 @@ sub join_tables {
                     if ( ! defined $data->{$db}{$schema}{tables_info} ) {
                         $data->{$db}{$schema}{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
                     }
-                    choose( $data->{$db}{$schema}{tables_info}, { prompt => 0, layout => 3, clear_screen => 1 } );
+                    choose( $data->{$db}{$schema}{tables_info}, { prompt => '', layout => 3, clear_screen => 1 } );
                     next SLAVE;
                 }
                 last SLAVE;
@@ -927,9 +928,10 @@ sub read_table {
     my %lyt_stmt = %{$info->{lyt_h}};
     my @keys = ( qw( print_table columns aggregate distinct where group_by having order_by limit lock ) );
     my $lock = [ '  Lk0', '  Lk1' ];
+    my $table_expand_suf = ' ep';
     my %customize = (
         hidden          => 'Customize:',
-        print_table     => 'Print TABLE',
+        print_table     => 'Print TABLE' . ( $opt->{print}{expand}[v] ? $table_expand_suf : '' ),
         columns         => '- COLUMNS',
         aggregate       => '- AGGREGATE',
         distinct        => '- DISTINCT',
@@ -956,7 +958,7 @@ sub read_table {
             #[ undef, @customize{@keys} ],
             #{ prompt => 'Customize:', layout => 3, undef => $info->{back} }
             [ $customize{hidden}, undef, @customize{@keys} ],
-            { prompt => 0, layout => 3, default => 1, undef => $info->{back} }
+            { prompt => '', layout => 3, default => 1, undef => $info->{back} }
         );
         for ( $custom ) {
             when ( ! defined ) {
@@ -1500,9 +1502,14 @@ sub read_table {
                 }
             }
             when ( $customize{'hidden'} ) {
-                $opt->{print}{expand}[v] = $opt->{print}{expand}[v] ? 0 : 1;
-                $custom = $customize{'print_table'};
-                redo;
+                if ( $opt->{print}{expand}[v] ) {
+                    $opt->{print}{expand}[v] = 0;
+                    $custom = $customize{'print_table'} = 'Print TABLE';
+                }
+                else {
+                    $opt->{print}{expand}[v] = 1;
+                    $custom = $customize{'print_table'} = 'Print TABLE' . $table_expand_suf;
+                }
             }
             when( $customize{'print_table'} ) {
                 my $cols_sql = '';
@@ -1801,7 +1808,7 @@ sub recalc_widths {
         $percent += 0.5;
         if ( $percent >= 100 ) {
             say 'Terminal window is not wide enough to print this table.';
-            choose( [ 'Press ENTER to show the column names' ], { prompt => 0 } );
+            choose( [ 'Press ENTER to show the column names' ], { prompt => '' } );
             choose( $a_ref->[0], { prompt => 'Column names (close with ENTER):', layout => 0 } );
             return;
         }
@@ -1905,7 +1912,7 @@ sub print_table {
             }
             my $idx_row = choose(
                 \@list,
-                { prompt => 0, layout => 3, index => 1, default => $idx_old, clear_screen => 1, limit => $opt->{print}{limit}[v] + 1, length_longest => $length_longest }
+                { prompt => '', layout => 3, index => 1, default => $idx_old, clear_screen => 1, limit => $opt->{print}{limit}[v] + 1, ll => $length_longest }
             );
             return if ! defined $idx_row;
             return if $idx_row == 0;
@@ -1925,6 +1932,7 @@ sub print_table {
             );
             my $row_data = [ ' Close with ENTER' ];
             for my $idx_col ( 0 .. $#{$a_ref->[0]} ) {
+                push @{$row_data}, ' ';
                 my $key = $a_ref->[0][$idx_col];
                 my $sep = $separator;
                 if ( ! defined $a_ref->[$idx_row][$idx_col] || $a_ref->[$idx_row][$idx_col] eq '' ) { 
@@ -1941,14 +1949,14 @@ sub print_table {
             }
             choose(
                 $row_data,
-                { prompt => 0, layout => 3, clear_screen => 1 }
+                { prompt => '', layout => 3, clear_screen => 1 }
             );
         }
     }
     else {
         choose(
             \@list,
-            { prompt => 0, layout => 3, clear_screen => 1, limit => $opt->{print}{limit}[v] + 1, length_longest => $length_longest }
+            { prompt => '', layout => 3, clear_screen => 1, limit => $opt->{print}{limit}[v] + 1, ll => $length_longest }
         );
         return;
     }
@@ -1982,7 +1990,7 @@ sub options {
         SWITCH: for ( $option ) {
             when ( ! defined ) { exit(); }
             when ( $info->{_confirm} ) { last OPTIONS; }
-            when ( $info->{_help} ) { help(); choose( [ ' Close with ENTER ' ], { prompt => 0 } ) }
+            when ( $info->{_help} ) { help(); choose( [ ' Close with ENTER ' ], { prompt => '' } ) }
             when ( $opt->{"print"}{'tab_width'}[chs] ) {
                 # Choose
                 my $current_value = $opt->{print}{tab_width}[v];
@@ -2532,7 +2540,7 @@ sub choose_a_number {
         # Choose
         my $range = choose(
             [ undef, @list, $confirm ],
-            { prompt => 0, layout => 3, justify => 1, undef => $back }
+            { prompt => '', layout => 3, justify => 1, undef => $back }
         );
         return if ! defined $range;
         return if $range eq $confirm && ! defined $number;
@@ -2550,7 +2558,7 @@ sub choose_a_number {
         # Choose
         my $choice = choose(
             [ undef, map( $_ . $range, 1 .. 9 ), $reset ],
-            { prompt => 0, %{$info->{lyt_h}}, undef => '<<' }
+            { prompt => '', %{$info->{lyt_h}}, undef => '<<' }
         );
         next if ! defined $choice;
         if ( $choice eq $reset ) {

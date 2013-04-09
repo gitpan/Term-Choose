@@ -1,4 +1,4 @@
-use 5.010001;
+use 5.010000;
 use warnings;
 use strict;
 use utf8;
@@ -8,7 +8,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
     PL_FILES       => {},
-    MIN_PERL_VERSION => '5.010001',
+    MIN_PERL_VERSION => '5.010000',
     LICENSE        => 'perl',
     AUTHOR         => 'Matthäus Kiem <cuer2s@gmail.com>',
     NAME           => 'Term::Choose',
