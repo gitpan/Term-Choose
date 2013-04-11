@@ -1,13 +1,12 @@
 use 5.010000;
 use strict;
 use warnings;
-use autodie;
 use utf8;
 use Test::More;
 
 my $build = 'Build.PL';
 my %build;
-open my $fh_build, '<:encoding(UTF-8)', $build;
+open my $fh_build, '<:encoding(UTF-8)', $build or die $!;
 while ( my $line = readline $fh_build ) {
     chomp $line;
     $build{one}   = $line if $. == 1 and $line =~ /\Ause/;
@@ -30,7 +29,7 @@ close $fh_build;
 
 my $make = 'Makefile.PL';
 my %make;
-open my $fh_make, '<:encoding(UTF-8)', $make;
+open my $fh_make, '<:encoding(UTF-8)', $make or die $!;
 while ( my $line = readline $fh_make ) {
     chomp $line;
     $make{one}   = $line if $. == 1 and $line =~ /\Ause/;

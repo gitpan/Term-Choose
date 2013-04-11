@@ -1,7 +1,6 @@
 use 5.010000;
 use strict;
 use warnings;
-use autodie;
 use Test::More;
 
 unless ( $ENV{RELEASE_TESTING} ) {
@@ -22,7 +21,7 @@ my $v_example = -1;
 my $release_date = -1;
 
 
-open my $fh1, '<', 'lib/Term/Choose.pm';
+open my $fh1, '<', 'lib/Term/Choose.pm' or die $!;
 while ( my $line = readline $fh1 ) {
     if ( $line =~ /\A=pod/ .. $line =~ /\A=cut/ ) {
         if ( $line =~ m/\A\s*Version\s+(\S+)/m ) {
@@ -32,7 +31,7 @@ while ( my $line = readline $fh1 ) {
 }
 close $fh1;
 
-open my $fh2, '<', 'example/table_watch_SQLite.pl';
+open my $fh2, '<', 'example/table_watch_SQLite.pl' or die $!;
 while ( my $line = readline $fh2 ) {
     if ( $line =~ m/\A#\sVersion\s(\d\.\d\d\d)/m ) {
         $v_example = $1;
@@ -41,7 +40,7 @@ while ( my $line = readline $fh2 ) {
 close $fh2;
 
 
-open my $fh_ch, '<', 'Changes';
+open my $fh_ch, '<', 'Changes' or die $!;
 while ( my $line = readline $fh_ch ) {
     if ( $line =~ m/\A\s*([0-9][0-9.]*)\s+(\d\d\d\d-\d\d-\d\d)\s*\Z/m ) {
         $v_changes = $1;

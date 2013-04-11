@@ -1,6 +1,10 @@
 Revision history for Term::Choose
 
 
+1.032   2013-04-11
+        - Removed "autodie" from the tests - perl 5.10.0 doesn't provide autodie.
+        - Fixed "prompt" bug in "_wr_screen".
+
 1.031   2013-04-09
         - Option "prompt": the value '' (empty string) means now no promptline.
         - Skip checking string-length in layout "3" if "length_longest" <= "maxcols".

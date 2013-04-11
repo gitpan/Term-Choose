@@ -1,7 +1,6 @@
 use 5.010000;
 use strict;
 use warnings;
-use autodie;
 use Test::More;
 
 unless ( $ENV{RELEASE_TESTING} ) {
@@ -16,7 +15,7 @@ else {
 my $file = 'lib/Term/Choose.pm';
 
 my $test_env = 0;
-open my $fh1, '<', $file;
+open my $fh1, '<', $file or die $!;
 while ( my $line = readline $fh1 ) {
     if ( $line =~ /\A\s*use\s+warnings\s+FATAL/s ) {
         $test_env++;
@@ -33,7 +32,7 @@ is( $test_env, 0, "OK - test environment in $file disabled." );
 
 my $c = 0;
 my $pad_before_pad_one_row = 0;
-open my $fh2, '<', $file;
+open my $fh2, '<', $file or die $!;
 while ( my $line = readline $fh2 ) {
     if ( $line =~ /\Asub _set_layout/ .. $line =~ /\A\}/ ) {
         $c++ if $line =~ /\A\s*\$\Qconfig->{pad}\E/;

@@ -4,7 +4,7 @@ use 5.10.0;
 
 package Term::Choose;
 
-our $VERSION = '1.031';
+our $VERSION = '1.032';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -378,7 +378,7 @@ sub _set_layout {
     $config->{limit}            //= 100_000;
     $config->{mouse}            //= 0;
     $config->{order}            //= 1;
-    $config->{pad}              //= 2;
+    $config->{pad}              //= 2;			# "pad" has to be before "pad_one_row"
     $config->{pad_one_row}      //= $config->{pad};
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
@@ -884,7 +884,7 @@ sub _wr_screen {
     my ( $arg ) = @_;
     _goto( $arg, 0, 0 );
     _clear_to_end_of_screen( $arg );
-    if ( $arg->{prompt} ne '0' ) {
+    if ( $arg->{prompt} ne '' && $arg->{prompt} ne '0' ) {    # ### this will be "if ( $arg->{prompt} ne '' ) {" in the next release
         print $arg->{prompt_line};
         _goto( $arg, $arg->{head}, 0 );
     }
@@ -1209,7 +1209,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.031
+Version 1.032
 
 =cut
 

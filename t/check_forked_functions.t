@@ -1,7 +1,6 @@
 use 5.010000;
 use strict;
 use warnings;
-use autodie;
 use Test::More;
 
 unless ( $ENV{RELEASE_TESTING} ) {
@@ -17,7 +16,7 @@ my @unicode_cut;
 my @unicode_sprintf;
 
 
-open my $fh, '<', 'lib/Term/Choose.pm';
+open my $fh, '<', 'lib/Term/Choose.pm' or die $!;
 while ( readline $fh ) {
     if ( /\Asub _unicode_cut/ .. /\A\}/ ) {
         push @unicode_cut, $_;

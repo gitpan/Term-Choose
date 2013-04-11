@@ -1,7 +1,6 @@
 use 5.010000;
 use strict;
 use warnings;
-use autodie;
 use Test::More;
 
 unless ( $ENV{RELEASE_TESTING} ) {
@@ -15,7 +14,7 @@ else {
 my $file = 'example/table_watch_SQLite.pl';
 
 my $test_env = 0;
-open my $fh1, '<', $file;
+open my $fh1, '<', $file or die $!;
 while ( my $line = readline $fh1 ) {
     if ( $line =~ /\A\s*use\s+warnings\s+FATAL/s ) {
         $test_env++;
@@ -30,7 +29,7 @@ is( $test_env, 0, 'OK - test environment in $file disabled.' );
 
 
 my $data = 0;
-open my $fh2, '<', $file;
+open my $fh2, '<', $file or die $!;
 my $whole_file = do { 
     local $/ = undef; 
     <$fh2> 
@@ -45,7 +44,7 @@ is( $data, 0, 'OK - __DATA__ section in $file is clean' );
 
 
 my $test_username_passwd = 0;
-open my $fh3, '<', $file;
+open my $fh3, '<', $file or die $!;
 while ( my $line = readline $fh3 ) {
     if ( $line =~ /\Amy\s\$info\s=\s\{\s*\z/ .. $line =~ /\A\};\s*\z/ ) {
         if ( $line =~ /\A\s+user\s+=>\sundef,/ ) {
