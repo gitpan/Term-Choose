@@ -1,6 +1,14 @@
 Revision history for Term::Choose
 
 
+1.033   2013-04-17
+        - Bugfix (KEY_END).
+        - Bugfix and code cleanup in "_getch".
+        - Reset "$|" before leaving "choose".
+        - Updated documentation.
+        - Example: update.
+        - Example: "binary filter" disabled by default
+
 1.032   2013-04-11
         - Removed "autodie" from the tests - perl 5.10.0 doesn't provide autodie.
         - Fixed "prompt" bug in "_wr_screen".

@@ -4,7 +4,7 @@ use 5.10.0;
 
 package Term::Choose;
 
-our $VERSION = '1.032';
+our $VERSION = '1.033';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -64,7 +64,7 @@ use constant {
 use constant {
     NEXT_getch      => -1,
     # Key codes:
-    CONTROL_SPACE   => 0x00,    # ord key
+    CONTROL_SPACE   => 0x00,    # ord key # ###
     CONTROL_A       => 0x01,    # ord key
     CONTROL_B       => 0x02,    # ord key
     CONTROL_C       => 0x03,    # ord key
@@ -99,49 +99,52 @@ use constant {
 
 sub _getch {
     my ( $arg ) = @_;
-    my $c = ReadKey 0;
-    return if ! defined $c;
-    if ( $c eq "\e" ) {
-        my $c = ReadKey 0.10;
-        if ( ! defined $c ) { return KEY_ESC; }
-        elsif ( $c eq 'A' ) { return KEY_UP; }
-        elsif ( $c eq 'B' ) { return KEY_DOWN; }
-        elsif ( $c eq 'C' ) { return KEY_RIGHT; }
-        elsif ( $c eq 'D' ) { return KEY_LEFT; }
-        elsif ( $c eq 'F' ) { return KEY_END; }
-        elsif ( $c eq 'H' ) { return KEY_HOME; }
-        elsif ( $c eq 'Z' ) { return KEY_BTAB; }
-        elsif ( $c eq '5' ) { return KEY_PAGE_UP; }
-        elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
-        elsif ( $c eq '[' ) {
-            my $c = ReadKey 0;
-               if ( $c eq 'A' ) { return KEY_UP; }
-            elsif ( $c eq 'B' ) { return KEY_DOWN; }
-            elsif ( $c eq 'C' ) { return KEY_RIGHT; }
-            elsif ( $c eq 'D' ) { return KEY_LEFT; }
-            elsif ( $c eq 'F' ) { return KEY_END; }
-            elsif ( $c eq 'H' ) { return KEY_HOME; }
-            elsif ( $c eq 'Z' ) { return KEY_BTAB; }
-            elsif ( $c =~ /^[0-9]$/ ) {
-                my $c1 = ReadKey 0;
-                if ( $c1 eq '~' ) {
-                       if ( $c eq '5' ) { return KEY_PAGE_UP; }
-                    elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
+    my $c1 = ReadKey 0;
+    return if ! defined $c1;
+    if ( $c1 eq "\e" ) {
+        my $c2 = ReadKey 0.10;
+        if ( ! defined $c2 ) { return KEY_ESC; } # unused
+        elsif ( $c2 eq 'A' ) { return KEY_UP; }
+        elsif ( $c2 eq 'B' ) { return KEY_DOWN; }
+        elsif ( $c2 eq 'C' ) { return KEY_RIGHT; }
+        elsif ( $c2 eq 'D' ) { return KEY_LEFT; }
+        elsif ( $c2 eq 'F' ) { return KEY_END; }
+        elsif ( $c2 eq 'H' ) { return KEY_HOME; }
+        elsif ( $c2 eq 'Z' ) { return KEY_BTAB; }
+        elsif ( $c2 eq '5' ) { return KEY_PAGE_UP; }
+        elsif ( $c2 eq '6' ) { return KEY_PAGE_DOWN; }
+        elsif ( $c2 eq '[' ) {
+            my $c3 = ReadKey 0;
+               if ( $c3 eq 'A' ) { return KEY_UP; }
+            elsif ( $c3 eq 'B' ) { return KEY_DOWN; }
+            elsif ( $c3 eq 'C' ) { return KEY_RIGHT; }
+            elsif ( $c3 eq 'D' ) { return KEY_LEFT; }
+            elsif ( $c3 eq 'F' ) { return KEY_END; }
+            elsif ( $c3 eq 'H' ) { return KEY_HOME; }
+            elsif ( $c3 eq 'Z' ) { return KEY_BTAB; }
+            elsif ( $c3 =~ /^[0-9]$/ ) {
+                my $c4 = ReadKey 0;
+                if ( $c4 eq '~' ) {
+                       if ( $c3 eq '5' ) { return KEY_PAGE_UP; }
+                    elsif ( $c3 eq '6' ) { return KEY_PAGE_DOWN; }
+                    else { 
+                        return NEXT_getch; 
+                    }
                 }
-                elsif ( $c1 =~ /^[;0-9]$/ ) {   # cursor-position report, response to "\e[6n"
-                    my $abs_curs_Y = 0 + $c;
+                elsif ( $c4 =~ /^[;0-9]$/ ) {   # cursor-position report, response to "\e[6n"
+                    my $abs_curs_Y = 0 + $c3;
                     while ( 1 ) {
-                        last if $c1 eq ';';
-                        $abs_curs_Y = 10 * $abs_curs_Y + $c1;
-                        $c1 = ReadKey 0;
+                        last if $c4 eq ';';
+                        $abs_curs_Y = 10 * $abs_curs_Y + $c4;
+                        $c4 = ReadKey 0;
                     }
                     my $abs_curs_X = 0; # $arg->{abs_curs_X} never used
                     while ( 1 ) {
-                        $c1 = ReadKey 0;
-                        last if $c1 !~ /^[0-9]$/;
-                        $abs_curs_X = 10 * $abs_curs_X + $c1;
+                        $c4 = ReadKey 0;
+                        last if $c4 !~ /^[0-9]$/;
+                        $abs_curs_X = 10 * $abs_curs_X + $c4;
                     }
-                    if ( $c1 eq 'R' ) {
+                    if ( $c4 eq 'R' ) {
                         $arg->{abs_curs_Y} = $abs_curs_Y;
                         $arg->{abs_curs_X} = $abs_curs_X;
                     }
@@ -151,9 +154,9 @@ sub _getch {
                     return NEXT_getch;
                 }
             }
-            elsif ( $c eq '5' ) { return KEY_PAGE_UP; }
-            elsif ( $c eq '6' ) { return KEY_PAGE_DOWN; }
-            elsif ( $c eq 'M' && $arg->{mouse} ) {
+            elsif ( $c3 eq '5' ) { return KEY_PAGE_UP; }
+            elsif ( $c3 eq '6' ) { return KEY_PAGE_DOWN; }
+            elsif ( $c3 eq 'M' && $arg->{mouse} ) {
                 # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
                 # http://leonerds-code.blogspot.co.uk/2012/04/wide-mouse-support-in-libvterm.html
                 my $event_type  = ord( ReadKey 0 ) - 32;        # byte 4
@@ -184,7 +187,7 @@ sub _getch {
         }
     }
     else {
-        return ord $c;
+        return ord $c1;
     }
 }
 
@@ -192,6 +195,7 @@ sub _getch {
 sub _init_scr {
     my ( $arg ) = @_;
     $arg->{old_handle} = select( $arg->{handle_out} );
+    $arg->{backup_flush} = $|;
     $| = 1;
     if ( $arg->{mouse} ) {
         if ( $arg->{mouse} == 3 ) {
@@ -248,6 +252,7 @@ sub _end_win {
     }
     Term::ReadKey::ReadMode 'restore';
     print SHOW_CURSOR if $arg->{hide_cursor};
+    $| = $arg->{backup_flush};
     select( $arg->{old_handle} );
 }
 
@@ -323,7 +328,7 @@ sub _validate_option {
             delete $config->{$key};
             ++$warn;
         }
-        elsif ( $validate->{$key} ) {  # an empty string is not true
+        elsif ( $validate->{$key} ) {  # the empty string is not true
             if ( defined $config->{$key} && ( $config->{$key} !~ m/^[0-9]+\z/ || $config->{$key} < $validate->{$key}[MIN] || $config->{$key} > $validate->{$key}[MAX] ) ) {
                 carp "choose: \"$config->{$key}\" is not a valid value for the option \"$key\". Falling back to the default value.";
                 $config->{$key} = undef;
@@ -378,7 +383,7 @@ sub _set_layout {
     $config->{limit}            //= 100_000;
     $config->{mouse}            //= 0;
     $config->{order}            //= 1;
-    $config->{pad}              //= 2;			# "pad" has to be before "pad_one_row"
+    $config->{pad}              //= 2;  # "pad" has to be before "pad_one_row"
     $config->{pad_one_row}      //= $config->{pad};
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
@@ -752,7 +757,14 @@ sub choose {
                         _beep( $arg );
                     }
                     else {
-                        $arg->{top_listrow}    = $arg->{maxrows} * ( int( @{$arg->{rowcol2list}} / $arg->{maxrows} ) );
+                        if ( @{$arg->{rowcol2list}} % $arg->{maxrows} ) {
+                            #$arg->{top_listrow} = $arg->{maxrows} * int( @{$arg->{rowcol2list}} / $arg->{maxrows} );
+                            $arg->{top_listrow} = @{$arg->{rowcol2list}} - @{$arg->{rowcol2list}} % $arg->{maxrows};
+                        }
+                        else {
+                            #$arg->{top_listrow} = $arg->{maxrows} * ( @{$arg->{rowcol2list}} / $arg->{maxrows} - 1 );
+                            $arg->{top_listrow} = @{$arg->{rowcol2list}} - $arg->{maxrows};
+                        }
                         $arg->{this_cell}[ROW] = $#{$arg->{rowcol2list}} - 1;
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                         if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} ) {
@@ -772,7 +784,14 @@ sub choose {
                         _beep( $arg );
                     }
                     else {
-                        $arg->{top_listrow}    = $arg->{maxrows} * ( int( @{$arg->{rowcol2list}} / $arg->{maxrows} ) );
+                        if ( @{$arg->{rowcol2list}} % $arg->{maxrows} ) {
+                            #$arg->{top_listrow} = $arg->{maxrows} * int( @{$arg->{rowcol2list}} / $arg->{maxrows} );
+                            $arg->{top_listrow} = @{$arg->{rowcol2list}} - @{$arg->{rowcol2list}} % $arg->{maxrows};
+                        }
+                        else {
+                            #$arg->{top_listrow} = $arg->{maxrows} * ( @{$arg->{rowcol2list}} / $arg->{maxrows} - 1 );
+                            $arg->{top_listrow} = @{$arg->{rowcol2list}} - $arg->{maxrows};
+                        }
                         $arg->{this_cell}[ROW] = $#{$arg->{rowcol2list}};
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                         $arg->{begin_page}     = $arg->{top_listrow};
@@ -1209,7 +1228,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.032
+Version 1.033
 
 =cut
 
@@ -1273,7 +1292,9 @@ If I<choose> is called in an I<list context>, the user can also mark an item wit
 
 I<choose> then returns - when "Return" is pressed - the list of marked items including the highlighted item.
 
-In I<list context> "Ctrl-SpaceBar" inverts the choices: marked items are unmarked and unmarked items are marked.
+In I<list context> "Ctrl-SpaceBar"* inverts the choices: marked items are unmarked and unmarked items are marked.
+
+* May be mapped to a different key in a future release.
 
 =item
 

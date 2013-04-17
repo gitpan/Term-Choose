@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.032
+# Version 1.033
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -124,8 +124,8 @@ Options:
 
     DB defaults    : Set Database defaults.
                         Binary filter: Print "BNRY" instead of arbitrary binary data (printing arbitrary binary data could break the output).
-                        Different other settings.
-                        "DB defaults" can be overwritten for each Database with the "Database settings".
+                        Different other DB settings ...
+                     "DB defaults" can be overwritten for each Database with the "Database settings".
     DB login       : If enabled username and password are asked for each new DB connection.
                      If not enabled username and password are asked once and used for all connections.
 
@@ -169,18 +169,18 @@ my $opt = {
         see_if_its_a_number => [ 1,       '- See if its a number' ],
         busy_timeout        => [ 3_000,   '- Busy timeout (ms)' ],
         cache_size          => [ 500_000, '- Cache size (kb)' ],
-        binary_filter       => [ 1,       '- Binary filter' ],
+        binary_filter       => [ 0,       '- Binary filter' ],
     },
     mysql => {
         enable_utf8         => [ 1, '- Enable utf8' ],
         connect_timeout     => [ 4, '- Connect timeout' ],
         bind_type_guessing  => [ 1, '- Bind type guessing' ],
         ChopBlanks          => [ 1, '- Chop blanks off' ],
-        binary_filter       => [ 1, '- Binary filter' ],
+        binary_filter       => [ 0, '- Binary filter' ],
     },
     postgres => {
         pg_enable_utf8      => [ 1, '- Enable utf8' ],
-        binary_filter       => [ 1, '- Binary filter' ],
+        binary_filter       => [ 0, '- Binary filter' ],
     }
 };
 
@@ -1858,6 +1858,7 @@ sub print_table {
     my $c = 0;                                #
     my $progress;                             #
     if ( $items > $start ) {                  #
+        local $| = 1;                         #
         print GO_TO_TOP_LEFT;                 #
         print CLEAR_EOS;                      #
         $progress = Term::ProgressBar->new( { #
@@ -1905,8 +1906,16 @@ sub print_table {
         my $length_sep = $gcs->columns();
         my $idx_old = 0;
 
+        my $size_changed = 0;
+        my $orig_sigwinch = $SIG{'WINCH'};
+        local $SIG{'WINCH'} = sub {
+            $orig_sigwinch->() if $orig_sigwinch && ref $orig_sigwinch eq 'CODE';
+            $size_changed = 1;
+        };
+
         while ( 1 ) {
-            if ( ( GetTerminalSize( *STDOUT ) )[0] != $terminal_width ) {
+            if ( $size_changed ) {
+                $size_changed = 0;
                 print_table( $info, $opt, $db, $a_ref );
                 return;
             }
