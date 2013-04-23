@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.033
+# Version 1.034
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;

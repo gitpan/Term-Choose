@@ -4,7 +4,7 @@ use 5.10.0;
 
 package Term::Choose;
 
-our $VERSION = '1.033';
+our $VERSION = '1.034';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -63,37 +63,39 @@ use constant {
 
 use constant {
     NEXT_getch      => -1,
-    # Key codes:
-    CONTROL_SPACE   => 0x00,    # ord key # ###
-    CONTROL_A       => 0x01,    # ord key
-    CONTROL_B       => 0x02,    # ord key
-    CONTROL_C       => 0x03,    # ord key
-    CONTROL_D       => 0x04,    # ord key
-    CONTROL_E       => 0x05,    # ord key
-    CONTROL_F       => 0x06,    # ord key
-    CONTROL_H       => 0x08,    # ord key
-    KEY_BTAB        => 0x08,    # *
-    CONTROL_I       => 0x09,    # ord key
-    KEY_TAB         => 0x09,    # ord key
-    KEY_ENTER       => 0x0d,    # ord key
-    KEY_ESC         => 0x1b,    # ord key
-    KEY_SPACE       => 0x20,    # ord key
-    KEY_PAGE_UP     => 0x21,    # *
-    KEY_PAGE_DOWN   => 0x22,    # *
-    KEY_END         => 0x23,    # *
-    KEY_HOME        => 0x24,    # *
-    KEY_LEFT        => 0x25,    # *
-    KEY_UP          => 0x26,    # *
-    KEY_RIGHT       => 0x27,    # *
-    KEY_DOWN        => 0x28,    # *
-    KEY_h           => 0x68,    # ord key
-    KEY_j           => 0x6a,    # ord key
-    KEY_k           => 0x6b,    # ord key
-    KEY_l           => 0x6c,    # ord key
-    KEY_q           => 0x71,    # ord key
-    KEY_Tilde       => 0x7e,    # ord key
-    KEY_BSPACE      => 0x7f,    # ord key
-    # * arbitray key code
+
+    CONTROL_SPACE   => 0x00,
+    CONTROL_A       => 0x01,
+    CONTROL_B       => 0x02,
+    CONTROL_C       => 0x03,
+    CONTROL_D       => 0x04,
+    CONTROL_E       => 0x05,
+    CONTROL_F       => 0x06,
+    CONTROL_H       => 0x08,
+    KEY_BTAB        => 0x08,
+    CONTROL_I       => 0x09,
+    KEY_TAB         => 0x09,
+    KEY_ENTER       => 0x0d,
+    KEY_ESC         => 0x1b,
+    KEY_SPACE       => 0x20,
+    KEY_h           => 0x68,
+    KEY_j           => 0x6a,
+    KEY_k           => 0x6b,
+    KEY_l           => 0x6c,
+    KEY_q           => 0x71,
+    KEY_Tilde       => 0x7e,
+    KEY_BSPACE      => 0x7f,
+
+    KEY_UP          => 0x1b5b41,
+    KEY_DOWN        => 0x1b5b42,
+    KEY_RIGHT       => 0x1b5b43,
+    KEY_LEFT        => 0x1b5b44,
+    KEY_PAGE_UP     => 0x1b5b35,
+    KEY_PAGE_DOWN   => 0x1b5b36,
+    KEY_HOME        => 0x1b5b48,
+    KEY_END         => 0x1b5b46,
+    KEY_INSERT      => 0x1b5b32,
+    KEY_DELETE      => 0x1b5b33,
 };
 
 
@@ -125,10 +127,12 @@ sub _getch {
             elsif ( $c3 =~ /^[0-9]$/ ) {
                 my $c4 = ReadKey 0;
                 if ( $c4 eq '~' ) {
-                       if ( $c3 eq '5' ) { return KEY_PAGE_UP; }
+                       if ( $c3 eq '2' ) { return KEY_INSERT; } # unused
+                    elsif ( $c3 eq '3' ) { return KEY_DELETE; } # unused
+                    elsif ( $c3 eq '5' ) { return KEY_PAGE_UP; }
                     elsif ( $c3 eq '6' ) { return KEY_PAGE_DOWN; }
-                    else { 
-                        return NEXT_getch; 
+                    else {
+                        return NEXT_getch;
                     }
                 }
                 elsif ( $c4 =~ /^[;0-9]$/ ) {   # cursor-position report, response to "\e[6n"
@@ -154,6 +158,8 @@ sub _getch {
                     return NEXT_getch;
                 }
             }
+            elsif ( $c3 eq '2' ) { return KEY_INSERT; } # unused
+            elsif ( $c3 eq '3' ) { return KEY_DELETE; } # unused
             elsif ( $c3 eq '5' ) { return KEY_PAGE_UP; }
             elsif ( $c3 eq '6' ) { return KEY_PAGE_DOWN; }
             elsif ( $c3 eq 'M' && $arg->{mouse} ) {
@@ -302,17 +308,15 @@ sub _validate_option {
         beep            => [ 0,       1 ],
         clear_screen    => [ 0,       1 ],
         default         => [ 0,  $limit ],
-        empty           => '',              # NOTE: NEW -> replaces "empty_string"
-        empty_string    => '',              # NOTE: deprecated -> replaced by "empty"
+        empty           => '',
         hide_cursor     => [ 0,       1 ],
         index           => [ 0,       1 ],
         justify         => [ 0,       2 ],
         layout          => [ 0,       3 ],
-        ll              => [ 1,  $limit ],  # NOTE: NEW -> replaces "length_longest"
-        length_longest  => [ 1,  $limit ],  # NOTE: deprecated -> replaced by "ll"
+        ll              => [ 1,  $limit ],
+        length_longest  => [ 1,  $limit ],  # -> ll
         limit           => [ 1,  $limit ],
-        mouse           => [ 0,       4 ],  # NOTE: NEW -> replaces "mouse_mode"
-        mouse_mode      => [ 0,       4 ],  # NOTE: deprecated -> replaced by "mouse"
+        mouse           => [ 0,       4 ],
         order           => [ 0,       1 ],
         pad             => [ 0,  $limit ],
         pad_one_row     => [ 0,  $limit ],
@@ -347,29 +351,9 @@ sub _validate_option {
 sub _set_layout {
     my ( $wantarray, $config ) = @_;
     my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
-
-    # ### #####
     if ( defined $config->{length_longest} && ! defined $config->{ll} ) {
         $config->{ll} = $config->{length_longest};
     }
-    # ### #####
-    my $stop = 0;
-    if ( defined $config->{empty_string} && ! defined $config->{empty} ) {
-        $config->{empty} = $config->{empty_string};
-        say "The the option name \"empty_string\" is deprecated and will be removed - use \"empty\" instead."; 
-        $stop++;
-    }
-    if ( defined $config->{mouse_mode} && ! defined $config->{mouse} ) {
-        $config->{mouse} = $config->{mouse_mode};
-        say "The the option name \"mouse_mode\" is deprecated and will be removed - use \"mouse\" instead."; 
-        $stop++;
-    }
-    if ( $stop ) {
-        print "Press a key to continue";
-        my $dummy = <STDIN> if $stop;
-    }
-    # ### #####
-
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
@@ -407,10 +391,10 @@ sub _set_this_cell {
         # }
     }
     while ( $arg->{tmp_this_cell}[ROW] > $arg->{end_page} ) {
-        $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
+        $arg->{top_listrow} = $arg->{avail_term_height} * ( int( $arg->{this_cell}[ROW] / $arg->{avail_term_height} ) + 1 );
         $arg->{this_cell}[ROW] = $arg->{top_listrow};
         $arg->{begin_page} = $arg->{top_listrow};
-        $arg->{end_page} = $arg->{begin_page} + $arg->{maxrows} - 1;
+        $arg->{end_page} = $arg->{begin_page} + $arg->{avail_term_height} - 1;
         $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
     }
     $arg->{this_cell} = $arg->{tmp_this_cell};
@@ -419,23 +403,23 @@ sub _set_this_cell {
 
 sub _prepare_page_number {
     my ( $arg ) = @_;
-    $arg->{total_pages} = int( $#{$arg->{rowcol2list}} / ( $arg->{maxrows} + $arg->{tail} ) ) + 1;
+    $arg->{total_pages} = int( $#{$arg->{rowcol2list}} / ( $arg->{avail_term_height} + $arg->{tail} ) ) + 1;
     if ( $arg->{total_pages} > 1 ) {
-        $arg->{total_pages} = int( $#{$arg->{rowcol2list}} / ( $arg->{maxrows} ) ) + 1;
-        $arg->{length_total_pages} = length $arg->{total_pages};
+        $arg->{total_pages} = int( $#{$arg->{rowcol2list}} / $arg->{avail_term_height} ) + 1;
+        $arg->{width_total_pages} = length $arg->{total_pages};
         $arg->{prompt_printf_template} = "--- Page %0*d/%d ---";
         $arg->{prompt_arguments} = 0;
-        if ( length sprintf( $arg->{prompt_printf_template}, $arg->{length_total_pages}, $arg->{total_pages}, $arg->{total_pages} )  > $arg->{maxcols} ) {
+        if ( length sprintf( $arg->{prompt_printf_template}, $arg->{width_total_pages}, $arg->{total_pages}, $arg->{total_pages} )  > $arg->{avail_term_width} ) {
             $arg->{prompt_printf_template} = "%0*d/%d";
-            if ( length sprintf( $arg->{prompt_printf_template}, $arg->{length_total_pages}, $arg->{total_pages}, $arg->{total_pages} )  > $arg->{maxcols} ) {
-                $arg->{length_total_pages} = $arg->{maxcols} if $arg->{length_total_pages} > $arg->{maxcols};
+            if ( length sprintf( $arg->{prompt_printf_template}, $arg->{width_total_pages}, $arg->{total_pages}, $arg->{total_pages} )  > $arg->{avail_term_width} ) {
+                $arg->{width_total_pages} = $arg->{avail_term_width} if $arg->{width_total_pages} > $arg->{avail_term_width};
                 $arg->{prompt_printf_template} = "%0*.*s";
                 $arg->{prompt_arguments} = 1;
             }
         }
     }
     else {
-        $arg->{maxrows} += $arg->{tail};
+        $arg->{avail_term_height} += $arg->{tail};
         $arg->{tail} = 0;
     }
 }
@@ -450,7 +434,7 @@ sub _prepare_promptline {
     utf8::upgrade( $arg->{prompt_line} );
     my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
     $prompt_length = $gcs->columns();
-    if ( $prompt_length > $arg->{maxcols} ) {
+    if ( $prompt_length > $arg->{avail_term_width} ) {
         $arg->{prompt_line} = _unicode_cut( $arg, $arg->{prompt} );
     }
 }
@@ -462,28 +446,26 @@ sub _write_first_screen {
 #        print CLEAR_SCREEN;
 #        print GO_TO_TOP_LEFT;
 #    }
-    ( $arg->{maxcols}, $arg->{maxrows} ) = GetTerminalSize( $arg->{handle_out} );
+    ( $arg->{avail_term_width}, $arg->{avail_term_height} ) = GetTerminalSize( $arg->{handle_out} );
     if ( $arg->{screen_width} ) {
-        $arg->{maxcols} = int( ( $arg->{maxcols} / 100 ) * $arg->{screen_width} );
-        $arg->{maxcols} = 1 if $arg->{maxcols} == 0;
+        $arg->{avail_term_width} = int( $arg->{avail_term_width} * $arg->{screen_width} / 100 );
     }
     if ( $arg->{mouse} == 2 ) {
-        $arg->{maxcols} = MAX_COL_MOUSE_1003 if $arg->{maxcols} > MAX_COL_MOUSE_1003;
-        $arg->{maxrows} = MAX_ROW_MOUSE_1003 if $arg->{maxrows} > MAX_ROW_MOUSE_1003;
+        $arg->{avail_term_width}  = MAX_COL_MOUSE_1003 if $arg->{avail_term_width}  > MAX_COL_MOUSE_1003;
+        $arg->{avail_term_height} = MAX_ROW_MOUSE_1003 if $arg->{avail_term_height} > MAX_ROW_MOUSE_1003;
     }
-    $arg->{head} = 0;
-    $arg->{tail} = 0;
-    $arg->{head} = 1 if $arg->{prompt} ne '' && $arg->{prompt} ne '0'; # ### this will be "$arg->{head} = 1 if $arg->{prompt} ne '';" in the next release
-    $arg->{tail} = 1 if $arg->{page};
-    $arg->{maxrows} -= $arg->{head} + $arg->{tail};
+    $arg->{head} = $arg->{prompt} ne '' ? 1 : 0;
+    $arg->{tail} = $arg->{page}         ? 1 : 0;
+    $arg->{avail_term_height} -= $arg->{head} + $arg->{tail};
+    $arg->{avail_term_width}  = 1 if $arg->{avail_term_width}  < 1;
+    $arg->{avail_term_height} = 1 if $arg->{avail_term_height} < 1;
     _size_and_layout( $arg );
-    _prepare_promptline( $arg ) if $arg->{prompt} ne '' && $arg->{prompt} ne '0'; # ### this will be "_prepare_promptline( $arg ) if $arg->{prompt} ne '';" in the next release
+    _prepare_promptline( $arg ) if $arg->{prompt} ne '';
     _prepare_page_number( $arg ) if $arg->{page};
-    $arg->{maxrows_index} = $arg->{maxrows} - 1;
-    $arg->{maxrows_index} = 0 if $arg->{maxrows_index} < 0;
+    $arg->{avail_term_height_idx} = $arg->{avail_term_height} - 1;
     $arg->{begin_page} = 0;
-    $arg->{end_page} = $arg->{maxrows_index};
-    $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{maxrows_index} > $#{$arg->{rowcol2list}};
+    $arg->{end_page} = $arg->{avail_term_height_idx};
+    $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{avail_term_height_idx} > $#{$arg->{rowcol2list}};
     $arg->{top_listrow} = 0;
     $arg->{marked} = [];
     $arg->{screen_row} = 0;
@@ -593,7 +575,7 @@ sub choose {
                         $arg->{top_listrow} = $arg->{this_cell}[ROW];
                         $arg->{end_page}++;
                         $arg->{begin_page} = $arg->{end_page};
-                        $arg->{end_page} = $arg->{end_page} + $arg->{maxrows_index};
+                        $arg->{end_page} = $arg->{end_page} + $arg->{avail_term_height_idx};
                         $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
                         _wr_screen( $arg );
                     }
@@ -614,10 +596,10 @@ sub choose {
                         _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                     }
                     else {
-                        $arg->{top_listrow} = $arg->{this_cell}[ROW] - $arg->{maxrows_index};
+                        $arg->{top_listrow} = $arg->{this_cell}[ROW] - $arg->{avail_term_height_idx};
                         $arg->{begin_page}--;
                         $arg->{end_page} = $arg->{begin_page};
-                        $arg->{begin_page} = $arg->{begin_page} - $arg->{maxrows_index};
+                        $arg->{begin_page} = $arg->{begin_page} - $arg->{avail_term_height_idx};
                         $arg->{begin_page} = 0 if $arg->{begin_page} < 0;
                         _wr_screen( $arg );
                     }
@@ -644,7 +626,7 @@ sub choose {
                             $arg->{top_listrow} = $arg->{this_cell}[ROW];
                             $arg->{end_page}++;
                             $arg->{begin_page} = $arg->{end_page};
-                            $arg->{end_page} = $arg->{end_page} + $arg->{maxrows_index};
+                            $arg->{end_page} = $arg->{end_page} + $arg->{avail_term_height_idx};
                             $arg->{end_page} = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
                             $arg->{this_cell}[COL] = 0;
                             _wr_screen( $arg );
@@ -670,10 +652,10 @@ sub choose {
                             _wr_cell( $arg, $arg->{this_cell}[ROW],     $arg->{this_cell}[COL] );
                         }
                         else {
-                            $arg->{top_listrow} = $arg->{this_cell}[ROW] - $arg->{maxrows_index};
+                            $arg->{top_listrow} = $arg->{this_cell}[ROW] - $arg->{avail_term_height_idx};
                             $arg->{begin_page}--;
                             $arg->{end_page} = $arg->{begin_page};
-                            $arg->{begin_page} = $arg->{begin_page} - $arg->{maxrows_index};
+                            $arg->{begin_page} = $arg->{begin_page} - $arg->{avail_term_height_idx};
                             $arg->{begin_page} = 0 if $arg->{begin_page} < 0;
                             $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                             _wr_screen( $arg );
@@ -707,14 +689,14 @@ sub choose {
                     _beep( $arg );
                 }
                 else {
-                    $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) -1 );
+                    $arg->{top_listrow} = $arg->{avail_term_height} * ( int( $arg->{this_cell}[ROW] / $arg->{avail_term_height} ) - 1 );
                     $arg->{this_cell}[ROW] = $arg->{top_listrow};
                     if ( defined $arg->{backup_col} ) {
                         $arg->{this_cell}[COL] = $arg->{backup_col};
                         $arg->{backup_col}     = undef;
                     }
                     $arg->{begin_page} = $arg->{top_listrow};
-                    $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
+                    $arg->{end_page}   = $arg->{begin_page} + $arg->{avail_term_height} - 1;
                     _wr_screen( $arg );
                 }
             }
@@ -723,7 +705,7 @@ sub choose {
                     _beep( $arg );
                 }
                 else {
-                    $arg->{top_listrow} = $arg->{maxrows} * ( int( $arg->{this_cell}[ROW] / $arg->{maxrows} ) + 1 );
+                    $arg->{top_listrow} = $arg->{avail_term_height} * ( int( $arg->{this_cell}[ROW] / $arg->{avail_term_height} ) + 1 );
                     $arg->{this_cell}[ROW] = $arg->{top_listrow};
                     # if it remains only the last row (which is then also the first row) for the last page
                     # and the column in use doesn't exist in the last row, then backup col
@@ -732,7 +714,7 @@ sub choose {
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                     }
                     $arg->{begin_page} = $arg->{top_listrow};
-                    $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
+                    $arg->{end_page}   = $arg->{begin_page} + $arg->{avail_term_height} - 1;
                     $arg->{end_page}   = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
                     _wr_screen( $arg );
                 }
@@ -746,7 +728,7 @@ sub choose {
                     $arg->{this_cell}[ROW] = $arg->{top_listrow};
                     $arg->{this_cell}[COL] = 0;
                     $arg->{begin_page} = $arg->{top_listrow};
-                    $arg->{end_page}   = $arg->{begin_page} + $arg->{maxrows} - 1;
+                    $arg->{end_page}   = $arg->{begin_page} + $arg->{avail_term_height} - 1;
                     $arg->{end_page}   = $#{$arg->{rowcol2list}} if $arg->{end_page} > $#{$arg->{rowcol2list}};
                     _wr_screen( $arg );
                 }
@@ -757,20 +739,13 @@ sub choose {
                         _beep( $arg );
                     }
                     else {
-                        if ( @{$arg->{rowcol2list}} % $arg->{maxrows} ) {
-                            #$arg->{top_listrow} = $arg->{maxrows} * int( @{$arg->{rowcol2list}} / $arg->{maxrows} );
-                            $arg->{top_listrow} = @{$arg->{rowcol2list}} - @{$arg->{rowcol2list}} % $arg->{maxrows};
-                        }
-                        else {
-                            #$arg->{top_listrow} = $arg->{maxrows} * ( @{$arg->{rowcol2list}} / $arg->{maxrows} - 1 );
-                            $arg->{top_listrow} = @{$arg->{rowcol2list}} - $arg->{maxrows};
-                        }
+                        $arg->{top_listrow} = @{$arg->{rowcol2list}} - ( @{$arg->{rowcol2list}} % $arg->{avail_term_height} || $arg->{avail_term_height} );
                         $arg->{this_cell}[ROW] = $#{$arg->{rowcol2list}} - 1;
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                         if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} ) {
-                            $arg->{top_listrow} = $arg->{top_listrow} - $arg->{maxrows};
+                            $arg->{top_listrow} = $arg->{top_listrow} - $arg->{avail_term_height};
                             $arg->{begin_page}  = $arg->{top_listrow};
-                            $arg->{end_page}    = $arg->{begin_page} + $arg->{maxrows} - 1;
+                            $arg->{end_page}    = $arg->{begin_page} + $arg->{avail_term_height} - 1;
                         }
                         else {
                             $arg->{begin_page} = $arg->{top_listrow};
@@ -784,14 +759,7 @@ sub choose {
                         _beep( $arg );
                     }
                     else {
-                        if ( @{$arg->{rowcol2list}} % $arg->{maxrows} ) {
-                            #$arg->{top_listrow} = $arg->{maxrows} * int( @{$arg->{rowcol2list}} / $arg->{maxrows} );
-                            $arg->{top_listrow} = @{$arg->{rowcol2list}} - @{$arg->{rowcol2list}} % $arg->{maxrows};
-                        }
-                        else {
-                            #$arg->{top_listrow} = $arg->{maxrows} * ( @{$arg->{rowcol2list}} / $arg->{maxrows} - 1 );
-                            $arg->{top_listrow} = @{$arg->{rowcol2list}} - $arg->{maxrows};
-                        }
+                        $arg->{top_listrow} = @{$arg->{rowcol2list}} - ( @{$arg->{rowcol2list}} % $arg->{avail_term_height} || $arg->{avail_term_height} );
                         $arg->{this_cell}[ROW] = $#{$arg->{rowcol2list}};
                         $arg->{this_cell}[COL] = $#{$arg->{rowcol2list}[$arg->{this_cell}[ROW]]};
                         $arg->{begin_page}     = $arg->{top_listrow};
@@ -903,17 +871,17 @@ sub _wr_screen {
     my ( $arg ) = @_;
     _goto( $arg, 0, 0 );
     _clear_to_end_of_screen( $arg );
-    if ( $arg->{prompt} ne '' && $arg->{prompt} ne '0' ) {    # ### this will be "if ( $arg->{prompt} ne '' ) {" in the next release
+    if ( $arg->{prompt} ne '' ) {
         print $arg->{prompt_line};
         _goto( $arg, $arg->{head}, 0 );
     }
     if ( $arg->{page} && $arg->{total_pages} > 1 ) {
-        _goto( $arg, $arg->{maxrows_index} + $arg->{head} + $arg->{tail}, 0 );
+        _goto( $arg, $arg->{avail_term_height_idx} + $arg->{head} + $arg->{tail}, 0 );
         if ( $arg->{prompt_arguments} == 0 ) {
-            printf $arg->{prompt_printf_template}, $arg->{length_total_pages}, int($arg->{top_listrow} / $arg->{maxrows}) + 1, $arg->{total_pages};
+            printf $arg->{prompt_printf_template}, $arg->{width_total_pages}, int( $arg->{top_listrow} / $arg->{avail_term_height} ) + 1, $arg->{total_pages};
         }
         elsif ( $arg->{prompt_arguments} == 1 ) {
-            printf $arg->{prompt_printf_template}, $arg->{length_total_pages}, $arg->{length_total_pages}, int($arg->{top_listrow} / $arg->{maxrows}) + 1;
+            printf $arg->{prompt_printf_template}, $arg->{width_total_pages}, $arg->{width_total_pages}, int( $arg->{top_listrow} / $arg->{avail_term_height} ) + 1;
         }
      }
     for my $row ( $arg->{begin_page} .. $arg->{end_page} ) {
@@ -956,17 +924,17 @@ sub _size_and_layout {
     my ( $arg ) = @_;
     my $layout = $arg->{layout};
     $arg->{rowcol2list} = [];
-    if ( $arg->{length_longest} > $arg->{maxcols} ) {
-        $arg->{available_column_width} = $arg->{maxcols};
+    if ( $arg->{length_longest} > $arg->{avail_term_width} ) {
+        $arg->{avail_col_width} = $arg->{avail_term_width};
         $layout = 3;
     }
     else {
-        $arg->{available_column_width} = $arg->{length_longest};
+        $arg->{avail_col_width} = $arg->{length_longest};
     }
     ### layout
     my $all_in_first_row;
     if ( $layout == 2 ) {
-        $layout = 3 if scalar @{$arg->{list}} <= $arg->{maxrows};
+        $layout = 3 if scalar @{$arg->{list}} <= $arg->{avail_term_height};
     }
     elsif ( $layout < 2 ) {
         for my $idx ( 0 .. $#{$arg->{list}} ) {
@@ -976,7 +944,7 @@ sub _size_and_layout {
             utf8::upgrade( $all_in_first_row );
             my $gcs = Unicode::GCString->new( $all_in_first_row );
             $length_first_row = $gcs->columns();
-            if ( $length_first_row > $arg->{maxcols} ) {
+            if ( $length_first_row > $arg->{avail_term_width} ) {
                 $all_in_first_row = '';
                 last;
             }
@@ -986,7 +954,7 @@ sub _size_and_layout {
         $arg->{rowcol2list}[0] = [ 0 .. $#{$arg->{list}} ];
     }
     elsif ( $layout == 3 ) {
-        if ( $arg->{length_longest} <= $arg->{maxcols} ) {
+        if ( $arg->{length_longest} <= $arg->{avail_term_width} ) {
             for my $idx ( 0 .. $#{$arg->{list}} ) {
                 $arg->{rowcol2list}[$idx][0] = $idx;
             }
@@ -1000,19 +968,19 @@ sub _size_and_layout {
     }
     else {
         # auto_format
-        my $maxcls = $arg->{maxcols};
-        if ( ( $arg->{layout} == 1 || $arg->{layout} == 2 ) && $arg->{maxrows} > 0 ) {
-            my $tmc = int( @{$arg->{list}} / $arg->{maxrows} );
-            $tmc++ if @{$arg->{list}} % $arg->{maxrows};
+        my $tmp_terminal_width = $arg->{avail_term_width};
+        if ( ( $arg->{layout} == 1 || $arg->{layout} == 2 ) && $arg->{avail_term_height} > 0 ) {
+            my $tmc = int( @{$arg->{list}} / $arg->{avail_term_height} );
+            $tmc++ if @{$arg->{list}} % $arg->{avail_term_height};
             $tmc *= $arg->{col_width};
-            if ( $tmc < $maxcls ) {
-                $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 1.5 ) ) if $arg->{layout} == 1;
-                $tmc = int( $tmc + ( ( $maxcls - $tmc ) / 6 ) )   if $arg->{layout} == 2;
-                $maxcls = $tmc;
+            if ( $tmc < $tmp_terminal_width ) {
+                $tmc = int( $tmc + ( ( $tmp_terminal_width - $tmc ) / 1.5 ) ) if $arg->{layout} == 1;
+                $tmc = int( $tmc + ( ( $tmp_terminal_width - $tmc ) / 6 ) )   if $arg->{layout} == 2;
+                $tmp_terminal_width = $tmc;
             }
         }
     ### order
-        my $cols_per_row = int( $maxcls / $arg->{col_width} );
+        my $cols_per_row = int( $tmp_terminal_width / $arg->{col_width} );
         $cols_per_row = 1 if $cols_per_row < 1;
         my $rows = int( ( $#{$arg->{list}} + $cols_per_row ) / $cols_per_row );
         $arg->{rest} = @{$arg->{list}} % $cols_per_row;
@@ -1056,27 +1024,27 @@ sub _unicode_cut {
     utf8::upgrade( $unicode );
     my $gcs = Unicode::GCString->new( $unicode );
     my $string_width = $gcs->columns();
-    if ( $string_width > $arg->{maxcols} ) {
-        my $available_terminal_width = $arg->{maxcols} - 3;
-        my $max_length = int( $available_terminal_width / 2 ) + 1;
+    if ( $string_width > $arg->{avail_term_width} ) {
+        my $avail_term_width_tmp = $arg->{avail_term_width} - 3;
+        my $max_length = int( $avail_term_width_tmp / 2 ) + 1;
         while ( 1 ) {
             #my( $tmp ) = $unicode =~ /^(\X{0,$max_length})/;
             my $tmp = substr( $unicode, 0, $max_length );
             my $gcs = Unicode::GCString->new( $tmp );
             $string_width = $gcs->columns();
-            if ( $string_width > $available_terminal_width ) {
+            if ( $string_width > $avail_term_width_tmp ) {
                 # As soon as the string is longer than the available terminal width again:
                 $unicode = $tmp;
                 last;
             }
             $max_length += 10;
         }
-        while ( $string_width > $available_terminal_width ) {
+        while ( $string_width > $avail_term_width_tmp ) {
             $unicode =~ s/\X\z//;
             my $gcs = Unicode::GCString->new( $unicode );
             $string_width = $gcs->columns();
         }
-        $unicode .= ' ' if $string_width < $available_terminal_width;
+        $unicode .= ' ' if $string_width < $avail_term_width_tmp;
         $unicode .= '...';
     }
     return $unicode;
@@ -1088,36 +1056,36 @@ sub _unicode_sprintf {
     utf8::upgrade( $unicode );
     my $gcs = Unicode::GCString->new( $unicode );
     my $string_width = $gcs->columns();
-    if ( $string_width > $arg->{available_column_width} ) {
-        my $max_length = int( $arg->{available_column_width} / 2 ) + 1;
+    if ( $string_width > $arg->{avail_col_width} ) {
+        my $max_length = int( $arg->{avail_col_width} / 2 ) + 1;
         while ( 1 ) {
             #my( $tmp ) = $unicode =~ /^(\X{0,$max_length})/;
             my $tmp = substr( $unicode, 0, $max_length );
             my $gcs = Unicode::GCString->new( $tmp );
             $string_width = $gcs->columns();
-            if ( $string_width > $arg->{available_column_width} ) {
+            if ( $string_width > $arg->{avail_col_width} ) {
                 # As soon as the string is longer than the available column width again:
                 $unicode = $tmp;
                 last;
             }
             $max_length += 10;
         }
-        while ( $string_width > $arg->{available_column_width} ) {
+        while ( $string_width > $arg->{avail_col_width} ) {
             $unicode =~ s/\X\z//;
             my $gcs = Unicode::GCString->new( $unicode );
             $string_width = $gcs->columns();
         }
-        $unicode .= ' ' if $string_width < $arg->{available_column_width};
+        $unicode .= ' ' if $string_width < $arg->{avail_col_width};
     }
-    elsif ( $string_width < $arg->{available_column_width} ) {
+    elsif ( $string_width < $arg->{avail_col_width} ) {
         if ( $arg->{justify} == 0 ) {
-            $unicode = $unicode . " " x ( $arg->{available_column_width} - $string_width );
+            $unicode = $unicode . " " x ( $arg->{avail_col_width} - $string_width );
         }
         elsif ( $arg->{justify} == 1 ) {
-            $unicode = " " x ( $arg->{available_column_width} - $string_width ) . $unicode;
+            $unicode = " " x ( $arg->{avail_col_width} - $string_width ) . $unicode;
         }
         elsif ( $arg->{justify} == 2 ) {
-            my $all = $arg->{available_column_width} - $string_width;
+            my $all = $arg->{avail_col_width} - $string_width;
             my $half = int( $all / 2 );
             $unicode = " " x $half . $unicode . " " x ( $all - $half );
         }
@@ -1156,7 +1124,7 @@ sub _handle_mouse {
                     $end_this_col -= int( $arg->{pad_one_row} / 2 );
                 }
                 if ( $col == $#{$arg->{rowcol2list}[$row]} ) {
-                    $end_this_col = $arg->{maxcols} if $end_this_col > $arg->{maxcols};
+                    $end_this_col = $arg->{avail_term_width} if $end_this_col > $arg->{avail_term_width};
                 }
                 if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
                     $found = 1;
@@ -1178,7 +1146,7 @@ sub _handle_mouse {
                         $end_this_col -= int( $arg->{pad} / 2 );
                     }
                     if ( $col == $#{$arg->{rowcol2list}[$row]} ) {
-                        $end_this_col = $arg->{maxcols} if $end_this_col > $arg->{maxcols};
+                        $end_this_col = $arg->{avail_term_width} if $end_this_col > $arg->{avail_term_width};
                     }
                     if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
                         $found = 1;
@@ -1228,7 +1196,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.033
+Version 1.034
 
 =cut
 
@@ -1292,9 +1260,7 @@ If I<choose> is called in an I<list context>, the user can also mark an item wit
 
 I<choose> then returns - when "Return" is pressed - the list of marked items including the highlighted item.
 
-In I<list context> "Ctrl-SpaceBar"* inverts the choices: marked items are unmarked and unmarked items are marked.
-
-* May be mapped to a different key in a future release.
+In I<list context> "Ctrl-SpaceBar" inverts the choices: marked items are unmarked and unmarked items are marked.
 
 =item
 
@@ -1308,7 +1274,7 @@ If the items of the list don't fit on the screen, the user can scroll to the nex
 
 If the window size is changed, then as soon as the user enters a keystroke I<choose> rewrites the screen. In list context marked items are reset.
 
-The "q" key returns I<undef> or an empty list in list context.
+The "q" key (or Ctrl-D) returns I<undef> or an empty list in list context.
 
 With a I<mouse> mode enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
 
@@ -1387,7 +1353,7 @@ There is a general upper limit of 1_000_000_000 for options which expect a numbe
 
 If I<prompt> is undefined a default prompt-string will be shown.
 
-If the I<prompt> value is  an empty string ("") no prompt-line will be shown (until the next relese a "0" will have the same effect).
+If the I<prompt> value is  an empty string ("") no prompt-line will be shown.
 
 default in list and scalar context: 'Your choice:'
 

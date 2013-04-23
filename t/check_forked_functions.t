@@ -28,7 +28,7 @@ while ( readline $fh ) {
 close $fh;
 
 
-my @c = map { s/\A\s+//; s/\$available_terminal_width/---/;        s/ terminal / --- /; $_ } @unicode_cut[7..25];
-my @s = map { s/\A\s+//; s/\$arg->\{available_column_width\}/---/; s/ column / --- /;   $_ } @unicode_sprintf[6..24];
+my @c = map { s/\A\s+//; s/\$avail_term_width_tmp/---/;        s/ terminal / --- /; $_ } @unicode_cut[7..25];
+my @s = map { s/\A\s+//; s/\$arg->\{avail_col_width\}/---/; s/ column / --- /;   $_ } @unicode_sprintf[6..24];
 
 ok( @c ~~ @s, '_unicode... cut ok' );
