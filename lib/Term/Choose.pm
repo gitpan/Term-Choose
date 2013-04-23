@@ -4,7 +4,7 @@ use 5.10.0;
 
 package Term::Choose;
 
-our $VERSION = '1.034';
+our $VERSION = '1.035';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -435,7 +435,7 @@ sub _prepare_promptline {
     my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
     $prompt_length = $gcs->columns();
     if ( $prompt_length > $arg->{avail_term_width} ) {
-        $arg->{prompt_line} = _unicode_cut( $arg, $arg->{prompt} );
+        $arg->{prompt_line} = _unicode_cut( $arg->{prompt}, $arg->{avail_term_width} );
     }
 }
 
@@ -961,7 +961,7 @@ sub _size_and_layout {
         }
         else {
             for my $idx ( 0 .. $#{$arg->{list}} ) {
-                $arg->{list}[$idx] = _unicode_cut( $arg, $arg->{list}[$idx] );
+                $arg->{list}[$idx] = _unicode_cut( $arg->{list}[$idx], $arg->{avail_term_width} );
                 $arg->{rowcol2list}[$idx][0] = $idx;
             }
         }
@@ -1020,34 +1020,36 @@ sub _size_and_layout {
 
 
 sub _unicode_cut {
-    my ( $arg, $unicode ) = @_;
-    utf8::upgrade( $unicode );
-    my $gcs = Unicode::GCString->new( $unicode );
+    my ( $remaining_str, $avail_width ) = @_;
+    utf8::upgrade( $remaining_str );
+    my $gcs = Unicode::GCString->new( $remaining_str );
     my $string_width = $gcs->columns();
-    if ( $string_width > $arg->{avail_term_width} ) {
-        my $avail_term_width_tmp = $arg->{avail_term_width} - 3;
-        my $max_length = int( $avail_term_width_tmp / 2 ) + 1;
-        while ( 1 ) {
-            #my( $tmp ) = $unicode =~ /^(\X{0,$max_length})/;
-            my $tmp = substr( $unicode, 0, $max_length );
-            my $gcs = Unicode::GCString->new( $tmp );
-            $string_width = $gcs->columns();
-            if ( $string_width > $avail_term_width_tmp ) {
-                # As soon as the string is longer than the available terminal width again:
-                $unicode = $tmp;
-                last;
-            }
-            $max_length += 10;
+    return $remaining_str if $string_width <= $avail_width;
+    $avail_width -= 3;
+    # perform binary cutting
+    my @tmp_str;
+    my $width_tmp_str = 0;
+    my $half_width = int( $string_width / 2 ) || 1;
+    my $count = 0;
+    while ( 1 ) {
+        my $left  = substr( $remaining_str, 0, $half_width );
+        my $right = $half_width > length( $remaining_str ) ? '' : substr( $remaining_str, $half_width );
+        utf8::upgrade( $left );
+        my $gcs = Unicode::GCString->new( $left );
+        my $width_left = $gcs->columns();
+        if ( $width_tmp_str + $width_left > $avail_width ) {
+            $remaining_str = $left;
+        } else {
+            push @tmp_str, $left;
+            $width_tmp_str += $width_left;
+            $remaining_str = $right;
         }
-        while ( $string_width > $avail_term_width_tmp ) {
-            $unicode =~ s/\X\z//;
-            my $gcs = Unicode::GCString->new( $unicode );
-            $string_width = $gcs->columns();
-        }
-        $unicode .= ' ' if $string_width < $avail_term_width_tmp;
-        $unicode .= '...';
+        $half_width = int( ( $half_width + 1 ) / 2 );
+        last if $half_width == 1 && $count > 1;
+        ++$count if $half_width == 1;
     }
-    return $unicode;
+    push @tmp_str, ' ' if $width_tmp_str < $avail_width;
+    return join( '', @tmp_str, '...' );
 }
 
 
@@ -1057,25 +1059,7 @@ sub _unicode_sprintf {
     my $gcs = Unicode::GCString->new( $unicode );
     my $string_width = $gcs->columns();
     if ( $string_width > $arg->{avail_col_width} ) {
-        my $max_length = int( $arg->{avail_col_width} / 2 ) + 1;
-        while ( 1 ) {
-            #my( $tmp ) = $unicode =~ /^(\X{0,$max_length})/;
-            my $tmp = substr( $unicode, 0, $max_length );
-            my $gcs = Unicode::GCString->new( $tmp );
-            $string_width = $gcs->columns();
-            if ( $string_width > $arg->{avail_col_width} ) {
-                # As soon as the string is longer than the available column width again:
-                $unicode = $tmp;
-                last;
-            }
-            $max_length += 10;
-        }
-        while ( $string_width > $arg->{avail_col_width} ) {
-            $unicode =~ s/\X\z//;
-            my $gcs = Unicode::GCString->new( $unicode );
-            $string_width = $gcs->columns();
-        }
-        $unicode .= ' ' if $string_width < $arg->{avail_col_width};
+        $unicode = _unicode_cut( $unicode, $arg->{avail_col_width} );
     }
     elsif ( $string_width < $arg->{avail_col_width} ) {
         if ( $arg->{justify} == 0 ) {
@@ -1196,7 +1180,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.034
+Version 1.035
 
 =cut
 

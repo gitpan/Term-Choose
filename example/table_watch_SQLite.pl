@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.034
+# Version 1.035
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -2632,35 +2632,42 @@ sub choose_list {
 
 
 sub unicode_sprintf {
-    my ( $length, $unicode, $right_justify ) = @_;
+    my ( $avail_width, $unicode, $right_justify ) = @_;
     utf8::upgrade( $unicode );
     my $gcs = Unicode::GCString->new( $unicode );
     my $colwidth = $gcs->columns();
-    if ( $colwidth > $length ) {
-        my $max_length = int( $length / 2 ) + 1;
+    if ( $colwidth > $avail_width ) {
+        # perform binary cutting
+        my @tmp_str;
+        my $width_tmp_str = 0;
+        my $half_width = int( $colwidth / 2 ) || 1;
+        my $count = 0;
         while ( 1 ) {
-            my $tmp = substr( $unicode, 0, $max_length );
-            my $gcs = Unicode::GCString->new( $tmp );
-            $colwidth = $gcs->columns();
-            if ( $colwidth > $length ) {
-                $unicode = $tmp;
-                last;
+            my $left  = substr( $unicode, 0, $half_width );
+            my $right = $half_width > length( $unicode ) ? '' : substr( $unicode, $half_width );
+            utf8::upgrade( $left );
+            my $gcs = Unicode::GCString->new( $left );
+            my $width_left = $gcs->columns();
+            if ( $width_tmp_str + $width_left > $avail_width ) {
+                $unicode = $left;
+            } else {
+                push @tmp_str, $left;
+                $width_tmp_str += $width_left;
+                $unicode = $right;
             }
-            $max_length += 10;
+            $half_width = int( ( $half_width + 1 ) / 2 );
+            last if $half_width == 1 && $count > 1;
+            ++$count if $half_width == 1;
         }
-        while ( $colwidth > $length ) {
-            $unicode =~ s/\X\z//;
-            my $gcs = Unicode::GCString->new( $unicode );
-            $colwidth = $gcs->columns();
-        }
-        $unicode .= ' ' if $colwidth < $length;
+        push @tmp_str, ' ' if $width_tmp_str < $avail_width;
+        $unicode = join( '', @tmp_str );
     }
-    elsif ( $colwidth < $length ) {
+    elsif ( $colwidth < $avail_width ) {
         if ( $right_justify ) {
-            $unicode = " " x ( $length - $colwidth ) . $unicode;
+            $unicode = " " x ( $avail_width - $colwidth ) . $unicode;
         }
         else {
-            $unicode = $unicode . " " x ( $length - $colwidth );
+            $unicode = $unicode . " " x ( $avail_width - $colwidth );
         }
     }
     return $unicode;

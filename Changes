@@ -1,6 +1,10 @@
 Revision history for Term::Choose
 
 
+1.035   2013-04-23
+        - Refactoring "_unicode_cut" (Text::WideChar::Util::mbtrunc).
+        - Refactoring "_unicode_sprintf" (truncated strings end with "...").
+
 1.034   2013-04-23
         - Code refactoring.
         - Code cleanup.
