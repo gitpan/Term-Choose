@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.035
+# Version 1.036
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -24,7 +24,7 @@ use Term::Choose qw(choose);
 use Term::ProgressBar;
 use Term::ReadKey qw(GetTerminalSize ReadLine ReadMode);
 use Text::LineFold;
-use Unicode::GCString;
+use Text::CharWidth qw(mbswidth);
 
 use constant {
     GO_TO_TOP_LEFT => "\e[1;1H",
@@ -80,10 +80,7 @@ my $info = {
     }
 };
 
-utf8::upgrade( $info->{binary_string} );
-my $gcs = Unicode::GCString->new( $info->{binary_string} );
-my $colwidth = $gcs->columns();
-$info->{binary_length} = $colwidth;
+$info->{binary_length} = mbswidth( $info->{binary_string} );
 
 
 sub help {
@@ -247,7 +244,7 @@ DB_TYPES: while ( 1 ) {
         $databases = available_databases( $info, $opt );
         1 }
     ) {
-        say 'Available databases:';    
+        say 'Available databases:';
         delete $info->{login}{$db_type};
         print_error_message( $@ );
         choose( [ 'Press ENTER to continue' ], { prompt => '' } );
@@ -1734,9 +1731,7 @@ sub calc_widths {
                 # column name
                 $row->[$i] =~ s/\p{Space}+/ /g;
                 $row->[$i] =~ s/\p{Cntrl}//g;
-                utf8::upgrade( $row->[$i] );
-                my $gcstring = Unicode::GCString->new( $row->[$i] );
-                $cols_head_width->[$i] = $gcstring->columns();
+                $cols_head_width->[$i] = mbswidth( $row->[$i] );
             }
             else {
                 # normal row
@@ -1756,17 +1751,13 @@ sub calc_widths {
                     else {
                         $row->[$i] =~ s/\p{Space}+/ /g;
                         $row->[$i] =~ s/\p{Cntrl}//g;
-                        utf8::upgrade( $row->[$i] );
-                        my $gcstring = Unicode::GCString->new( $row->[$i] );
-                        $width_columns->[$i] = $gcstring->columns() if $gcstring->columns() > $width_columns->[$i];
+                        $width_columns->[$i] = mbswidth( $row->[$i] ) if mbswidth( $row->[$i] ) > $width_columns->[$i];
                     }
                 }
                 else {
                     $row->[$i] =~ s/\p{Space}+/ /g;
                     $row->[$i] =~ s/\p{Cntrl}//g;
-                    utf8::upgrade( $row->[$i] );
-                    my $gcstring = Unicode::GCString->new( $row->[$i] );
-                    $width_columns->[$i] = $gcstring->columns() if $gcstring->columns() > $width_columns->[$i];
+                    $width_columns->[$i] = mbswidth( $row->[$i] ) if mbswidth( $row->[$i] ) > $width_columns->[$i];
                 }
                 ++$not_a_number->[$i] if ! looks_like_number $row->[$i];
             }
@@ -1852,7 +1843,7 @@ sub print_table {
     my ( $cols_head_width, $width_columns, $not_a_number ) = recalc_widths( $info, $opt, $db, $terminal_width, $a_ref );
     return if ! defined $width_columns;
     my $items = @$a_ref * @{$a_ref->[0]};     #
-    my $start = 10_000;                       #
+    my $start = 20_000;                       #
     my $total = $#{$a_ref};                   #
     my $next_update = 0;                      #
     my $c = 0;                                #
@@ -1901,9 +1892,7 @@ sub print_table {
         }
         $length_key += 1;
         my $separator = ': ';
-        utf8::upgrade( $separator );
-        my $gcs = Unicode::GCString->new( $separator );
-        my $length_sep = $gcs->columns();
+        my $length_sep = mbswidth( $separator );
         my $idx_old = 0;
 
         my $size_changed = 0;
@@ -1944,7 +1933,7 @@ sub print_table {
                 push @{$row_data}, ' ';
                 my $key = $a_ref->[0][$idx_col];
                 my $sep = $separator;
-                if ( ! defined $a_ref->[$idx_row][$idx_col] || $a_ref->[$idx_row][$idx_col] eq '' ) { 
+                if ( ! defined $a_ref->[$idx_row][$idx_col] || $a_ref->[$idx_row][$idx_col] eq '' ) {
                     push @{$row_data}, sprintf "%*.*s%*s%s", $length_key, $length_key, $key, $length_sep, $sep, '';
                 }
                 else {
@@ -2521,9 +2510,7 @@ sub choose_a_number {
         if ( defined $current ) {
             $old = sprintf "%s%*s", 'Current ' . $name . ': ', $longest, $current;
             $new = sprintf "%s%*s", '    New ' . $name . ': ', $longest, $new_number;
-            utf8::upgrade( $old );
-            my $gcs = Unicode::GCString->new( $old );
-            if ( $gcs->columns() > $terminal_width ) {
+            if ( mbswidth( $old ) > $terminal_width ) {
                 $old = sprintf "%s%*s", 'Cur: ', $longest, $current;
                 $new = sprintf "%s%*s", 'New: ', $longest, $new_number;
                 if ( length $old > $terminal_width ) {
@@ -2534,9 +2521,7 @@ sub choose_a_number {
         }
         else {
             $new = sprintf "%s%*s", $name . ': ', $longest, $new_number;
-            utf8::upgrade( $new );
-            my $gcs = Unicode::GCString->new( $new );
-            if ( $gcs->columns() > $terminal_width ) {
+            if ( mbswidth( $new ) > $terminal_width ) {
                 $new = $new_number;
             }
         }
@@ -2633,9 +2618,7 @@ sub choose_list {
 
 sub unicode_sprintf {
     my ( $avail_width, $unicode, $right_justify ) = @_;
-    utf8::upgrade( $unicode );
-    my $gcs = Unicode::GCString->new( $unicode );
-    my $colwidth = $gcs->columns();
+    my $colwidth = mbswidth( $unicode );
     if ( $colwidth > $avail_width ) {
         # perform binary cutting
         my @tmp_str;
@@ -2645,9 +2628,7 @@ sub unicode_sprintf {
         while ( 1 ) {
             my $left  = substr( $unicode, 0, $half_width );
             my $right = $half_width > length( $unicode ) ? '' : substr( $unicode, $half_width );
-            utf8::upgrade( $left );
-            my $gcs = Unicode::GCString->new( $left );
-            my $width_left = $gcs->columns();
+            my $width_left = mbswidth( $left );
             if ( $width_tmp_str + $width_left > $avail_width ) {
                 $unicode = $left;
             } else {

@@ -1,6 +1,10 @@
 Revision history for Term::Choose
 
 
+1.036   2013-04-24
+        - Switched from "Unicode::GCString/columns" to "Text::CharWidth::mbswidth" to determine print columns (faster).
+        - Update documentation.
+
 1.035   2013-04-23
         - Refactoring "_unicode_cut" (Text::WideChar::Util::mbtrunc).
         - Refactoring "_unicode_sprintf" (truncated strings end with "...").

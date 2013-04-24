@@ -4,14 +4,15 @@ use 5.10.0;
 
 package Term::Choose;
 
-our $VERSION = '1.035';
+our $VERSION = '1.036';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
 use Carp;
 use Scalar::Util qw(reftype);
 use Term::ReadKey;
-use Unicode::GCString;
+use Text::CharWidth qw(mbswidth);
+#use Unicode::GCString;
 
 #use warnings FATAL => qw(all);
 #use Log::Log4perl qw(get_logger);
@@ -265,13 +266,15 @@ sub _end_win {
 
 sub _length_longest {
     my ( $list ) = @_;
-    utf8::upgrade( $list->[0] );
-    my $gcs = Unicode::GCString->new( $list->[0] );
-    my $longest = $gcs->columns();
+    my $longest = mbswidth( $list->[0] );
+    #utf8::upgrade( $list->[0] );
+    #my $gcs = Unicode::GCString->new( $list->[0] );
+    #my $longest = $gcs->columns();
     for my $str ( @{$list} ) {
-        utf8::upgrade( $str );
-        my $gcs = Unicode::GCString->new( $str );
-        my $length = $gcs->columns();
+        my $length = mbswidth( $str );
+        #utf8::upgrade( $str );
+        #my $gcs = Unicode::GCString->new( $str );
+        #my $length = $gcs->columns();
         $longest = $length if $length > $longest;
     }
     return $longest;
@@ -367,7 +370,7 @@ sub _set_layout {
     $config->{limit}            //= 100_000;
     $config->{mouse}            //= 0;
     $config->{order}            //= 1;
-    $config->{pad}              //= 2;  # "pad" has to be before "pad_one_row"
+    $config->{pad}              //= 2; # before "pad_one_row"
     $config->{pad_one_row}      //= $config->{pad};
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
@@ -430,10 +433,10 @@ sub _prepare_promptline {
     $arg->{prompt} =~ s/\p{Space}/ /g;
     $arg->{prompt} =~ s/\p{Cntrl}//g;
     $arg->{prompt_line} = $arg->{prompt};
-    my $prompt_length;
-    utf8::upgrade( $arg->{prompt_line} );
-    my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
-    $prompt_length = $gcs->columns();
+    my $prompt_length = mbswidth( $arg->{prompt_line} );
+    #utf8::upgrade( $arg->{prompt_line} );
+    #my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
+    #my $prompt_length = $gcs->columns();
     if ( $prompt_length > $arg->{avail_term_width} ) {
         $arg->{prompt_line} = _unicode_cut( $arg->{prompt}, $arg->{avail_term_width} );
     }
@@ -899,9 +902,10 @@ sub _wr_cell {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
-                utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
-                my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
-                $lngth += $gcs->columns();
+                $lngth += mbswidth( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
+                #utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
+                #my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
+                #$lngth += $gcs->columns();
                 $lngth += $arg->{pad_one_row};
             }
         }
@@ -940,10 +944,10 @@ sub _size_and_layout {
         for my $idx ( 0 .. $#{$arg->{list}} ) {
             $all_in_first_row .= $arg->{list}[$idx];
             $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
-            my $length_first_row;
-            utf8::upgrade( $all_in_first_row );
-            my $gcs = Unicode::GCString->new( $all_in_first_row );
-            $length_first_row = $gcs->columns();
+            my $length_first_row = mbswidth( $all_in_first_row );
+            #utf8::upgrade( $all_in_first_row );
+            #my $gcs = Unicode::GCString->new( $all_in_first_row );
+            #my $length_first_row = $gcs->columns();
             if ( $length_first_row > $arg->{avail_term_width} ) {
                 $all_in_first_row = '';
                 last;
@@ -1021,9 +1025,10 @@ sub _size_and_layout {
 
 sub _unicode_cut {
     my ( $remaining_str, $avail_width ) = @_;
-    utf8::upgrade( $remaining_str );
-    my $gcs = Unicode::GCString->new( $remaining_str );
-    my $string_width = $gcs->columns();
+    my $string_width = mbswidth( $remaining_str );
+    #utf8::upgrade( $remaining_str );
+    #my $gcs = Unicode::GCString->new( $remaining_str );
+    #my $string_width = $gcs->columns();
     return $remaining_str if $string_width <= $avail_width;
     $avail_width -= 3;
     # perform binary cutting
@@ -1034,9 +1039,10 @@ sub _unicode_cut {
     while ( 1 ) {
         my $left  = substr( $remaining_str, 0, $half_width );
         my $right = $half_width > length( $remaining_str ) ? '' : substr( $remaining_str, $half_width );
-        utf8::upgrade( $left );
-        my $gcs = Unicode::GCString->new( $left );
-        my $width_left = $gcs->columns();
+        my $width_left = mbswidth( $left );
+        #utf8::upgrade( $left );
+        #my $gcs = Unicode::GCString->new( $left );
+        #my $width_left = $gcs->columns();
         if ( $width_tmp_str + $width_left > $avail_width ) {
             $remaining_str = $left;
         } else {
@@ -1055,9 +1061,10 @@ sub _unicode_cut {
 
 sub _unicode_sprintf {
     my ( $arg, $unicode ) = @_;
-    utf8::upgrade( $unicode );
-    my $gcs = Unicode::GCString->new( $unicode );
-    my $string_width = $gcs->columns();
+    my $string_width = mbswidth( $unicode );
+    #utf8::upgrade( $unicode );
+    #my $gcs = Unicode::GCString->new( $unicode );
+    #my $string_width = $gcs->columns();
     if ( $string_width > $arg->{avail_col_width} ) {
         $unicode = _unicode_cut( $unicode, $arg->{avail_col_width} );
     }
@@ -1101,9 +1108,10 @@ sub _handle_mouse {
         if ( $row == $mouse_row ) {
             my $end_last_col = 0;
             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
-                utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
-                my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
-                my $end_this_col = $end_last_col + $gcs->columns() + $arg->{pad_one_row};
+                my $end_this_col = $end_last_col + mbswidth( $arg->{list}[$arg->{rowcol2list}[$row][$col]] ) + $arg->{pad_one_row};
+                #utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
+                #my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
+                #my $end_this_col = $end_last_col + $gcs->columns() + $arg->{pad_one_row};
                 if ( $col == 0 ) {
                     $end_this_col -= int( $arg->{pad_one_row} / 2 );
                 }
@@ -1180,7 +1188,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.035
+Version 1.036
 
 =cut
 
@@ -1524,7 +1532,9 @@ If the length of the element with the largest length is known before calling I<c
 
 I<length> refers here to the number of print columns the element will use on the terminal.
 
-A way to determine the number of print colunms is the use of the function I<colunms> from L<Unicode::GCString>.
+One way to determine the number of print colunms is the use of the function I<mbswidth> from L<Text::CharWidth> another is the use of I<colunms> from L<Unicode::GCString>.
+
+When calculating the number of print columns with one of these two modules the strings may not contain control characters.
 
 Calculating the largest length by using the number of bytes or the number of characters of the strings instead of using the numer of print columns could break the output.
 
@@ -1581,7 +1591,7 @@ L<Term::ReadKey>
 
 =item
 
-L<Unicode::GCString>
+L<Text::CharWidth>
 
 =back
 
@@ -1658,7 +1668,7 @@ As mentioned above I<choose> from L<Term::Clui> does not order the elements in c
 
 Another difference is how lists which don't fit on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
 
-Strings with characters where I<length(>characterI<)>* is not equal to the number of print columns of the respective character might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with such kind of Unicode strings it uses the method I<columns> from L<Unicode::GCString> to determine the string length.
+Strings with characters where I<length(>characterI<)>* is not equal to the number of print columns of the respective character might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with such kind of Unicode strings it uses the method I<mbswidth> from L<Text::CharWidth> to determine the string length.
 
 * Perl builtin function I<length>.
 
@@ -1668,7 +1678,7 @@ L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> 
 
 =item Only in L<Term::Clui>
 
-L<Term::Clui> provides a speaking interface, offers a bundle of functions and has a fallback to work when only Perl core modules are available.
+L<Term::Clui> provides a speaking interface, offers a bundle of command-line related functions and has a fallback to work when only Perl core modules are available.
 
 The I<choose> function from L<Term::Clui> can remember choices made in scalar context and allows multiline question - the first line is put on the top, the subsequent lines are displayed below the list.
 

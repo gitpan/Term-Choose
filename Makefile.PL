@@ -21,7 +21,8 @@ WriteMakefile(
         'Carp' => 0,
         'Scalar::Util' => 0,
         'Term::ReadKey' => '2.30',
-        'Unicode::GCString' => '2012.04',
+        'Text::CharWidth' => '0.04',
+        #'Unicode::GCString' => '2012.04',
     },
     clean => { 
         FILES => 'Term-Choose-*',
