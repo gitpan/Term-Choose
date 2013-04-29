@@ -1,5 +1,9 @@
 Revision history for Term::Choose
 
+1.037   2013-04-29
+        - Example: fixed bugs.
+        - Example: added progess bar threshold (option).
+        - Example: changed the "binary filter"/ removed the option "Binary filter".
 
 1.036   2013-04-24
         - Switched from "Unicode::GCString/columns" to "Text::CharWidth::mbswidth" to determine print columns (faster).

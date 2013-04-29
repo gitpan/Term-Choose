@@ -4,7 +4,7 @@ use 5.10.0;
 
 package Term::Choose;
 
-our $VERSION = '1.036';
+our $VERSION = '1.037';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -787,7 +787,7 @@ sub choose {
             }
             when ( $c == CONTROL_C ) {
                 _end_win( $arg );
-                print "^C";
+                warn "^C\n";
                 kill( 'INT', $$ );
                 return;
             }
@@ -1188,7 +1188,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.036
+Version 1.037
 
 =cut
 
