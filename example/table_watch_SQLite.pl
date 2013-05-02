@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.037
+# Version 1.038
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -142,9 +142,9 @@ my $opt = {
         tab_width      => [ 2,      '- Tab width' ],
         min_col_width  => [ 30,     '- Min col width' ],
         undef          => [ '',     '- Undef' ],
-        limit          => [ 50_000, '- Max rows' ],
+        limit          => [ 80_000, '- Max rows' ],
         progress_bar   => [ 40_000, '- ProgressBar' ],
-        expand         => [ 0,      '- Expand' ],
+        expand         => [ 1,      '- Expand' ],
     },
     sql => {
         lock_stmt      => [ 0, '- Keep statement' ],
@@ -1546,6 +1546,7 @@ sub read_table {
                 }
                 my $all_arrayref = $sth->fetchall_arrayref;
                 unshift @$all_arrayref, $col_names;
+                local $| = 1;
                 print GO_TO_TOP_LEFT;
                 print CLEAR_EOS;
                 return $all_arrayref;
@@ -1718,7 +1719,7 @@ sub calc_widths {
     my ( $info, $opt, $db, $a_ref, $terminal_width ) = @_;
     my ( $cols_head_width, $width_columns, $not_a_number );
     my $count = 0;
-    say 'Computing: ...' if @$a_ref > $opt->{print}{progress_bar}[v];
+    say 'Computing: ...' if @$a_ref * @{$a_ref->[0]}  > $opt->{print}{progress_bar}[v];
     for my $row ( @$a_ref ) {
         ++$count;
         for my $i ( 0 .. $#$row ) {
@@ -1798,7 +1799,7 @@ sub recalc_widths {
             else {
                 $tmp_width_columns[$i] = minus_x_percent( $tmp_width_columns[$i], $percent );
             }
-            $count++;
+            ++$count;
             last if $sum <= $terminal_width;
         }
         $minimum_with-- if $count == 0 && $minimum_with > 1;
@@ -1860,7 +1861,7 @@ sub print_table {
         push @list, $string;
         if ( $items > $start ) {                                          #
             my $is_power = 0;                                             #
-            for ( my $i = 0; 2 ** $i <= $c; $i++) {                       #
+            for ( my $i = 0; 2 ** $i <= $c; ++$i ) {                      #
                 $is_power = 1 if 2 ** $i == $c;                           #
             }                                                             #
             $next_update = $progress->update( $c ) if $c >= $next_update; #

@@ -4,13 +4,13 @@ use 5.10.0;
 
 package Term::Choose;
 
-our $VERSION = '1.037';
+our $VERSION = '1.038';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
-use Carp;
+use Carp qw(croak carp);
 use Scalar::Util qw(reftype);
-use Term::ReadKey;
+use Term::ReadKey qw(GetTerminalSize ReadKey);
 use Text::CharWidth qw(mbswidth);
 #use Unicode::GCString;
 
@@ -267,12 +267,10 @@ sub _end_win {
 sub _length_longest {
     my ( $list ) = @_;
     my $longest = mbswidth( $list->[0] );
-    #utf8::upgrade( $list->[0] );
     #my $gcs = Unicode::GCString->new( $list->[0] );
     #my $longest = $gcs->columns();
     for my $str ( @{$list} ) {
         my $length = mbswidth( $str );
-        #utf8::upgrade( $str );
         #my $gcs = Unicode::GCString->new( $str );
         #my $length = $gcs->columns();
         $longest = $length if $length > $longest;
@@ -283,24 +281,77 @@ sub _length_longest {
 
 sub _copy_orig_list {
     my ( $arg ) = @_;
-    if ( $arg->{list_to_long} ) {
+    $arg->{cp_list} = 1 if $arg->{ll};
+    if ( $arg->{cp_list} == 1 ) {
+        if ( $arg->{list_to_long} ) {
+            return [ map {
+                my $copy = $_;
+                if ( ! $copy ) {
+                    $copy = $arg->{undef} if ! defined $copy;
+                    $copy = $arg->{empty} if $copy eq '';
+                }
+                $copy;
+            } @{$arg->{orig_list}}[ 0 .. $arg->{limit} - 1 ] ];
+        }
         return [ map {
             my $copy = $_;
-            $copy = $arg->{undef} if ! defined $copy;
-            $copy = $arg->{empty} if $copy eq '';
+            if ( ! $copy ) {
+                $copy = $arg->{undef} if ! defined $copy;
+                $copy = $arg->{empty} if $copy eq '';
+            }
+            $copy;
+        } @{$arg->{orig_list}} ];
+    }
+    elsif( $arg->{cp_list} == 2 ) {
+        if ( $arg->{list_to_long} ) {
+            return [ map {
+                my $copy = $_;
+                if ( ! $copy ) {
+                    $copy = $arg->{undef} if ! defined $copy;
+                    $copy = $arg->{empty} if $copy eq '';
+                }
+                $copy =~ s/\p{Space}/ /g;   # replace, but don't squash sequences of spaces
+                $copy =~ s/\p{Cntrl}//g;
+                $copy;
+            } @{$arg->{orig_list}}[ 0 .. $arg->{limit} - 1 ] ];
+        }
+        return [ map {
+            my $copy = $_;
+            if ( ! $copy ) {
+                $copy = $arg->{undef} if ! defined $copy;
+                $copy = $arg->{empty} if $copy eq '';
+            }
             $copy =~ s/\p{Space}/ /g;   # replace, but don't squash sequences of spaces
             $copy =~ s/\p{Cntrl}//g;
             $copy;
-        } @{$arg->{orig_list}}[ 0 .. $arg->{limit} - 1 ] ];
+        } @{$arg->{orig_list}} ];
     }
-    return [ map {
-        my $copy = $_;
-        $copy = $arg->{undef} if ! defined $copy;
-        $copy = $arg->{empty} if $copy eq '';
-        $copy =~ s/\p{Space}/ /g;   # replace, but don't squash sequences of spaces
-        $copy =~ s/\p{Cntrl}//g;
-        $copy;
-    } @{$arg->{orig_list}} ];
+    elsif ( $arg->{cp_list} == 3 ) {
+        if ( $arg->{list_to_long} ) {
+            return [ map {
+                my $copy = $_;
+                if ( ! $copy ) {
+                    $copy = $arg->{undef} if ! defined $copy;
+                    $copy = $arg->{empty} if $copy eq '';
+                }
+                utf8::upgrade( $copy );
+                $copy =~ s/\p{Space}/ /g;   # replace, but don't squash sequences of spaces
+                $copy =~ s/\p{Cntrl}//g;
+                $copy;
+            } @{$arg->{orig_list}}[ 0 .. $arg->{limit} - 1 ] ];
+        }
+        return [ map {
+            my $copy = $_;
+            if ( ! $copy ) {
+                $copy = $arg->{undef} if ! defined $copy;
+                $copy = $arg->{empty} if $copy eq '';
+            }
+            utf8::upgrade( $copy );
+            $copy =~ s/\p{Space}/ /g;   # replace, but don't squash sequences of spaces
+            $copy =~ s/\p{Cntrl}//g;
+            $copy;
+        } @{$arg->{orig_list}} ];
+    }
 }
 
 
@@ -327,19 +378,20 @@ sub _validate_option {
         prompt          => '',
         screen_width    => [ 1 ,    100 ],
         undef           => '',
+        cp_list         => [ 1,       3 ],
     };
     my $warn = 0;
     for my $key ( keys %$config ) {
         if ( ! exists $validate->{$key} ) {
             carp "choose: \"$key\" is not a valid option";
             delete $config->{$key};
-            ++$warn;
+            $warn++;
         }
         elsif ( $validate->{$key} ) {  # the empty string is not true
             if ( defined $config->{$key} && ( $config->{$key} !~ m/^[0-9]+\z/ || $config->{$key} < $validate->{$key}[MIN] || $config->{$key} > $validate->{$key}[MAX] ) ) {
                 carp "choose: \"$config->{$key}\" is not a valid value for the option \"$key\". Falling back to the default value.";
                 $config->{$key} = undef;
-                ++$warn;
+                $warn++;
             }
         }
     }
@@ -376,6 +428,7 @@ sub _set_layout {
     $config->{prompt}           //= $prompt;
     #$config->{screen_width}    //= undef;
     $config->{undef}            //= '<undef>';
+    $config->{cp_list}          //= 3;
     return $config;
 }
 
@@ -787,7 +840,7 @@ sub choose {
             }
             when ( $c == CONTROL_C ) {
                 _end_win( $arg );
-                warn "^C\n";
+                print STDERR "^C";
                 kill( 'INT', $$ );
                 return;
             }
@@ -903,7 +956,6 @@ sub _wr_cell {
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
                 $lngth += mbswidth( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
-                #utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
                 #my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
                 #$lngth += $gcs->columns();
                 $lngth += $arg->{pad_one_row};
@@ -945,7 +997,6 @@ sub _size_and_layout {
             $all_in_first_row .= $arg->{list}[$idx];
             $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
             my $length_first_row = mbswidth( $all_in_first_row );
-            #utf8::upgrade( $all_in_first_row );
             #my $gcs = Unicode::GCString->new( $all_in_first_row );
             #my $length_first_row = $gcs->columns();
             if ( $length_first_row > $arg->{avail_term_width} ) {
@@ -1026,7 +1077,6 @@ sub _size_and_layout {
 sub _unicode_cut {
     my ( $remaining_str, $avail_width ) = @_;
     my $string_width = mbswidth( $remaining_str );
-    #utf8::upgrade( $remaining_str );
     #my $gcs = Unicode::GCString->new( $remaining_str );
     #my $string_width = $gcs->columns();
     return $remaining_str if $string_width <= $avail_width;
@@ -1040,7 +1090,6 @@ sub _unicode_cut {
         my $left  = substr( $remaining_str, 0, $half_width );
         my $right = $half_width > length( $remaining_str ) ? '' : substr( $remaining_str, $half_width );
         my $width_left = mbswidth( $left );
-        #utf8::upgrade( $left );
         #my $gcs = Unicode::GCString->new( $left );
         #my $width_left = $gcs->columns();
         if ( $width_tmp_str + $width_left > $avail_width ) {
@@ -1062,7 +1111,6 @@ sub _unicode_cut {
 sub _unicode_sprintf {
     my ( $arg, $unicode ) = @_;
     my $string_width = mbswidth( $unicode );
-    #utf8::upgrade( $unicode );
     #my $gcs = Unicode::GCString->new( $unicode );
     #my $string_width = $gcs->columns();
     if ( $string_width > $arg->{avail_col_width} ) {
@@ -1109,7 +1157,6 @@ sub _handle_mouse {
             my $end_last_col = 0;
             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
                 my $end_this_col = $end_last_col + mbswidth( $arg->{list}[$arg->{rowcol2list}[$row][$col]] ) + $arg->{pad_one_row};
-                #utf8::upgrade( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
                 #my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
                 #my $end_this_col = $end_last_col + $gcs->columns() + $arg->{pad_one_row};
                 if ( $col == 0 ) {
@@ -1188,7 +1235,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.037
+Version 1.038
 
 =cut
 
@@ -1494,18 +1541,6 @@ Allowed values:  0 or greater
 
 4 - extended SGR mouse mode (1006) - mouse mode 1003 is used if mouse mode 1006 is not supported
 
-=head4 undef
-
-Sets the string displayed on the screen instead an undefined element.
-
-default: '<undef>'
-
-=head4 empty
-
-Sets the string displayed on the screen instead an empty string.
-
-default: '<empty>'
-
 =head4 beep
 
 0 - off (default)
@@ -1524,19 +1559,60 @@ Sets the maximal allowed length of the array. (default: 100_000)
 
 Allowed values:  1 or greater
 
+=head4 undef
+
+Sets the string displayed on the screen instead an undefined element.
+
+default: '<undef>'
+
+=head4 empty
+
+Sets the string displayed on the screen instead an empty string.
+
+default: '<empty>'
+
+=head4 cp_list
+
+This option is experimental.
+
+1 - Control characters are not removed by I<choose>. If I<cp_list> is set to "1" the elements of the array must not contain any control characters.
+
+2 - White-spaces in elements are replaced with simple spaces and control characters are removed.
+
+    $element =~ s/\p{Space}/ /g;
+    $element =~ s/\p{Cntrl}//g;
+
+3 - To the elements of the array is applied an I<utf8::upgrade> before the substitutions/replacements are done. (default)
+
+    utf8::upgrade( $element );
+    $element =~ s/\p{Space}/ /g;
+    $element =~ s/\p{Cntrl}//g;
+
+As mentioned in the L</REQUIREMENTS> I<choose> needs decoded strings to work correctly. If for some reasons elements are not decoded strings setting I<cp_list> to "3" reduces the likelihood that the output breaks.
+
 =head4 length_longest or ll
 
 This option is experimental.
+
+The long name of this option (length_longest) may be removed in a future release.
 
 If the length of the element with the largest length is known before calling I<choose> it can be passed with this option.
 
 I<length> refers here to the number of print columns the element will use on the terminal.
 
-One way to determine the number of print colunms is the use of the function I<mbswidth> from L<Text::CharWidth> another is the use of I<colunms> from L<Unicode::GCString>.
+If the array has undefined elements the the value of the option I<undef> has to be considered when calculating the length of the longest element.
 
-When calculating the number of print columns with one of these two modules the strings may not contain control characters.
+If the array contains elements with an empty string as its value the value of the option I<empty> has to considered when calculating the length of the longest element.
 
-Calculating the largest length by using the number of bytes or the number of characters of the strings instead of using the numer of print columns could break the output.
+If the option I<ll> is set the option I<cp_list> is set by default to "1".
+
+If the option I<ll> is set the elements must not contain any control characters.
+
+If the option I<ll> is set setting the option I<cp_list> has no effect.
+
+One way to determine the number of print columns is the use of the function I<mbswidth> from L<Text::CharWidth> another is the use of I<columns> from L<Unicode::GCString>.
+
+Calculating the largest length by using the number of bytes or the number of characters of the strings instead of using the number of print columns could break the output.
 
 If I<ll> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
 
@@ -1549,7 +1625,6 @@ If the value of I<ll> is greater than the screen width I<ll> will be set to the 
 Allowed values: 1 or greater
 
 (default: undef)
-
 
 =head3 Error handling
 
