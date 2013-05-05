@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.038
+# Version 1.039
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -24,7 +24,8 @@ use Term::Choose qw(choose);
 use Term::ProgressBar;
 use Term::ReadKey qw(GetTerminalSize ReadLine ReadMode);
 use Text::LineFold;
-use Text::CharWidth qw(mbswidth);
+#use Text::CharWidth qw(mbswidth);
+use Unicode::GCString;
 
 use constant {
     GO_TO_TOP_LEFT => "\e[1;1H",
@@ -80,8 +81,9 @@ my $info = {
     }
 };
 
-$info->{binary_length} = mbswidth( $info->{binary_string} );
-
+#$info->{binary_length} = mbswidth( $info->{binary_string} );
+my $gcs = Unicode::GCString->new( $info->{binary_string} );
+$info->{binary_length} = $gcs->columns;
 
 sub help {
     print << 'HELP';
@@ -124,11 +126,12 @@ Options:
                          if disabled the default case sensitivity is used.
 
     DB defaults    : Set Database defaults.
-                     "DB defaults" can be overwritten for each Database with the "Database settings".
+                        Binary filter: Print "BNRY" instead of arbitrary binary data (printing arbitrary binary data could break the output).
+                        Different Database settings ...
+                     Database defaults can be overwritten for each Database with the "Database settings".
     DB login       : If enabled username and password are asked for each new DB connection.
                      If not enabled username and password are asked once and used for all connections.
 
-    If an arbitrary binary string can't be handled "BNRY" is displayed instead.
     "q" key goes back.
 
 HELP
@@ -143,7 +146,7 @@ my $opt = {
         min_col_width  => [ 30,     '- Min col width' ],
         undef          => [ '',     '- Undef' ],
         limit          => [ 80_000, '- Max rows' ],
-        progress_bar   => [ 40_000, '- ProgressBar' ],
+        progress_bar   => [ 20_000, '- ProgressBar' ],
         expand         => [ 1,      '- Expand' ],
     },
     sql => {
@@ -168,15 +171,18 @@ my $opt = {
         see_if_its_a_number => [ 1,       '- See if its a number' ],
         busy_timeout        => [ 3_000,   '- Busy timeout (ms)' ],
         cache_size          => [ 500_000, '- Cache size (kb)' ],
+        binary_filter       => [ 0,       '- Binary filter' ],
     },
     mysql => {
         enable_utf8         => [ 1, '- Enable utf8' ],
         connect_timeout     => [ 4, '- Connect timeout' ],
         bind_type_guessing  => [ 1, '- Bind type guessing' ],
         ChopBlanks          => [ 1, '- Chop blanks off' ],
+        binary_filter       => [ 0, '- Binary filter' ],
     },
     postgres => {
         pg_enable_utf8      => [ 1, '- Enable utf8' ],
+        binary_filter       => [ 0, '- Binary filter' ],
     }
 };
 
@@ -188,9 +194,9 @@ $info->{dbs}{keys}       = [ qw( db_login db_defaults ) ];
 $info->{menu}{keys}      = [ qw( thsd_sep database_types operators sssc_mode ) ];
 
 $info->{db_sections}     = [ qw( sqlite mysql postgres ) ];
-$info->{sqlite}{keys}    = [ qw( reset_cache max_depth unicode see_if_its_a_number busy_timeout cache_size ) ];
-$info->{mysql}{keys}     = [ qw( enable_utf8 connect_timeout bind_type_guessing ChopBlanks ) ];
-$info->{postgres}{keys}  = [ qw( pg_enable_utf8 ) ];
+$info->{sqlite}{keys}    = [ qw( reset_cache max_depth unicode see_if_its_a_number busy_timeout cache_size binary_filter ) ];
+$info->{mysql}{keys}     = [ qw( enable_utf8 connect_timeout bind_type_guessing ChopBlanks binary_filter ) ];
+$info->{postgres}{keys}  = [ qw( pg_enable_utf8 binary_filter ) ];
 
 $info->{sqlite}{commandline_only} = [ qw( reset_cache max_depth ) ];
 
@@ -1601,20 +1607,10 @@ sub set_operator_sql {
 
         IN: while ( 1 ) {
             print_select_statement( $sql, $table );
-            # Choose
-            my $choices = [ $info->{ok}, @$cols ];
-            unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
-            my $print_col = choose(
-                $choices,
-                { prompt => "$operator: ", %lyt_stmt }
-            );
-            if ( ! defined $print_col ) {
-                $sql->{quote}{$args} = [];
-                $sql->{quote}{$stmt} = '';
-                $sql->{print}{$stmt} = '';
-                return;
-            }
-            if ( $print_col eq $info->{ok} ) {
+            # Readline
+            state $count = 1;
+            my $value = local_read_line( prompt => 'Value ' . $count++ . ': ' );
+            if ( $value eq '' ) {
                 if ( $info->{col_sep} eq ' ' ) {
                     $sql->{quote}{$args} = [];
                     $sql->{quote}{$stmt} = '';
@@ -1625,9 +1621,9 @@ sub set_operator_sql {
                 $sql->{print}{$stmt} .= ' )';
                 last IN;
             }
-            ( my $quote_col = $quote_cols->{$print_col} ) =~ s/\sAS\s\S+\z//;
-            $sql->{quote}{$stmt} .= $info->{col_sep} . $quote_col;
-            $sql->{print}{$stmt} .= $info->{col_sep} . $print_col;
+            $sql->{quote}{$stmt} .= $info->{col_sep} . '?';
+            $sql->{print}{$stmt} .= $info->{col_sep} . $value;
+            push @{$sql->{quote}{$args}}, $value;
             $info->{col_sep} = ', ';
         }
     }
@@ -1720,25 +1716,25 @@ sub calc_widths {
     my ( $cols_head_width, $width_columns, $not_a_number );
     my $count = 0;
     say 'Computing: ...' if @$a_ref * @{$a_ref->[0]}  > $opt->{print}{progress_bar}[v];
+    my $binary_filter = $opt->{$db}{binary_filter}[v] // $opt->{$info->{db_type}}{binary_filter}[v];
+    my $binray_regexp = qr/[\x00-\x08\x0B-\x0C\x0E-\x1F]/;
     for my $row ( @$a_ref ) {
         ++$count;
         for my $i ( 0 .. $#$row ) {
             $width_columns->[$i] ||= 1;
             $row->[$i] = $opt->{print}{undef}[v] if ! defined $row->[$i];
-            my $width = -1;
-            eval {
-                $row->[$i] =~ s/\p{Space}+/ /g;
-                $row->[$i] =~ s/\p{Cntrl}//g;
-                $width = mbswidth( $row->[$i] ); # returns -1 if encountered something invalid.
-            };
-            if ( $width == -1 ) {
+            my $width;
+            if ( $binary_filter && substr( $row->[$i], 0, 100 ) =~ $binray_regexp) {
                 $row->[$i] = $info->{binary_string};
                 $width = $info->{binary_length};
             }
-            #utf8::upgrade( $row->[$i] );
-            #$row->[$i] =~ s/\p{Space}+/ /g;
-            #$row->[$i] =~ s/\p{Cntrl}//g;
-            #my $width = mbswidth( $row->[$i] );
+            else {
+                utf8::upgrade( $row->[$i] );
+                $row->[$i] =~ s/\p{Space}+/ /g;
+                $row->[$i] =~ s/\p{Cntrl}//g;
+                my $gcs = Unicode::GCString->new( $row->[$i] );
+                $width = $gcs->columns;
+            }
             if ( $count == 1 ) {
                 # column name
                 $cols_head_width->[$i] = $width;
@@ -1879,7 +1875,9 @@ sub print_table {
         }
         $length_key += 1;
         my $separator = ' : ';
-        my $length_sep = mbswidth( $separator );
+        #my $length_sep = mbswidth( $separator );
+        my $gcs = Unicode::GCString->new( $separator );
+        my $length_sep = $gcs->columns;
         my $idx_old = 0;
 
         my $size_changed = 0;
@@ -2255,6 +2253,21 @@ sub database_setting {
                     $new->{$section}{$key} = $choice;
                     $change++;
                 }
+                when ( $opt->{'sqlite'}{binary_filter}[chs] ) {
+                    my $key = 'binary_filter';
+                    my $binary_filter = current_value( $opt, $key, $db_type, $db );
+                    # Choose
+                    my $choice = choose(
+                        [ undef, $true, $false ],
+                        { prompt => 'Enable Binary Filter [' . ( $binary_filter ? 'YES' : 'NO' ) . ']:', %lyt_bol }
+                    );
+                    if ( ! defined $choice ) {
+                        delete $new->{$section}{$key};
+                        next SQLITE;
+                    }
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
+                    $change++;
+                }
                 default { die "$option: no such value in the hash \%opt"; }
             }
         }
@@ -2318,6 +2331,21 @@ sub database_setting {
                     $new->{$section}{$key} = $choice;
                     $change++;
                 }
+                when ( $opt->{'mysql'}{binary_filter}[chs] ) {
+                    my $key = 'binary_filter';
+                    my $binary_filter = current_value( $opt, $key, $db_type, $db );
+                    # Choose
+                    my $choice = choose(
+                        [ undef, $true, $false ],
+                        { prompt => 'Enable Binary Filter [' . ( $binary_filter ? 'YES' : 'NO' ) . ']:', %lyt_bol }
+                    );
+                    if ( ! defined $choice ) {
+                        delete $new->{$section}{$key};
+                        next MYSQL;
+                    }
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
+                    $change++;
+                }
                 default { die "$option: no such value in the hash \%opt"; }
             }
         }
@@ -2330,6 +2358,21 @@ sub database_setting {
                     my $choice = choose(
                         [ undef, $true, $false ],
                         { prompt => 'Enable utf8 [' . ( $utf8 ? 'YES' : 'NO' ) . ']:', %lyt_bol }
+                    );
+                    if ( ! defined $choice ) {
+                        delete $new->{$section}{$key};
+                        next POSTGRES;
+                    }
+                    $new->{$section}{$key} = $choice eq $true ? 1 : 0;
+                    $change++;
+                }
+                when ( $opt->{'postgres'}{binary_filter}[chs] ) {
+                    my $key = 'binary_filter';
+                    my $binary_filter = current_value( $opt, $key, $db_type, $db );
+                    # Choose
+                    my $choice = choose(
+                        [ undef, $true, $false ],
+                        { prompt => 'Enable Binary Filter [' . ( $binary_filter ? 'YES' : 'NO' ) . ']:', %lyt_bol }
                     );
                     if ( ! defined $choice ) {
                         delete $new->{$section}{$key};
@@ -2457,7 +2500,9 @@ sub choose_a_number {
         if ( defined $current ) {
             $old = sprintf "%s%*s", 'Current ' . $name . ': ', $longest, $current;
             $new = sprintf "%s%*s", '    New ' . $name . ': ', $longest, $new_number;
-            if ( mbswidth( $old ) > $terminal_width ) {
+            #if ( mbswidth( $old ) > $terminal_width ) {
+            my $gcs = Unicode::GCString->new( $old );
+            if ( $gcs->columns > $terminal_width ) {
                 $old = sprintf "%s%*s", 'Cur: ', $longest, $current;
                 $new = sprintf "%s%*s", 'New: ', $longest, $new_number;
                 if ( length $old > $terminal_width ) {
@@ -2468,7 +2513,9 @@ sub choose_a_number {
         }
         else {
             $new = sprintf "%s%*s", $name . ': ', $longest, $new_number;
-            if ( mbswidth( $new ) > $terminal_width ) {
+            #if ( mbswidth( $new ) > $terminal_width ) {
+            my $gcs = Unicode::GCString->new( $new );
+            if ( $gcs->columns > $terminal_width ) {
                 $new = $new_number;
             }
         }
@@ -2565,7 +2612,9 @@ sub choose_list {
 
 sub unicode_sprintf {
     my ( $avail_width, $unicode, $right_justify ) = @_;
-    my $colwidth = mbswidth( $unicode );
+    #my $colwidth = mbswidth( $unicode );
+    my $gcs = Unicode::GCString->new( $unicode );
+    my $colwidth = $gcs->columns;
     if ( $colwidth > $avail_width ) {
         # perform binary cutting
         my @tmp_str;
@@ -2575,7 +2624,9 @@ sub unicode_sprintf {
         while ( 1 ) {
             my $left  = substr( $unicode, 0, $half_width );
             my $right = $half_width > length( $unicode ) ? '' : substr( $unicode, $half_width );
-            my $width_left = mbswidth( $left );
+            #my $width_left = mbswidth( $left );
+            my $gcs = Unicode::GCString->new( $left );
+            my $width_left = $gcs->columns;
             if ( $width_tmp_str + $width_left > $avail_width ) {
                 $unicode = $left;
             } else {

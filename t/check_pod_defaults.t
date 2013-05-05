@@ -7,10 +7,10 @@ unless ( $ENV{RELEASE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 
-my @long = ( qw( pad pad_one_row empty undef length_longest default limit screen_width ) );
+my @long = ( qw( pad pad_one_row empty undef ll default limit screen_width ) );
 my @simple = ( qw( justify layout order clear_screen page mouse beep hide_cursor index cp_list ) ); # prompt
 my @all = ( @long, @simple );
-my @deprecated = ( qw() );
+my @deprecated = ( qw( length_longest ) );
 
 plan tests => 2 + scalar @all;
 
@@ -26,7 +26,6 @@ while ( my $line = readline $fh ) {
             my $op = $1;
             next if $op eq 'prompt';
             next if $op ~~ @deprecated;
-            $op = 'length_longest' if $op eq 'll'; # ll -> length_longest
             $option_default{$op} = $2;
          }
     }

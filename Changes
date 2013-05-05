@@ -1,7 +1,15 @@
 Revision history for Term::Choose
 
+
+1.039   2013-05-05
+        - Switched from "Text::CharWidth" back to "Unicode::GCString" ("Unicode::GCString" supports Unicode Version 6.2).
+        - The minimum required version of "Unicode::GCString" is now "2012.10".
+        - Example: update.
+        - Example: adaption to work again with "Unicode::GCString".
+
 1.038   2013-05-02
         -Added experimental option "cp_list".
+        -Updated documentation.
 
 1.037   2013-04-29
         - Example: fixed bugs.
