@@ -1,6 +1,15 @@
 Revision history for Term::Choose
 
 
+1.040   2013-05-10
+        - Removed experimental option "cp_list".
+        -"s/\p{Cntrl}//g;" --> "s/\P{Print}/./g;"
+        - Refactoring "_unicode_cut" (now called "_unicode_trim").
+        - Strings trimmed with "_unicode_sprintf" don't end with "...".
+        - Code refactoring.
+        - Update documentation.
+        - Update example.
+
 1.039   2013-05-05
         - Switched from "Text::CharWidth" back to "Unicode::GCString" ("Unicode::GCString" supports Unicode Version 6.2).
         - The minimum required version of "Unicode::GCString" is now "2012.10".

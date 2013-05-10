@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.039
+# Version 1.040
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -24,7 +24,6 @@ use Term::Choose qw(choose);
 use Term::ProgressBar;
 use Term::ReadKey qw(GetTerminalSize ReadLine ReadMode);
 use Text::LineFold;
-#use Text::CharWidth qw(mbswidth);
 use Unicode::GCString;
 
 use constant {
@@ -67,7 +66,8 @@ my $info = {
     binary_string       => 'BNRY',
     aggregate_functions => [ "AVG(X)", "COUNT(X)", "COUNT(*)", "MAX(X)", "MIN(X)", "SUM(X)" ],
     avilable_operators  => [ "REGEXP", "NOT REGEXP", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL", "IN", "NOT IN",
-                             "BETWEEN", "NOT BETWEEN", " = ", " != ", " <> ", " < ", " > ", " >= ", " <= " ],
+                             "BETWEEN", "NOT BETWEEN", " = ", " != ", " <> ", " < ", " > ", " >= ", " <= ", 
+                             "LIKE col" ],
     avilable_db_types   => [ 'sqlite', 'mysql', 'postgres' ],
     login => {
         mysql => {
@@ -81,7 +81,6 @@ my $info = {
     }
 };
 
-#$info->{binary_length} = mbswidth( $info->{binary_string} );
 my $gcs = Unicode::GCString->new( $info->{binary_string} );
 $info->{binary_length} = $gcs->columns;
 
@@ -208,7 +207,6 @@ for my $section ( @{$info->{option_sections}}, @{$info->{db_sections}} ) {
     }
 }
 
-
 if ( ! eval {
     $opt = read_config_file( $opt, $info->{config_file} );
     my $help;
@@ -226,10 +224,7 @@ if ( ! eval {
     choose( [ 'Press ENTER to continue' ], { prompt => '' } );
 }
 
-
-if ( $opt->{menu}{sssc_mode}[v] ) {
-    $info->{ok} = '<OK>';
-}
+$info->{ok} = '<OK>' if $opt->{menu}{sssc_mode}[v];
 
 
 
@@ -462,7 +457,7 @@ DB_TYPES: while ( 1 ) {
                     MAIN_LOOP: while ( 1 ) {
                         my ( $all_arrayref, $print_cols ) = read_table( $info, $opt, $sql, $dbh, $table, $from_stmt, $default_cols_sql, $quote_cols, $print_cols );
                         last MAIN_LOOP if ! defined $all_arrayref;
-                        print_loop( $info, $opt, $dbh, $db, $all_arrayref, $print_cols );
+                        split_and_print_table( $info, $opt, $dbh, $db, $all_arrayref, $print_cols );
                     }
 
                     1 }
@@ -1593,83 +1588,113 @@ sub set_operator_sql {
         return;
     }
     $operator =~ s/^\s+|\s+\z//g;
-    if ( $operator !~ /REGEXP\z/ ) {
-        $sql->{quote}{$stmt} .= ' ' . $operator;
-        $sql->{print}{$stmt} .= ' ' . $operator;
-    }
-    if ( $operator =~ /NULL\z/ ) {
-        # do nothing
-    }
-    elsif ( $operator =~ /^(?:NOT\s)?IN\z/ ) {
-        $info->{col_sep} = ' ';
-        $sql->{quote}{$stmt} .= '(';
-        $sql->{print}{$stmt} .= '(';
+    if ( $operator !~ /\scol\z/ ) {
+        if ( $operator !~ /REGEXP\z/  ) {
+            $sql->{quote}{$stmt} .= ' ' . $operator;
+            $sql->{print}{$stmt} .= ' ' . $operator;
+        }
+        if ( $operator =~ /NULL\z/ ) {
+            # do nothing
+        }
+        elsif ( $operator =~ /^(?:NOT\s)?IN\z/ ) {
+            $info->{col_sep} = ' ';
+            $sql->{quote}{$stmt} .= '(';
+            $sql->{print}{$stmt} .= '(';
 
-        IN: while ( 1 ) {
+            IN: while ( 1 ) {
+                print_select_statement( $sql, $table );
+                # Readline
+                state $count = 1;
+                my $value = local_read_line( prompt => 'Value ' . $count++ . ': ' );
+                if ( $value eq '' ) {
+                    if ( $info->{col_sep} eq ' ' ) {
+                        $sql->{quote}{$args} = [];
+                        $sql->{quote}{$stmt} = '';
+                        $sql->{print}{$stmt} = '';
+                        return;
+                    }
+                    $sql->{quote}{$stmt} .= ' )';
+                    $sql->{print}{$stmt} .= ' )';
+                    last IN;
+                }
+                $sql->{quote}{$stmt} .= $info->{col_sep} . '?';
+                $sql->{print}{$stmt} .= $info->{col_sep} . $value;
+                push @{$sql->{quote}{$args}}, $value;
+                $info->{col_sep} = ', ';
+            }
+        }
+        elsif ( $operator =~ /^(?:NOT\s)?BETWEEN\z/ ) {
             print_select_statement( $sql, $table );
             # Readline
-            state $count = 1;
-            my $value = local_read_line( prompt => 'Value ' . $count++ . ': ' );
-            if ( $value eq '' ) {
-                if ( $info->{col_sep} eq ' ' ) {
-                    $sql->{quote}{$args} = [];
-                    $sql->{quote}{$stmt} = '';
-                    $sql->{print}{$stmt} = '';
-                    return;
-                }
-                $sql->{quote}{$stmt} .= ' )';
-                $sql->{print}{$stmt} .= ' )';
-                last IN;
+            my $value_1 = local_read_line( prompt => 'Value_1: ' );
+            $sql->{quote}{$stmt} .= ' ' . '?' .      ' AND';
+            $sql->{print}{$stmt} .= ' ' . $value_1 . ' AND';
+            push @{$sql->{quote}{$args}}, $value_1;
+            print_select_statement( $sql, $table );
+            # Readline
+            my $value_2 = local_read_line( prompt => 'Value_2: ' );
+            $sql->{quote}{$stmt} .= ' ' . '?';
+            $sql->{print}{$stmt} .= ' ' . $value_2;
+            push @{$sql->{quote}{$args}}, $value_2;
+        }
+        elsif ( $operator =~ /REGEXP\z/ ) {
+            $sql->{print}{$stmt} .= ' ' . $operator;
+            print_select_statement( $sql, $table );
+            # Readline
+            my $value = local_read_line( prompt => 'Pattern: ' );
+            $value = '^$' if ! length $value;
+            if ( $info->{db_type} eq 'sqlite' ) {
+                $value = qr/$value/i if ! $opt->{sql}{regexp_case}[v];
+                $value = qr/$value/  if   $opt->{sql}{regexp_case}[v];
             }
-            $sql->{quote}{$stmt} .= $info->{col_sep} . '?';
-            $sql->{print}{$stmt} .= $info->{col_sep} . $value;
+            $sql->{quote}{$stmt} =~ s/.*\K\s\Q$quote_col\E//;
+            $sql->{quote}{$stmt} .= sql_regexp( $info, $opt, $quote_col, $operator =~ /^NOT/ ? 1 : 0 );
+            $sql->{print}{$stmt} .= ' ' . "'$value'";
             push @{$sql->{quote}{$args}}, $value;
-            $info->{col_sep} = ', ';
+        }
+        else {
+            print_select_statement( $sql, $table );
+            # Readline
+            my $value = local_read_line( prompt => $operator =~ /LIKE\z/ ? 'Pattern: ' : 'Value: ' );
+            $sql->{quote}{$stmt} .= ' ' . '?';
+            $sql->{print}{$stmt} .= ' ' . "'$value'";
+            push @{$sql->{quote}{$args}}, $value;
         }
     }
-    elsif ( $operator =~ /^(?:NOT\s)?BETWEEN\z/ ) {
-        print_select_statement( $sql, $table );
-        # Readline
-        my $value_1 = local_read_line( prompt => 'Value_1: ' );
-        $sql->{quote}{$stmt} .= ' ' . '?' .      ' AND';
-        $sql->{print}{$stmt} .= ' ' . $value_1 . ' AND';
-        push @{$sql->{quote}{$args}}, $value_1;
-        print_select_statement( $sql, $table );
-        # Readline
-        my $value_2 = local_read_line( prompt => 'Value_2: ' );
-        $sql->{quote}{$stmt} .= ' ' . '?';
-        $sql->{print}{$stmt} .= ' ' . $value_2;
-        push @{$sql->{quote}{$args}}, $value_2;
-    }
-    elsif ( $operator =~ /REGEXP\z/ ) {
+    elsif ( $operator =~ /\scol\z/ ) {
+        $operator =~ s/(.*\S)\scol\z/$1/;
+        $sql->{quote}{$stmt} .= ' ' . $operator;
         $sql->{print}{$stmt} .= ' ' . $operator;
         print_select_statement( $sql, $table );
-        # Readline
-        my $value = local_read_line( prompt => 'Pattern: ' );
-        $value = '^$' if ! length $value;
-        if ( $info->{db_type} eq 'sqlite' ) {
-            $value = qr/$value/i if ! $opt->{sql}{regexp_case}[v];
-            $value = qr/$value/  if   $opt->{sql}{regexp_case}[v];
+        # choose
+        my $choices = [ $info->{ok}, @$cols ];
+        unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
+        my $print_col = choose(
+            $choices,
+            { prompt => "$operator: ", %lyt_stmt }
+        );
+        if ( ! defined $print_col ) {
+            $sql->{quote}{$stmt} = '';
+            $sql->{print}{$stmt} = '';
+            return;
         }
-        $sql->{quote}{$stmt} =~ s/.*\K\s\Q$quote_col\E//;
-        $sql->{quote}{$stmt} .= sql_regexp( $info, $opt, $quote_col, $operator =~ /^NOT/ ? 1 : 0 );
-        $sql->{print}{$stmt} .= ' ' . "'$value'";
-        push @{$sql->{quote}{$args}}, $value;
-    }
-    else {
-        print_select_statement( $sql, $table );
-        # Readline
-        my $value = local_read_line( prompt => $operator =~ /LIKE\z/ ? 'Pattern: ' : 'Value: ' );
-        $sql->{quote}{$stmt} .= ' ' . '?';
-        $sql->{print}{$stmt} .= ' ' . "'$value'";
-        push @{$sql->{quote}{$args}}, $value;
+        if ( $print_col eq $info->{ok} ) {
+            if ( $info->{col_sep} eq ' ' ) {
+                $sql->{quote}{$stmt} = '';
+                $sql->{print}{$stmt} = '';
+                return;
+            }
+        }
+        ( my $quote_col = $quote_cols->{$print_col} ) =~ s/\sAS\s\S+\z//;
+        $sql->{quote}{$stmt} .= ' ' . $quote_col;
+        $sql->{print}{$stmt} .= ' ' . $print_col;
     }
     return;
 }
 
 
 
-sub print_loop {
+sub split_and_print_table {
     my ( $info, $opt, $dbh, $db, $all_arrayref ) = @_;
     my $begin = 0;
     my $end = $opt->{print}{limit}[v] - 1;
@@ -1701,10 +1726,10 @@ sub print_loop {
             $start =~ s/^\s+//;
             $stop = $start + $opt->{print}{limit}[v] - 1;
             $stop = $#$all_arrayref if $stop > $#$all_arrayref;
-            print_table( $info, $opt, $db, [ @{$all_arrayref}[ $start .. $stop ] ] );
+            func_print_tbl( $info, $opt, $db, [ @{$all_arrayref}[ $start .. $stop ] ] );
         }
         else {
-            print_table( $info, $opt, $db, $all_arrayref );
+            func_print_tbl( $info, $opt, $db, $all_arrayref );
             last PRINT;
         }
     }
@@ -1716,7 +1741,7 @@ sub calc_widths {
     my ( $cols_head_width, $width_columns, $not_a_number );
     my $count = 0;
     say 'Computing: ...' if @$a_ref * @{$a_ref->[0]}  > $opt->{print}{progress_bar}[v];
-    my $binary_filter = $opt->{$db}{binary_filter}[v] // $opt->{$info->{db_type}}{binary_filter}[v];
+    my $binary_filter = $opt->{$info->{db_type} . '_' . $db}{binary_filter}[v] // $opt->{$info->{db_type}}{binary_filter}[v];
     my $binray_regexp = qr/[\x00-\x08\x0B-\x0C\x0E-\x1F]/;
     for my $row ( @$a_ref ) {
         ++$count;
@@ -1731,9 +1756,10 @@ sub calc_widths {
             else {
                 utf8::upgrade( $row->[$i] );
                 $row->[$i] =~ s/\p{Space}+/ /g;
-                $row->[$i] =~ s/\p{Cntrl}//g;
-                my $gcs = Unicode::GCString->new( $row->[$i] );
-                $width = $gcs->columns;
+                $row->[$i] =~ s/\P{Print}/./g;
+                my $gcs = Unicode::GCString->new( $row->[$i] );     # GCS
+                $width = $gcs->columns;                             # GCS
+
             }
             if ( $count == 1 ) {
                 # column name
@@ -1779,7 +1805,7 @@ sub recalc_widths {
     my $percent = 0;
     my $minimum_with = $opt->{print}{min_col_width}[v];
     while ( $sum > $terminal_width ) {
-        $percent += 0.5;
+        $percent += 1;
         if ( $percent >= 100 ) {
             say 'Terminal window is not wide enough to print this table.';
             choose( [ 'Press ENTER to show the column names' ], { prompt => '' } );
@@ -1819,7 +1845,7 @@ sub recalc_widths {
 }
 
 
-sub print_table {
+sub func_print_tbl {
     my ( $info, $opt, $db, $a_ref ) = @_;
     my ( $terminal_width ) = GetTerminalSize( *STDOUT );
     return if ! defined $a_ref;
@@ -1845,11 +1871,10 @@ sub print_table {
     for my $row ( @$a_ref ) {
         my $string;
         for my $i ( 0 .. $#$width_columns ) {
-            my $word = $row->[$i];
             my $right_justify = $not_a_number->[$i] ? 0 : 1;
-            $string .= unicode_sprintf(
+            $string .= unicode_sprintf(              # GCS
                         $width_columns->[$i],
-                        $word,
+                        $row->[$i],
                         $right_justify,
             );
             $string .= ' ' x $opt->{print}{tab_width}[v] if $i != $#$width_columns;
@@ -1867,7 +1892,6 @@ sub print_table {
     $progress->update( $total ) if $total >= $next_update && $items > $start; #
     say 'Computing: ...' if $items > $start * 3;                              #
     my $length_longest = sum( @$width_columns, $opt->{print}{tab_width}[v] * $#{$width_columns} );
-
     if ( $opt->{print}{expand}[v] ) {
         my $length_key = 0;
         for my $width ( @$cols_head_width ) {
@@ -1875,7 +1899,6 @@ sub print_table {
         }
         $length_key += 1;
         my $separator = ' : ';
-        #my $length_sep = mbswidth( $separator );
         my $gcs = Unicode::GCString->new( $separator );
         my $length_sep = $gcs->columns;
         my $idx_old = 0;
@@ -1890,7 +1913,7 @@ sub print_table {
         while ( 1 ) {
             if ( $size_changed ) {
                 $size_changed = 0;
-                print_table( $info, $opt, $db, $a_ref );
+                func_print_tbl( $info, $opt, $db, $a_ref );
                 return;
             }
             my $idx_row = choose(
@@ -2169,7 +2192,7 @@ sub database_setting {
         }
     }
 
-    my $section = $db // $db_type;
+    my $section = defined $db ? $db_type . '_' . $db  : $db_type;
     my $change = 0;
     my $new = {};
     my ( $true, $false ) = ( 'YES', 'NO' );
@@ -2390,7 +2413,7 @@ sub database_setting {
 
 sub current_value {
     my ( $opt, $key, $db_type, $db ) = @_;
-    return $opt->{$db}{$key}[v] if defined $db && defined $opt->{$db}{$key}[v];
+    return $opt->{$db_type . '_' . $db}{$key}[v] if defined $db && defined $opt->{$db_type . '_' . $db}{$key}[v];
     return $opt->{$db_type}{$key}[v];
 }
 
@@ -2443,6 +2466,7 @@ sub read_config_file {
 sub write_json {
     my ( $file, $h_ref ) = @_;
     my $json = JSON::XS->new->pretty->encode( $h_ref );
+    #my $json = JSON::XS->new->encode( $h_ref );
     open my $fh, '>', encode_utf8( $file ) or die $!;
     print $fh $json;
     close $fh or die $!;
@@ -2460,6 +2484,7 @@ sub read_json {
         close $fh or die $!;
     }
     my $h_ref = JSON::XS->new->pretty->decode( $json ) if $json;
+    #my $h_ref = JSON::XS->new->decode( $json ) if $json;
     return $h_ref;
 }
 
@@ -2612,34 +2637,23 @@ sub choose_list {
 
 sub unicode_sprintf {
     my ( $avail_width, $unicode, $right_justify ) = @_;
-    #my $colwidth = mbswidth( $unicode );
     my $gcs = Unicode::GCString->new( $unicode );
     my $colwidth = $gcs->columns;
     if ( $colwidth > $avail_width ) {
-        # perform binary cutting
-        my @tmp_str;
-        my $width_tmp_str = 0;
-        my $half_width = int( $colwidth / 2 ) || 1;
-        my $count = 0;
-        while ( 1 ) {
-            my $left  = substr( $unicode, 0, $half_width );
-            my $right = $half_width > length( $unicode ) ? '' : substr( $unicode, $half_width );
-            #my $width_left = mbswidth( $left );
-            my $gcs = Unicode::GCString->new( $left );
-            my $width_left = $gcs->columns;
-            if ( $width_tmp_str + $width_left > $avail_width ) {
-                $unicode = $left;
-            } else {
-                push @tmp_str, $left;
-                $width_tmp_str += $width_left;
-                $unicode = $right;
+        #return '' if $avail_width <= 0;
+        my $pos = $gcs->pos;
+        $gcs->pos( 0 );
+        my $cols = 0;
+        my $gc;
+        while ( defined( $gc = $gcs->next ) ) {
+            if ( $avail_width < ( $cols += $gc->columns ) ) {
+                my $ret = $gcs->substr( 0, $gcs->pos - 1 );
+                $gcs->pos( $pos );
+                return $ret;
             }
-            $half_width = int( ( $half_width + 1 ) / 2 );
-            last if $half_width == 1 && $count > 1;
-            ++$count if $half_width == 1;
         }
-        push @tmp_str, ' ' if $width_tmp_str < $avail_width;
-        $unicode = join( '', @tmp_str );
+        #$gcs->pos( $pos );
+        #return $gcs;
     }
     elsif ( $colwidth < $avail_width ) {
         if ( $right_justify ) {
@@ -2680,17 +2694,18 @@ sub set_credentials {
 sub get_db_handle {
     my ( $info, $opt, $db ) = @_;
     my $dbh;
+    my $db_key = $info->{db_type} . '_' . $db;
     if ( $info->{db_type} eq 'sqlite' ) {
         die "\"$db\": $!. Maybe the cached data is not up to date." if ! -f $db;
         $dbh = DBI->connect( "DBI:SQLite:dbname=$db", '', '', {
             PrintError => 0,
             RaiseError => 1,
             AutoCommit => 1,
-            sqlite_unicode             => $opt->{$db}{unicode}[v]             // $opt->{sqlite}{unicode}[v],
-            sqlite_see_if_its_a_number => $opt->{$db}{see_if_its_a_number}[v] // $opt->{sqlite}{see_if_its_a_number}[v],
+            sqlite_unicode             => $opt->{$db_key}{unicode}[v]             // $opt->{sqlite}{unicode}[v],
+            sqlite_see_if_its_a_number => $opt->{$db_key}{see_if_its_a_number}[v] // $opt->{sqlite}{see_if_its_a_number}[v],
         } ) or die DBI->errstr;
-        $dbh->sqlite_busy_timeout(           $opt->{$db}{busy_timeout}[v] // $opt->{sqlite}{busy_timeout}[v] );
-        $dbh->do( 'PRAGMA cache_size = ' . ( $opt->{$db}{cache_size}[v]   // $opt->{sqlite}{cache_size}[v] ) );
+        $dbh->sqlite_busy_timeout(           $opt->{$db_key}{busy_timeout}[v] // $opt->{sqlite}{busy_timeout}[v] );
+        $dbh->do( 'PRAGMA cache_size = ' . ( $opt->{$db_key}{cache_size}[v]   // $opt->{sqlite}{cache_size}[v] ) );
         $dbh->func( 'regexp', 2,
                 sub { my ( $regex, $string ) = @_; $string //= ''; return $string =~ m/$regex/ism },
                 'create_function'
@@ -2702,10 +2717,10 @@ sub get_db_handle {
             PrintError  => 0,
             RaiseError  => 1,
             AutoCommit  => 1,
-            mysql_enable_utf8        => $opt->{$db}{enable_utf8}[v]        // $opt->{mysql}{enable_utf8}[v],
-            mysql_connect_timeout    => $opt->{$db}{connect_timeout}[v]    // $opt->{mysql}{connect_timeout}[v],
-            mysql_bind_type_guessing => $opt->{$db}{bind_type_guessing}[v] // $opt->{mysql}{bind_type_guessing}[v],
-            ChopBlanks               => $opt->{$db}{ChopBlanks}[v]         // $opt->{mysql}{ChopBlanks}[v],
+            mysql_enable_utf8        => $opt->{$db_key}{enable_utf8}[v]        // $opt->{mysql}{enable_utf8}[v],
+            mysql_connect_timeout    => $opt->{$db_key}{connect_timeout}[v]    // $opt->{mysql}{connect_timeout}[v],
+            mysql_bind_type_guessing => $opt->{$db_key}{bind_type_guessing}[v] // $opt->{mysql}{bind_type_guessing}[v],
+            ChopBlanks               => $opt->{$db_key}{ChopBlanks}[v]         // $opt->{mysql}{ChopBlanks}[v],
         } ) or die DBI->errstr;
     }
     elsif ( $info->{db_type} eq 'postgres' ) {
@@ -2714,7 +2729,7 @@ sub get_db_handle {
             PrintError => 0,
             RaiseError => 1,
             AutoCommit => 1,
-            pg_enable_utf8 => $opt->{$db}{pg_enable_utf8}[v] // $opt->{postgres}{pg_enable_utf8}[v],
+            pg_enable_utf8 => $opt->{$db_key}{pg_enable_utf8}[v] // $opt->{postgres}{pg_enable_utf8}[v],
         } ) or die DBI->errstr;
     }
     else {
@@ -2999,15 +3014,5 @@ sub no_entry_for_db_type {
     die "No entry for \"$db_type\"!";
 }
 
+
 __DATA__
-
-
-
-
-
-
-
-
-
-
-
