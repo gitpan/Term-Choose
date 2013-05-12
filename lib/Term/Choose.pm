@@ -4,7 +4,7 @@ use 5.10.0;
 
 package Term::Choose;
 
-our $VERSION = '1.040';
+our $VERSION = '1.041';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -48,7 +48,7 @@ use constant {
     BEEP                            => "\07",
     CLEAR_SCREEN                    => "\e[2J",
     GO_TO_TOP_LEFT                  => "\e[1;1H",
-    CLEAR_EOS                       => "\e[0J",
+    CLEAR_TO_END_OF_SCREEN          => "\e[0J",
     RESET                           => "\e[0m",
     UNDERLINE                       => "\e[4m",
     REVERSE                         => "\e[7m",
@@ -142,7 +142,7 @@ sub _getch {
                         $abs_curs_Y = 10 * $abs_curs_Y + $c4;
                         $c4 = ReadKey 0;
                     }
-                    my $abs_curs_X = 0; # $arg->{abs_curs_X} never used
+                    my $abs_curs_X = 0;
                     while ( 1 ) {
                         $c4 = ReadKey 0;
                         last if $c4 !~ /^[0-9]$/;
@@ -150,7 +150,7 @@ sub _getch {
                     }
                     if ( $c4 eq 'R' ) {
                         $arg->{abs_curs_Y} = $abs_curs_Y;
-                        $arg->{abs_curs_X} = $abs_curs_X;
+                        $arg->{abs_curs_X} = $abs_curs_X; # unused
                     }
                     return NEXT_getch;
                 }
@@ -198,32 +198,35 @@ sub _getch {
 }
 
 
-sub _init_scr {
+sub _init_scr { # new
+    my $class = shift;
     my ( $arg ) = @_;
-    $arg->{old_handle} = select( $arg->{handle_out} );
-    $arg->{backup_flush} = $|;
+    # OO to initialize the screen, so that DESTROY does the cleanup.
+    my $self = bless $arg, $class;
+    $self->{old_handle} = select( $self->{handle_out} );
+    $self->{backup_flush} = $|;
     $| = 1;
-    if ( $arg->{mouse} ) {
-        if ( $arg->{mouse} == 3 ) {
+    if ( $self->{mouse} ) {
+        if ( $self->{mouse} == 3 ) {
             my $return = binmode STDIN, ':utf8';
             if ( $return ) {
                 print SET_ANY_EVENT_MOUSE_1003;
                 print SET_EXT_MODE_MOUSE_1005;
             }
             else {
-                $arg->{mouse} = 0;
+                $self->{mouse} = 0;
                 warn "binmode STDIN, :utf8: $!\n";
                 warn "mouse-mode disabled\n";
             }
         }
-        elsif ( $arg->{mouse} == 4 ) {
+        elsif ( $self->{mouse} == 4 ) {
             my $return = binmode STDIN, ':raw';
             if ( $return ) {
                 print SET_ANY_EVENT_MOUSE_1003;
                 print SET_SGR_EXT_MODE_MOUSE_1006;
             }
             else {
-                $arg->{mouse} = 0;
+                $self->{mouse} = 0;
                 warn "binmode STDIN, :raw: $!\n";
                 warn "mouse-mode disabled\n";
             }
@@ -234,32 +237,33 @@ sub _init_scr {
                 print SET_ANY_EVENT_MOUSE_1003;
             }
             else {
-                $arg->{mouse} = 0;
+                $self->{mouse} = 0;
                 warn "binmode STDIN, :raw: $!\n";
                 warn "mouse-mode disabled\n";
             }
         }
     }
-    print HIDE_CURSOR if $arg->{hide_cursor};
+    print HIDE_CURSOR if $self->{hide_cursor};
     Term::ReadKey::ReadMode 'ultra-raw';
+    return $self;
 }
 
-
-sub _end_win {
-    my ( $arg ) = @_;
-    print CR, UP x ( $arg->{this_cell}[ROW] + $arg->{head} );
-    _clear_to_end_of_screen( $arg );
+sub DESTROY {
+    my $self = shift;
+    print CR, UP x ( $self->{this_cell}[ROW] + $self->{head} );
+    print CLEAR_TO_END_OF_SCREEN;
     print RESET;
-    if ( $arg->{mouse} ) {
+    if ( $self->{mouse} ) {
         binmode STDIN, ':encoding(UTF-8)' or warn "binmode STDIN, :encoding(UTF-8): $!\n";
-        print UNSET_EXT_MODE_MOUSE_1005     if $arg->{mouse} == 3;
-        print UNSET_SGR_EXT_MODE_MOUSE_1006 if $arg->{mouse} == 4;
+        print UNSET_EXT_MODE_MOUSE_1005     if $self->{mouse} == 3;
+        print UNSET_SGR_EXT_MODE_MOUSE_1006 if $self->{mouse} == 4;
         print UNSET_ANY_EVENT_MOUSE_1003;
     }
     Term::ReadKey::ReadMode 'restore';
-    print SHOW_CURSOR if $arg->{hide_cursor};
-    $| = $arg->{backup_flush};
-    select( $arg->{old_handle} );
+    print SHOW_CURSOR if $self->{hide_cursor};
+    $| = $self->{backup_flush};
+    select( $self->{old_handle} );
+    print STDERR "EOT!\n" if $self->{EOT};
 }
 
 
@@ -319,7 +323,7 @@ sub _copy_orig_list {
                 $copy = $arg->{empty} if $copy eq '';
             }
             utf8::upgrade( $copy );
-            $copy =~ s/\p{Space}/ /g;   # replace, but don't squash sequences of spaces
+            $copy =~ s/\p{Space}/ /g;
             $copy =~ s/\P{Print}/./g;
             $copy;
         } @{$arg->{orig_list}} ];
@@ -338,6 +342,7 @@ sub _validate_option {
         hide_cursor     => [ 0,       1 ],
         index           => [ 0,       1 ],
         justify         => [ 0,       2 ],
+        ##keep            => [ 0,  $limit ], # ###
         layout          => [ 0,       3 ],
         ll              => [ 1,  $limit ],
         length_longest  => [ 1,  $limit ],  # ###
@@ -390,6 +395,7 @@ sub _set_layout {
     $config->{hide_cursor}      //= 1;
     $config->{index}            //= 0;
     $config->{justify}          //= 0;
+    ##$config->{keep}            //= undef; # ###
     $config->{layout}           //= 1;
     #$config->{ll}              //= undef;
     $config->{limit}            //= 100_000;
@@ -405,7 +411,7 @@ sub _set_layout {
 }
 
 
-sub _set_this_cell {
+sub _set_default_cell {
     my ( $arg ) = @_;
     $arg->{tmp_this_cell} = [ 0, 0 ];
     LOOP: for my $i ( 0 .. $#{$arg->{rowcol2list}} ) {
@@ -457,11 +463,11 @@ sub _prepare_promptline {
     my ( $arg ) = @_;
     $arg->{prompt} =~ s/\p{Space}/ /g;
     $arg->{prompt} =~ s/\P{Print}/./g;
-    $arg->{prompt_line} = $arg->{prompt};
-    utf8::upgrade( $arg->{prompt_line} );
-    my $gcs = Unicode::GCString->new( $arg->{prompt_line} );
-    if ( $gcs->columns() > $arg->{avail_term_width} ) {
-        $arg->{prompt_line} = _unicode_trim( $gcs, $arg->{avail_term_width} - 3 ) . '...';
+    $arg->{prompt_copy} = $arg->{prompt};
+    utf8::upgrade( $arg->{prompt_copy} );
+    my $gcs_prompt_copy = Unicode::GCString->new( $arg->{prompt_copy} );
+    if ( $gcs_prompt_copy->columns() > $arg->{avail_term_width} ) {
+        $arg->{prompt_copy} = _unicode_trim( $gcs_prompt_copy, $arg->{avail_term_width} - 3 ) . '...';
     }
 }
 
@@ -483,6 +489,9 @@ sub _write_first_screen {
     $arg->{head} = $arg->{prompt} ne '' ? 1 : 0;
     $arg->{tail} = $arg->{page}         ? 1 : 0;
     $arg->{avail_term_height} -= $arg->{head} + $arg->{tail};
+    # ###
+    #$arg->{avail_term_height} -= $arg->{keep} if defined $arg->{keep};
+    # ###
     $arg->{avail_term_width}  = 1 if $arg->{avail_term_width}  < 1;
     $arg->{avail_term_height} = 1 if $arg->{avail_term_height} < 1;
     _size_and_layout( $arg );
@@ -496,7 +505,7 @@ sub _write_first_screen {
     $arg->{marked} = [];
     $arg->{screen_row} = 0;
     $arg->{this_cell} = [ 0, 0 ];
-    _set_this_cell( $arg ) if defined $arg->{default} && $arg->{default} <= $#{$arg->{list}};
+    _set_default_cell( $arg ) if defined $arg->{default} && $arg->{default} <= $#{$arg->{list}};
     # No printing before clear_screen!
     if ( $arg->{clear_screen} ) {
         print CLEAR_SCREEN;
@@ -537,13 +546,17 @@ sub choose {
         print "Press a key to continue";
         my $dummy = <STDIN>;
     }
-    $arg->{orig_list} = $orig_list_ref;
-    $arg->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
-    $arg->{list} = _copy_orig_list( $arg );
+    $arg->{orig_list}      = $orig_list_ref;
+    $arg->{handle_out}     = -t \*STDOUT ? \*STDOUT : \*STDERR;
+    $arg->{list}           = _copy_orig_list( $arg );
     $arg->{length_longest} = defined $arg->{ll} ? $arg->{ll} : _length_longest( $arg->{list} );
-    $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
-    $arg->{wantarray} = $wantarray;
-    _init_scr( $arg );
+    $arg->{col_width}      = $arg->{length_longest} + $arg->{pad};
+    $arg->{wantarray}      = $wantarray;
+    local $SIG{'INT'} = sub {
+        my $signame = shift;
+        exit();
+    };
+    my $init = Term::Choose->_init_scr( $arg );
     $arg->{size_changed} = 0;
     my $orig_sigwinch = $SIG{'WINCH'};
     local $SIG{'WINCH'} = sub {
@@ -555,8 +568,7 @@ sub choose {
     while ( 1 ) {
         my $c = _getch( $arg );
         if ( ! defined $c ) {
-            _end_win( $arg );
-            warn "EOT";
+            $arg->{EOT} = 1;
             return;
         }
         next if $c == NEXT_getch;
@@ -800,18 +812,17 @@ sub choose {
                 }
             }
             when ( $c == KEY_q || $c == CONTROL_D ) {
-                _end_win( $arg );
                 return;
             }
             when ( $c == CONTROL_C ) {
-                _end_win( $arg );
-                print STDERR "^C";
+                local $SIG{'INT'} = "DEFAULT";
+                $init->DESTROY;
+                print STDERR '^C';
                 kill( 'INT', $$ );
                 return;
             }
             when ( $c == KEY_ENTER ) {
                 my @chosen;
-                _end_win( $arg );
                 return if ! defined $arg->{wantarray};
                 if ( $arg->{wantarray} ) {
                     if ( $arg->{order} == 1 ) {
@@ -857,7 +868,6 @@ sub choose {
             }
         }
     }
-    _end_win( $arg );
     warn "choose: shouldn't reach here ...\n";
 }
 
@@ -865,12 +875,6 @@ sub choose {
 sub _beep {
     my ( $arg ) = @_;
     print BEEP if $arg->{beep};
-}
-
-
-sub _clear_to_end_of_screen {
-    my ( $arg ) = @_;
-    print CLEAR_EOS;
 }
 
 
@@ -891,9 +895,9 @@ sub _goto {
 sub _wr_screen {
     my ( $arg ) = @_;
     _goto( $arg, 0, 0 );
-    _clear_to_end_of_screen( $arg );
+    print CLEAR_TO_END_OF_SCREEN;
     if ( $arg->{prompt} ne '' ) {
-        print $arg->{prompt_line};
+        print $arg->{prompt_copy};
         _goto( $arg, $arg->{head}, 0 );
     }
     if ( $arg->{page} && $arg->{total_pages} > 1 ) {
@@ -920,8 +924,8 @@ sub _wr_cell {
         my $lngth = 0;
         if ( $col > 0 ) {
             for my $cl ( 0 .. $col - 1 ) {
-                my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
-                $lngth += $gcs->columns();
+                my $gcs_element = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$cl]] );
+                $lngth += $gcs_element->columns();
                 $lngth += $arg->{pad_one_row};
             }
         }
@@ -951,7 +955,6 @@ sub _size_and_layout {
     else {
         $arg->{avail_col_width} = $arg->{length_longest};
     }
-    ### layout
     my $all_in_first_row;
     if ( $layout == 2 ) {
         $layout = 3 if scalar @{$arg->{list}} <= $arg->{avail_term_height};
@@ -960,8 +963,8 @@ sub _size_and_layout {
         for my $idx ( 0 .. $#{$arg->{list}} ) {
             $all_in_first_row .= $arg->{list}[$idx];
             $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
-            my $gcs = Unicode::GCString->new( $all_in_first_row );
-            if ( $gcs->columns() > $arg->{avail_term_width} ) {
+            my $gcs_first_row = Unicode::GCString->new( $all_in_first_row );
+            if ( $gcs_first_row->columns() > $arg->{avail_term_width} ) {
                 $all_in_first_row = '';
                 last;
             }
@@ -978,9 +981,9 @@ sub _size_and_layout {
         }
         else {
             for my $idx ( 0 .. $#{$arg->{list}} ) {
-                my $gcs = Unicode::GCString->new( $arg->{list}[$idx] );
-                if ( $gcs->columns > $arg->{avail_term_width} ) {
-                    $arg->{list}[$idx] = _unicode_trim( $gcs, $arg->{avail_term_width} - 3 ) . '...';
+                my $gcs_element = Unicode::GCString->new( $arg->{list}[$idx] );
+                if ( $gcs_element->columns > $arg->{avail_term_width} ) {
+                    $arg->{list}[$idx] = _unicode_trim( $gcs_element, $arg->{avail_term_width} - 3 ) . '...';
                 }
                 $arg->{rowcol2list}[$idx][0] = $idx;
             }
@@ -999,7 +1002,7 @@ sub _size_and_layout {
                 $tmp_terminal_width = $tmc;
             }
         }
-    ### order
+        # order
         my $cols_per_row = int( $tmp_terminal_width / $arg->{col_width} );
         $cols_per_row = 1 if $cols_per_row < 1;
         my $rows = int( ( $#{$arg->{list}} + $cols_per_row ) / $cols_per_row );
@@ -1050,11 +1053,11 @@ sub _unicode_trim {
         if ( $len < ( $cols += $gc->columns ) ) {
             my $ret = $gcs->substr( 0, $gcs->pos - 1 );
             $gcs->pos( $pos );
-            return $ret;
+            return $ret->as_string;
         }
     }
     $gcs->pos( $pos );
-    return $gcs;
+    return $gcs->as_string;
 }
 
 
@@ -1105,8 +1108,8 @@ sub _handle_mouse {
         if ( $row == $mouse_row ) {
             my $end_last_col = 0;
             for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
-                my $gcs = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
-                my $end_this_col = $end_last_col + $gcs->columns() + $arg->{pad_one_row};
+                my $gcs_element = Unicode::GCString->new( $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
+                my $end_this_col = $end_last_col + $gcs_element->columns() + $arg->{pad_one_row};
                 if ( $col == 0 ) {
                     $end_this_col -= int( $arg->{pad_one_row} / 2 );
                 }
@@ -1183,7 +1186,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.040
+Version 1.041
 
 =cut
 

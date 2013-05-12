@@ -6,7 +6,7 @@ use open qw(:std :utf8);
 
 #use warnings FATAL => qw(all);
 #use Data::Dumper;
-# Version 1.040
+# Version 1.041
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -1869,7 +1869,7 @@ sub func_print_tbl {
     }                                           #
     my @list;
     for my $row ( @$a_ref ) {
-        my $string;
+        my $string = '';
         for my $i ( 0 .. $#$width_columns ) {
             my $right_justify = $not_a_number->[$i] ? 0 : 1;
             $string .= unicode_sprintf(              # GCS
@@ -2466,7 +2466,6 @@ sub read_config_file {
 sub write_json {
     my ( $file, $h_ref ) = @_;
     my $json = JSON::XS->new->pretty->encode( $h_ref );
-    #my $json = JSON::XS->new->encode( $h_ref );
     open my $fh, '>', encode_utf8( $file ) or die $!;
     print $fh $json;
     close $fh or die $!;
@@ -2484,7 +2483,6 @@ sub read_json {
         close $fh or die $!;
     }
     my $h_ref = JSON::XS->new->pretty->decode( $json ) if $json;
-    #my $h_ref = JSON::XS->new->decode( $json ) if $json;
     return $h_ref;
 }
 
@@ -2525,7 +2523,6 @@ sub choose_a_number {
         if ( defined $current ) {
             $old = sprintf "%s%*s", 'Current ' . $name . ': ', $longest, $current;
             $new = sprintf "%s%*s", '    New ' . $name . ': ', $longest, $new_number;
-            #if ( mbswidth( $old ) > $terminal_width ) {
             my $gcs = Unicode::GCString->new( $old );
             if ( $gcs->columns > $terminal_width ) {
                 $old = sprintf "%s%*s", 'Cur: ', $longest, $current;
@@ -2538,7 +2535,6 @@ sub choose_a_number {
         }
         else {
             $new = sprintf "%s%*s", $name . ': ', $longest, $new_number;
-            #if ( mbswidth( $new ) > $terminal_width ) {
             my $gcs = Unicode::GCString->new( $new );
             if ( $gcs->columns > $terminal_width ) {
                 $new = $new_number;
@@ -2649,7 +2645,7 @@ sub unicode_sprintf {
             if ( $avail_width < ( $cols += $gc->columns ) ) {
                 my $ret = $gcs->substr( 0, $gcs->pos - 1 );
                 $gcs->pos( $pos );
-                return $ret;
+                return $ret->as_string;
             }
         }
         #$gcs->pos( $pos );

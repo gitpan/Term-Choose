@@ -1,6 +1,12 @@
 Revision history for Term::Choose
 
 
+1.041   2013-05-12
+        -"_init_scr" is now OO, so that DESTROY does the cleanup.
+        - Added $SIG{'INT'} handler.
+        - Code cleanup.
+        - Fixed bug in example (stringify gcstring).
+
 1.040   2013-05-10
         - Removed experimental option "cp_list".
         -"s/\p{Cntrl}//g;" --> "s/\P{Print}/./g;"
