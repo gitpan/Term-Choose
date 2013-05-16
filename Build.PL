@@ -20,9 +20,7 @@ my $builder = Module::Build->new(
     requires => {
         'perl'              => '5.010000',
         'Carp'              => 0,
-        'Scalar::Util'      => 0,
         'Term::ReadKey'     => '2.30',
-        #'Text::CharWidth'   => '0.04',
         'Unicode::GCString' => '2012.10',
     },
     add_to_cleanup      => [ 'Term-Choose-*' ],
