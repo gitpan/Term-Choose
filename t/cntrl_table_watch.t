@@ -16,9 +16,6 @@ my $file = 'example/table_watch_SQLite.pl';
 my $test_env = 0;
 open my $fh1, '<', $file or die $!;
 while ( my $line = readline $fh1 ) {
-    if ( $line =~ /\A\s*use\s+warnings\s+FATAL/s ) {
-        $test_env++;
-    }
     if ( $line =~ /\A\s*use\s+Data::Dumper/s ) {
         $test_env++;
     }
