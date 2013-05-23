@@ -7,7 +7,7 @@ build_requires:
 configure_requires:
   Module::Build: 0
 dynamic_config: 1
-generated_by: 'Module::Build version 0.4005, CPAN::Meta::Converter version 2.120921'
+generated_by: 'Module::Build version 0.4005, CPAN::Meta::Converter version 2.130880'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -16,7 +16,7 @@ name: Term-Choose
 provides:
   Term::Choose:
     file: lib/Term/Choose.pm
-    version: 1.043
+    version: 1.044
 requires:
   Carp: 0
   Term::ReadKey: 2.30
@@ -24,4 +24,4 @@ requires:
   perl: 5.010000
 resources:
   license: http://dev.perl.org/licenses/
-version: 1.043
+version: 1.044

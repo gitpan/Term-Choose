@@ -1,6 +1,11 @@
 Revision history for Term::Choose
 
 
+1.044   2013-05-23
+        - Experimental option "keep" is now called "head".
+        - Updated documentation.
+        - Example: update and bug bixes.
+
 1.043   2013-05-20
         - Replaced "given/when".
         - Updated documentation.

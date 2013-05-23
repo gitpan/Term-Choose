@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.043';
+our $VERSION = '1.044';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -338,10 +338,11 @@ sub _validate_option {
         clear_screen    => [ 0,       1 ],
         default         => [ 0,  $limit ],
         empty           => '',
+        head            => [ 0,  $limit ],
+        keep            => [ 0,  $limit ], # ### deprecated
         hide_cursor     => [ 0,       1 ],
         index           => [ 0,       1 ],
         justify         => [ 0,       2 ],
-        keep            => [ 0,  $limit ],
         layout          => [ 0,       3 ],
         ll              => [ 1,  $limit ],
         limit           => [ 1,  $limit ],
@@ -380,6 +381,11 @@ sub _validate_option {
 sub _set_layout {
     my ( $wantarray, $config ) = @_;
     my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
+    # ###
+    if ( defined $config->{keep} && ! defined $config->{head} ) {
+        $config->{head} = $config->{keep};
+    }
+    # ###
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
@@ -388,7 +394,7 @@ sub _set_layout {
     $config->{hide_cursor}      //= 1;
     $config->{index}            //= 0;
     $config->{justify}          //= 0;
-    #$config->{keep}            //= undef;
+    #$config->{head}            //= undef;
     $config->{layout}           //= 1;
     #$config->{ll}              //= undef;
     $config->{limit}            //= 100_000;
@@ -479,10 +485,10 @@ sub _write_first_screen {
         $arg->{avail_width}  = MAX_COL_MOUSE_1003 if $arg->{avail_width}  > MAX_COL_MOUSE_1003;
         $arg->{avail_height} = MAX_ROW_MOUSE_1003 if $arg->{avail_height} > MAX_ROW_MOUSE_1003;
     }
-    $arg->{head} = $arg->{prompt} ne '' ? 1 : 0;
+    $arg->{prmt} = $arg->{prompt} ne '' ? 1 : 0;
     $arg->{tail} = $arg->{page}         ? 1 : 0;
-    $arg->{avail_height} -= $arg->{head} + $arg->{tail};
-    $arg->{avail_height} -= $arg->{keep} if defined $arg->{keep};
+    $arg->{avail_height} -= $arg->{prmt} + $arg->{tail};
+    $arg->{avail_height} -= $arg->{head} if defined $arg->{head};
     $arg->{avail_width}  = 1 if $arg->{avail_width}  < 1;
     $arg->{avail_height} = 1 if $arg->{avail_height} < 1;
     _size_and_layout( $arg );
@@ -506,7 +512,7 @@ sub _write_first_screen {
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
     print GET_CURSOR_POSITION if $arg->{mouse}; # in: abs_curs_X, abs_curs_Y
-    $arg->{cursor_row} = $arg->{screen_row} - $arg->{head}; # needed by _handle_mouse
+    $arg->{cursor_row} = $arg->{screen_row} - $arg->{prmt}; # needed by _handle_mouse
 }
 
 
@@ -881,10 +887,10 @@ sub _wr_screen {
     print CLEAR_TO_END_OF_SCREEN;
     if ( $arg->{prompt} ne '' ) {
         print $arg->{prompt_copy};
-        _goto( $arg, $arg->{head}, 0 );
+        _goto( $arg, $arg->{prmt}, 0 );
     }
     if ( $arg->{page} && $arg->{pp} > 1 ) {
-        _goto( $arg, $arg->{avail_height_idx} + $arg->{head} + $arg->{tail}, 0 );
+        _goto( $arg, $arg->{avail_height_idx} + $arg->{prmt} + $arg->{tail}, 0 );
         if ( $arg->{pp_printf_type} == 0 ) {
             printf $arg->{pp_printf_fmt}, $arg->{width_pp}, int( $arg->{top_listrow} / $arg->{avail_height} ) + 1, $arg->{pp};
         }
@@ -912,13 +918,13 @@ sub _wr_cell {
                 $lngth += $arg->{pad_one_row};
             }
         }
-        _goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $lngth );
+        _goto( $arg, $row + $arg->{prmt} - $arg->{top_listrow}, $lngth );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
         print REVERSE         if $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
         print $arg->{list}[$arg->{rowcol2list}[$row][$col]];
     }
     else {
-        _goto( $arg, $row + $arg->{head} - $arg->{top_listrow}, $col * $arg->{col_width} );
+        _goto( $arg, $row + $arg->{prmt} - $arg->{top_listrow}, $col * $arg->{col_width} );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
         print REVERSE         if $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
         print _unicode_sprintf( $arg, $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
@@ -1169,7 +1175,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.043
+Version 1.044
 
 =cut
 
@@ -1320,7 +1326,7 @@ Defaults may change in a future release.
 
 Options which expect a number as their value expect integers.
 
-There is a general upper limit of 1_000_000_000 for options which expect a number as their value and where no upper limit is mentioned.
+There is a general upper limit of one billion for options which expect a number as their value and where no upper limit is mentioned.
 
 =head4 prompt
 
@@ -1505,15 +1511,17 @@ Sets the string displayed on the screen instead an empty string.
 
 default: '<empty>'
 
-=head4 keep
+=head4 keep DEPRECATED
+
+Use I<head> instead.
+
+=head4 head
 
 This option is experimental.
 
-The name of this option may change with the next release.
+Reduces the available terminal rows by I<head> rows.
 
-Reduces the available terminal rows by I<keep> rows.
-
-It also means that I<choose> doesn't overwrite the I<keep> lines above the I<choose> output.
+This means that I<choose> doesn't overwrite the I<head> lines above the I<choose> output.
 
 Allowed values: 0 or greater
 

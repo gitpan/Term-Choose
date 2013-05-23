@@ -5,7 +5,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.043
+# Version 1.044
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -104,33 +104,35 @@ Usage:
 Options:
     Help           : Show this Info.
 
-    Tab width      : Set the number of spaces between columns.
-    Min col width  : Set the width the columns should have at least when printed.
+    Tabwidth       : Set the number of spaces between columns.
+    Colwidth       : Set the width the columns should have at least when printed.
     Undef          : Set the string that will be shown on the screen if a table value is undefined.
-    Max rows       : Set the maximum number of table rows available at once.
+    Rows           : Set the maximum number of table rows available at once.
     ProgressBar    : Set the progress bar threshold. The threshold refers to the list size.
     Expand
-    Length func    : Set function for determine the strings length on output ("gcstring" or "mbswidth").
-                     "mbswidth" is probably faster but may not support recently added unicode characters.
+    Length         : Choose the function which should investigate the string length on output.
+                        "mbswidth" or "gcstring"
+                        "mbswidth" is probably faster but may not support recently added unicode characters.
 
     Database types : Choose the needed database types.
     Operators      : Choose the needed operators.
-    Thousands sep  : Choose the thousands separator displayed in menus.
-    sssc mode      : With the sssc mode "compat" enabled back-arrows are offered in the sql "sub-statement" menu.
-                     To reset a sql "sub-statement" in the "simple" mode re-enter in the "sub-statement" (e.g WHERE)
-                     and choose '- OK -' or use the "q" key.
+    Separator      : Choose the thousands separator displayed in menus.
+    Sssc mode      : With the Sssc mode "compat" enabled back-arrows are offered in the sql "sub-statement" menu.
+                     To reset a sql "sub-statement" (e.g WHERE) in the "simple" mode re-enter into
+                     the "sub-statement" and choose '- OK -' or use the "q" key.
 
-    Keep statement : Set the default value: Lk0 or Lk1.
+    Lock           : Set the default value: Lk0 or Lk1.
                         Lk0: Reset the SQL-statement after each "PrintTable".
                         Lk1: Reset the SQL-statement only when a table is selected.
-    Show metadata  : If enabled system tables/schemas/databases are appended to the respective list.
+    Metadata       : If enabled system tables/schemas/databases are appended to the respective list.
     Regexp case    : If enabled REGEXP will match case sensitive.
                      With MySQL
-                         if enabled the BINARY operator is used to achieve a case sensitive match.
-                         if disabled the default case sensitivity is used.
+                        if enabled the BINARY operator is used to achieve a case sensitive match.
+                        if disabled the default case sensitivity is used.
 
     DB defaults    : Set Database defaults.
-                        Binary filter: Print "BNRY" instead of arbitrary binary data (printing arbitrary binary data could break the output).
+                        Binary filter: Print "BNRY" instead of arbitrary binary data.
+                        Printing arbitrary binary data could break the output.
                         Different Database settings ...
                      Database defaults can be overwritten for each Database with the "Database settings".
     DB login       : If enabled username and password are asked for each new DB connection.
@@ -142,28 +144,28 @@ HELP
 }
 
 my $default_db_types  = [ 'sqlite', 'mysql', 'postgres' ];
-my $default_operators = [ "REGEXP", "NOT REGEXP", " = ", " != ", " < ", " > ", "IS NULL", "IS NOT NULL", "IN" ];
+my $default_operators = [ "REGEXP", " = ", " != ", " < ", " > ", "IS NULL", "IS NOT NULL", "IN" ];
 
 my $opt = {
     print => {
-        tab_width      => [ 2,      '- Tab width' ],
-        min_col_width  => [ 30,     '- Min col width' ],
+        tab_width      => [ 2,      '- Tabwidth' ],
+        min_col_width  => [ 30,     '- Colwidth' ],
         undef          => [ '',     '- Undef' ],
-        limit          => [ 80_000, '- Max rows' ],
+        limit          => [ 80_000, '- Rows' ],
         progress_bar   => [ 20_000, '- ProgressBar' ],
         expand         => [ 1,      '- Expand' ],
-        fast_width     => [ 0,      '- Length function' ]
+        fast_width     => [ 0,      '- Length' ]
     },
     sql => {
-        lock_stmt      => [ 0, '- Keep statement' ],
-        system_info    => [ 0, '- Show metadata' ],
+        lock_stmt      => [ 0, '- Lock' ],
+        system_info    => [ 0, '- Metadata' ],
         regexp_case    => [ 0, '- Regexp case' ],
     },
     menu => {
-        thsd_sep       => [ ',',                '- Thousands sep' ],
+        thsd_sep       => [ ',',                '- Separator' ],
         database_types => [ $default_db_types,  '- Database types' ],
         operators      => [ $default_operators, '- Operators' ],
-        sssc_mode      => [ 0,                  '- sssc mode' ],
+        sssc_mode      => [ 0,                  '- Sssc mode' ],
     },
     dbs => {
         db_login       => [ 0,       '- DB login' ],
@@ -423,20 +425,16 @@ DB_TYPES: while ( 1 ) {
                     $table =~ s/^[-\ ]\s//;
                 }
                 if ( ! eval {
+                    my $qt_columns = {};
+                    my $pr_columns = [];
                     my $sql;
-                    $sql->{stmt_keys} = [ qw( distinct_stmt where_stmt group_by_stmt having_stmt order_by_stmt limit_stmt ) ];
-                    $sql->{list_keys} = [ qw( chosen_columns aggregate_cols where_args group_by_cols having_args limit_args ) ];
-                    $sql->{alias}{aggr} = [];
-                    $sql->{alias}{func} = [];
-                    @{$sql->{print}}{ @{$sql->{stmt_keys}} } = ( '' ) x @{$sql->{stmt_keys}};
-                    @{$sql->{quote}}{ @{$sql->{stmt_keys}} } = ( '' ) x @{$sql->{stmt_keys}};
-                    @{$sql->{print}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
-                    @{$sql->{quote}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
+                    $sql->{stmt_keys}  = [ qw( distinct_stmt where_stmt group_by_stmt having_stmt order_by_stmt limit_stmt ) ];
+                    $sql->{list_keys}  = [ qw( chosen_columns aggregate_cols where_args group_by_cols having_args limit_args ) ];
+                    $sql->{alias_keys} = [ qw( aggr have func ) ];
+                    reset_stmts( $sql, $qt_columns );
 
                     $info->{lock} = $opt->{sql}{lock_stmt}[v];
 
-                    my $qt_columns = {};
-                    my $pr_columns = [];
                     if ( $select_from_stmt ) {
                         for my $a_ref ( @$print_and_quote_cols ) {
                             $qt_columns->{$a_ref->[0]} = $a_ref->[1];
@@ -484,12 +482,12 @@ sub union_tables {
     my $saved_columns = [];
 
     UNION_TABLE: while ( 1 ) {
-        my $keep = print_union_statement( $info, $used_tables, $cols );
-        $keep = keeper( $keep );
+        my $head = print_union_statement( $info, $used_tables, $cols );
+        $head = keeper( $head );
         # Choose
         my $union_table = choose(
             [ undef, map( "+ $_", @$used_tables ), @tables_unused, $info->{_info}, $enough_tables ],
-            { prompt => 'Choose UNION table:', layout => 3, keep => $keep, undef => $info->{_back} }
+            { prompt => 'Choose UNION table:', layout => 3, head => $head, undef => $info->{_back} }
         );
         return if ! defined $union_table;
         if ( $union_table eq $info->{_info} ) {
@@ -518,14 +516,14 @@ sub union_tables {
             my $privious_cols = q['^'];
             my $void          = q[' '];
             my @short_cuts = ( ( @$saved_columns ? $privious_cols : $void ), $all_cols );
-            my $keep = print_union_statement( $info, $used_tables, $cols );
-            $keep = keeper( $keep );
+            my $head = print_union_statement( $info, $used_tables, $cols );
+            $head = keeper( $head );
             # Choose
             my $choices = [ $info->{ok}, @short_cuts, @{$data->{$db}{$schema}{col_names}{$union_table}} ];
             unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
             my $col = choose(
                 $choices,
-                { prompt => 'Choose Column: ', %{$info->{lyt_h}}, keep => $keep }
+                { prompt => 'Choose Column: ', %{$info->{lyt_h}}, head => $head }
             );
             if ( ! defined $col ) {
                 if ( defined $cols->{$union_table} ) {
@@ -704,12 +702,12 @@ sub join_tables {
     my ( $mastertable, @used_tables, @primary_keys, @foreign_keys );
 
     MASTER: while ( 1 ) {
-        my $keep = print_join_statement( $info, $join_statement_print );
-        $keep = keeper( $keep );
+        my $head = print_join_statement( $info, $join_statement_print );
+        $head = keeper( $head );
         # Choose
         $mastertable = choose(
             [ undef, @tables, $info->{_info} ],
-            { prompt => 'Choose MASTER table:', layout => 3, keep => $keep, undef => $info->{_back} }
+            { prompt => 'Choose MASTER table:', layout => 3, head => $head, undef => $info->{_back} }
         );
         return if ! defined $mastertable;
         if ( $mastertable eq $info->{_info} ) {
@@ -742,12 +740,12 @@ sub join_tables {
             @old_avail_tables = @available_tables;
 
             SLAVE: while ( 1 ) {
-                my $keep = print_join_statement( $info, $join_statement_print );
-                $keep = keeper( $keep );
+                my $head = print_join_statement( $info, $join_statement_print );
+                $head = keeper( $head );
                 # Choose
                 $slave_table = choose(
                     [ undef, @available_tables, $info->{_info}, $enough_slaves ],
-                    { prompt => 'Add a SLAVE table:', layout => 3, keep => $keep, undef => $info->{_reset} }
+                    { prompt => 'Add a SLAVE table:', layout => 3, head => $head, undef => $info->{_reset} }
                 );
                 if ( ! defined $slave_table ) {
                     if ( @used_tables == 1 ) {
@@ -795,12 +793,12 @@ sub join_tables {
             my $AND = '';
 
             ON: while ( 1 ) {
-                my $keep = print_join_statement( $info, $join_statement_print );
-                $keep = keeper( $keep );
+                my $head = print_join_statement( $info, $join_statement_print );
+                $head = keeper( $head );
                 # Choose
                 my $pk_col = choose(
                     [ undef, map( "- $_", sort keys %avail_primary_key_cols ), $info->{_continue} ],
-                    { prompt => 'Choose PRIMARY KEY column:', layout => 3, keep => $keep, undef => $info->{_reset} }
+                    { prompt => 'Choose PRIMARY KEY column:', layout => 3, head => $head, undef => $info->{_reset} }
                 );
                 if ( ! defined $pk_col ) {
                     @primary_keys         = @old_primary_keys;
@@ -827,12 +825,12 @@ sub join_tables {
                 $join_statement_print .= $AND;
                 $join_statement_quote .= ' ' . $avail_primary_key_cols{$pk_col} . " =";
                 $join_statement_print .= ' ' . $pk_col                          . " =";
-                $keep = print_join_statement( $info, $join_statement_print );
-                $keep = keeper( $keep );
+                $head = print_join_statement( $info, $join_statement_print );
+                $head = keeper( $head );
                 # Choose
                 my $fk_col = choose(
                     [ undef, map{ "- $_" } sort keys %avail_foreign_key_cols ],
-                    { prompt => 'Choose FOREIGN KEY column:', layout => 3, keep => $keep, undef => $info->{_reset} }
+                    { prompt => 'Choose FOREIGN KEY column:', layout => 3, head => $head, undef => $info->{_reset} }
                 );
                 if ( ! defined $fk_col ) {
                     @primary_keys         = @old_primary_keys;
@@ -971,6 +969,19 @@ sub print_select_statement {
 }
 
 
+sub reset_stmts {
+    my ( $sql, $qt_columns ) = @_;
+    for my $alias_key ( @{$sql->{alias_keys}} ) {
+        delete @{$qt_columns}{@{$sql->{alias}{$alias_key}//[]}};
+    }
+    @{$sql->{alias}}{ @{$sql->{alias_keys}} } = map{ [] } @{$sql->{alias_keys}};
+    @{$sql->{print}}{ @{$sql->{stmt_keys}} }  = ( '' ) x @{$sql->{stmt_keys}};
+    @{$sql->{quote}}{ @{$sql->{stmt_keys}} }  = ( '' ) x @{$sql->{stmt_keys}};
+    @{$sql->{print}}{ @{$sql->{list_keys}} }  = map{ [] } @{$sql->{list_keys}};
+    @{$sql->{quote}}{ @{$sql->{list_keys}} }  = map{ [] } @{$sql->{list_keys}};
+}
+
+
 sub read_table {
     my ( $info, $opt, $sql, $dbh, $table, $select_from_stmt, $qt_columns, $pr_columns  ) = @_;
     my %lyt_stmt = %{$info->{lyt_h}};
@@ -991,25 +1002,16 @@ sub read_table {
     );
     my ( $DISTINCT, $ALL, $ASC, $DESC, $AND, $OR ) = ( "DISTINCT", "ALL", "ASC", "DESC", "AND", "OR" );
     if ( $info->{lock} == 0 ) {
-        delete @{$qt_columns}{@{$sql->{alias}{aggr}}};
-        delete @{$qt_columns}{@{$sql->{alias}{func}}};
-        $sql->{alias}{aggr} = [];
-        $sql->{alias}{func} = [];
-        @{$sql->{print}}{ @{$sql->{stmt_keys}} } = ( '' ) x @{$sql->{stmt_keys}};
-        @{$sql->{quote}}{ @{$sql->{stmt_keys}} } = ( '' ) x @{$sql->{stmt_keys}};
-        @{$sql->{print}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
-        @{$sql->{quote}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
+        reset_stmts( $sql, $qt_columns );
     }
 
     CUSTOMIZE: while ( 1 ) {
-        my $keep = print_select_statement( $info, $sql, $table );
-        $keep = keeper( $keep );
+        my $head = print_select_statement( $info, $sql, $table );
+        $head = keeper( $head );
         # Choose
         my $custom = choose(
-            #[ undef, @customize{@keys} ],
-            #{ prompt => 'Customize:', layout => 3, undef => $info->{back} }
             [ $customize{hidden}, undef, @customize{@keys} ],
-            { prompt => '', layout => 3, default => 1, keep => $keep, undef => $info->{back} }
+            { prompt => '', layout => 3, default => 1, head => $head, undef => $info->{back} }
         );
         if ( ! defined $custom ) {
             last CUSTOMIZE;
@@ -1018,14 +1020,7 @@ sub read_table {
             if ( $info->{lock} == 1 ) {
                 $info->{lock} = 0;
                 $customize{lock} = $lock->[0];
-                delete @{$qt_columns}{@{$sql->{alias}{aggr}}};
-                delete @{$qt_columns}{@{$sql->{alias}{func}}};
-                $sql->{alias}{aggr} = [];
-                $sql->{alias}{func} = [];
-                @{$sql->{print}}{ @{$sql->{stmt_keys}} } = ( '' ) x @{$sql->{stmt_keys}};
-                @{$sql->{quote}}{ @{$sql->{stmt_keys}} } = ( '' ) x @{$sql->{stmt_keys}};
-                @{$sql->{print}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
-                @{$sql->{quote}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
+                reset_stmts( $sql, $qt_columns );
             }
             elsif ( $info->{lock} == 0 )   {
                 $info->{lock} = 1;
@@ -1040,14 +1035,14 @@ sub read_table {
             $sql->{alias}{func} = [];
 
             COLUMNS: while ( 1 ) {
-                my $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                my $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $print_col = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, keep => $keep }
+                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
                 );
                 if ( ! defined $print_col ) {
                     if ( @{$sql->{quote}{chosen_columns}} ) {
@@ -1073,8 +1068,8 @@ sub read_table {
             $sql->{print}{distinct_stmt} = '';
 
             DISTINCT: while ( 1 ) {
-                my $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                my $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, $DISTINCT, $ALL ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1103,21 +1098,21 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'aggregate'} ) {
-            my @cols = ( @$pr_columns, @{$sql->{alias}{func}} );
+            my @cols = ( @$pr_columns ); # @{$sql->{alias}{func}}
             delete @{$qt_columns}{@{$sql->{alias}{aggr}}};
             $sql->{alias}{aggr}        = [];
             $sql->{quote}{aggregate_cols} = [];
             $sql->{print}{aggregate_cols} = [];
 
             AGGREGATE: while ( 1 ) {
-                my $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                my $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @{$info->{aggregate_functions}} ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $func = choose(
                     $choices,
-                    { prompt => 'Choose:', %lyt_stmt, keep => $keep }
+                    { prompt => 'Choose:', %lyt_stmt, head => $head }
                 );
                 if ( ! defined $func ) {
                     if ( @{$sql->{quote}{aggregate_cols}} ) {
@@ -1150,46 +1145,35 @@ sub read_table {
                 $sql->{quote}{aggregate_cols}[$next_idx] = $quote_aggregate_col;
                 $sql->{print}{aggregate_cols}[$next_idx] = $print_aggregate_col;
                 if ( ! defined $print_col ) {
-                    my $keep = print_select_statement( $info, $sql, $table );
-                    $keep = keeper( $keep );
+                    my $head = print_select_statement( $info, $sql, $table );
+                    $head = keeper( $head );
                     # Choose
                     my $choices = [ @cols ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                     $print_col = choose(
                         $choices,
-                        { prompt => 'Choose:', %lyt_stmt, keep => $keep }
+                        { prompt => 'Choose:', %lyt_stmt, head => $head }
                     );
                     if ( ! defined $print_col ) {
-                        if ( @{$sql->{quote}{aggregate_cols}} ) {
-                            delete @{$qt_columns}{@{$sql->{alias}{aggr}}};
-                            $sql->{alias}{aggr}        = [];
-                            $sql->{quote}{aggregate_cols} = [];
-                            $sql->{print}{aggregate_cols} = [];
-                            next AGGREGATE;
-                        }
-                        else {
-                            delete @{$qt_columns}{@{$sql->{alias}{aggr}}};
-                            $sql->{alias}{aggr}        = [];
-                            $sql->{quote}{aggregate_cols} = [];
-                            $sql->{print}{aggregate_cols} = [];
-                            last AGGREGATE;
-                        }
+                        delete @{$qt_columns}{@{$sql->{alias}{aggr}}};
+                        $sql->{alias}{aggr}        = [];
+                        $sql->{quote}{aggregate_cols} = [];
+                        $sql->{print}{aggregate_cols} = [];
+                        next AGGREGATE;
                     }
                     ( $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
                 }
-                #my $alias = '@' . $func . '_' . $print_col; # ( $print_col eq '*' ? 'ROWS' : $print_col );
-                my $alias = $func .'(' . $print_col . ')';
-                $quote_aggregate_col .= $quote_col . ') AS ' . $dbh->quote_identifier( $alias );
+                $quote_aggregate_col .= $quote_col . ')';
                 $print_aggregate_col .= $print_col . ')';
-                #$print_aggregate_col .= $print_col . ') AS ' .                         $alias  ;
-                $qt_columns->{$alias} = $func . '(' . $quote_col . ')';
                 $sql->{quote}{aggregate_cols}[$next_idx] = $quote_aggregate_col;
                 $sql->{print}{aggregate_cols}[$next_idx] = $print_aggregate_col;
+                my $alias = $func .'(' . $print_col . ')';
+                $qt_columns->{$alias} = $func . '(' . $quote_col . ')';
                 push @{$sql->{alias}{aggr}}, $alias;
             }
         }
         elsif ( $custom eq $customize{'where'} ) {
-            my @cols = ( @$pr_columns, @{$sql->{alias}{func}} );
+            my @cols = ( @$pr_columns ); # @{$sql->{alias}{func}}
             my $AND_OR = '';
             $sql->{quote}{where_args} = [];
             $sql->{quote}{where_stmt} = " WHERE";
@@ -1197,14 +1181,14 @@ sub read_table {
             my $count = 0;
 
             WHERE: while ( 1 ) {
-                my $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                my $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $print_col = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, keep => $keep }
+                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
                 );
                 if ( ! defined $print_col ) {
                     if ( $sql->{quote}{where_stmt} ne " WHERE" ) {
@@ -1230,30 +1214,22 @@ sub read_table {
                     last WHERE;
                 }
                 if ( $count > 0 ) {
-                    my $keep = print_select_statement( $info, $sql, $table );
-                    $keep = keeper( $keep );
+                    my $head = print_select_statement( $info, $sql, $table );
+                    $head = keeper( $head );
                     # Choose
                     my $choices = [ $AND, $OR ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                     $AND_OR = choose(
                         $choices,
-                        { prompt => 'Choose:', %lyt_stmt, keep => $keep }
+                        { prompt => 'Choose:', %lyt_stmt, head => $head }
                     );
                     if ( ! defined $AND_OR ) {
-                        if ( $sql->{quote}{where_stmt} ) {
-                            $sql->{quote}{where_args} = [];
-                            $sql->{quote}{where_stmt} = " WHERE";
-                            $sql->{print}{where_stmt} = " WHERE";
-                            $count = 0;
-                            $AND_OR = '';
-                            next WHERE;
-                        }
-                        else {
-                            $sql->{quote}{where_args} = [];
-                            $sql->{quote}{where_stmt} = '';
-                            $sql->{print}{where_stmt} = '';
-                            last WHERE;
-                        }
+                        $sql->{quote}{where_args} = [];
+                        $sql->{quote}{where_stmt} = " WHERE";
+                        $sql->{print}{where_stmt} = " WHERE";
+                        $count = 0;
+                        $AND_OR = '';
+                        next WHERE;
                     }
                     $AND_OR =~ s/^\s+|\s+\z//g;
                     $AND_OR = ' ' . $AND_OR;
@@ -1274,7 +1250,7 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'group_by'} ) {
-            my @cols = ( @$pr_columns, @{$sql->{alias}{func}} );
+            my @cols = ( @$pr_columns ); # @{$sql->{alias}{func}}
             $info->{col_sep} = ' ';
             $sql->{quote}{group_by_stmt} = " GROUP BY";
             $sql->{print}{group_by_stmt} = " GROUP BY";
@@ -1282,17 +1258,17 @@ sub read_table {
             $sql->{print}{group_by_cols} = [];
 
             GROUP_BY: while ( 1 ) {
-                my $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                my $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $print_col = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, keep => $keep }
+                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
                 );
                 if ( ! defined $print_col ) {
-                    if ( $sql->{quote}{group_by_cols} ) {
+                    if ( @{$sql->{quote}{group_by_cols}} ) {
                         $sql->{quote}{group_by_stmt} = " GROUP BY";
                         $sql->{print}{group_by_stmt} = " GROUP BY";
                         $sql->{quote}{group_by_cols} = [];
@@ -1326,7 +1302,7 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'having'} ) {
-            my @cols = ( @$pr_columns, @{$sql->{alias}{func}} );
+            my @cols = ( @$pr_columns ); # @{$sql->{alias}{func}}
             my $AND_OR = '';
             $sql->{quote}{having_args} = [];
             $sql->{quote}{having_stmt} = " HAVING";
@@ -1334,14 +1310,14 @@ sub read_table {
             my $count = 0;
 
             HAVING: while ( 1 ) {
-                my $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                my $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
-                my $choices = [ $info->{ok}, @{$info->{aggregate_functions}}, @{$sql->{alias}{aggr}}, @{$sql->{alias}{func}} ];
+                my $choices = [ $info->{ok}, @{$info->{aggregate_functions}}, map( '@' . $_, @{$sql->{alias}{aggr}} ) ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $func = choose(
                     $choices,
-                    { prompt => 'Choose:', %lyt_stmt, keep => $keep }
+                    { prompt => 'Choose:', %lyt_stmt, head => $head }
                 );
                 if ( ! defined $func ) {
                     if ( $sql->{quote}{having_stmt} ne " HAVING" ) {
@@ -1367,40 +1343,29 @@ sub read_table {
                     last HAVING;
                 }
                 if ( $count > 0 ) {
-                    my $keep = print_select_statement( $info, $sql, $table );
-                    $keep = keeper( $keep );
+                    my $head = print_select_statement( $info, $sql, $table );
+                    $head = keeper( $head );
                     # Choose
                     my $choices = [ $AND, $OR ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                     $AND_OR = choose(
                         $choices,
-                        { prompt => 'Choose:', %lyt_stmt, keep => $keep }
+                        { prompt => 'Choose:', %lyt_stmt, head => $head }
                     );
                     if ( ! defined $AND_OR ) {
                         $sql->{quote}{having_args} = [];
-                        $sql->{quote}{having_stmt} = '';
-                        $sql->{print}{having_stmt} = '';
-                        last HAVING;
-                        if ( $sql->{quote}{having_stmt} ) {
-                            $sql->{quote}{having_args} = [];
-                            $sql->{quote}{having_stmt} = " HAVING";
-                            $sql->{print}{having_stmt} = " HAVING";
-                            $count = 0;
-                            $AND_OR = '';
-                            next HAVING;
-                        }
-                        else {
-                            $sql->{quote}{having_args} = [];
-                            $sql->{quote}{having_stmt} = '';
-                            $sql->{print}{having_stmt} = '';
-                            last HAVING;
-                        }
+                        $sql->{quote}{having_stmt} = " HAVING";
+                        $sql->{print}{having_stmt} = " HAVING";
+                        $count = 0;
+                        $AND_OR = '';
+                        next HAVING;
                     }
                     $AND_OR =~ s/^\s+|\s+\z//g;
                     $AND_OR = ' ' . $AND_OR;
                 }
                 my ( $print_col, $quote_col );
-                if ( any { $_ eq $func } @{$sql->{alias}{aggr}} ) {
+                if ( ( any { '@' . $_ eq $func } @{$sql->{alias}{aggr}} ) ) { # @{$sql->{alias}{func}}
+                    $func =~ s/^\@//;
                     $sql->{quote}{having_stmt} .= $AND_OR . ' ' . $qt_columns->{$func};  #
                     $sql->{print}{having_stmt} .= $AND_OR . ' ' . $func;
                     $quote_col = $qt_columns->{$func};
@@ -1414,25 +1379,30 @@ sub read_table {
                     $sql->{quote}{having_stmt} .= $AND_OR . ' ' . $func . '(';
                     $sql->{print}{having_stmt} .= $AND_OR . ' ' . $func . '(';
                     if ( ! defined $print_col ) {
-                        my $keep = print_select_statement( $info, $sql, $table );
-                        $keep = keeper( $keep );
+                        my $head = print_select_statement( $info, $sql, $table );
+                        $head = keeper( $head );
                         # Choose
                         my $choices = [ @cols ];
                         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                         $print_col = choose(
                             $choices,
-                            { prompt => 'Choose:', %lyt_stmt, keep => $keep }
+                            { prompt => 'Choose:', %lyt_stmt, head => $head }
                         );
                         if ( ! defined $print_col ) {
                             $sql->{quote}{having_args} = [];
-                            $sql->{quote}{having_stmt} = '';
-                            $sql->{print}{having_stmt} = '';
-                            last HAVING;
+                            $sql->{quote}{having_stmt} = " HAVING";
+                            $sql->{print}{having_stmt} = " HAVING";
+                            $count = 0;
+                            $AND_OR = '';
+                            next HAVING;
                         }
                         ( $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
                     }
                     $sql->{quote}{having_stmt} .= $quote_col . ')';
                     $sql->{print}{having_stmt} .= $print_col . ')';
+                    my $alias = $func . '(' . $print_col . ')';
+                    $qt_columns->{$alias} = $func . '(' . $quote_col . ')';
+                    push @{$sql->{alias}{have}}, $alias;
                 }
                 set_operator_sql( $info, $opt, $sql, 'having', $table, \@cols, $qt_columns, $quote_col );
                 if ( ! $sql->{quote}{having_stmt} ) {
@@ -1447,20 +1417,20 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'order_by'} ) {
-            my @cols = ( @$pr_columns, @{$sql->{alias}{aggr}}, @{$sql->{alias}{func}} );
+            my @cols = ( @$pr_columns, map( '@' . $_, @{$sql->{alias}{aggr}}, @{$sql->{alias}{have}} ) ); # @{$sql->{alias}{func}}
             $info->{col_sep} = ' ';
             $sql->{quote}{order_by_stmt} = " ORDER BY";
             $sql->{print}{order_by_stmt} = " ORDER BY";
 
             ORDER_BY: while ( 1 ) {
-                my $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                my $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $print_col = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, keep => $keep }
+                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
                 );
                 if ( ! defined $print_col ) {
                     if ( $sql->{quote}{order_by_stmt} ne " ORDER BY" ) {
@@ -1484,17 +1454,21 @@ sub read_table {
                     }
                     last ORDER_BY;
                 }
-                ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;   #
+                if ( ( any { '@' . $_ eq $print_col } @{$sql->{alias}{aggr}} ) || 
+                     ( any { '@' . $_ eq $print_col } @{$sql->{alias}{have}} ) ) { # @{$sql->{alias}{func}}
+                    $print_col =~ s/^\@//;
+                }
+                ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
                 $sql->{quote}{order_by_stmt} .= $info->{col_sep} . $quote_col;
                 $sql->{print}{order_by_stmt} .= $info->{col_sep} . $print_col;
-                $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 $choices = [ $ASC, $DESC ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $direction = choose(
                     $choices,
-                    { prompt => 'Choose:', %lyt_stmt, keep => $keep }
+                    { prompt => 'Choose:', %lyt_stmt, head => $head }
                 );
                 if ( ! defined $direction ){
                     $sql->{quote}{order_by_args} = [];
@@ -1519,14 +1493,14 @@ sub read_table {
             my ( $only_limit, $offset_and_limit ) = ( 'LIMIT', 'OFFSET-LIMIT' );
 
             LIMIT: while ( 1 ) {
-                my $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                my $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, $only_limit, $offset_and_limit ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $choice = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, keep => $keep }
+                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
                 );
                 if ( ! defined $choice ) {
                     if ( @{$sql->{quote}{limit_args}} ) {
@@ -1551,7 +1525,7 @@ sub read_table {
                 if ( $choice eq $offset_and_limit ) {
                     print_select_statement( $info, $sql, $table );
                     # Choose_a_number
-                    my $offset = choose_a_number( $info, $opt, { digits => $digits, name => '"OFFSET"' } );
+                    my $offset = choose_a_number( $info, $opt, $digits, '"OFFSET"' );
                     if ( ! defined $offset ) {
                         $sql->{quote}{limit_stmt} = " LIMIT";
                         $sql->{print}{limit_stmt} = " LIMIT";
@@ -1563,7 +1537,7 @@ sub read_table {
                 }
                 print_select_statement( $info, $sql, $table );
                 # Choose_a_number
-                my $limit = choose_a_number( $info, $opt, { digits => $digits, name => '"LIMIT"' } );
+                my $limit = choose_a_number( $info, $opt, $digits, '"LIMIT"' );
                 if ( ! defined $limit ) {
                     $sql->{quote}{limit_args} = [];
                     $sql->{quote}{limit_stmt} = " LIMIT";
@@ -1576,7 +1550,7 @@ sub read_table {
             }
         }
         elsif ( $custom eq $customize{'hidden'} ) {
-            my @functions = ( qw( epoch2date truncate epoch2datetime ) );
+            my @functions = ( qw( Epoch_to_Date Truncate Epoch_to_DateTime ) );
             delete @{$qt_columns}{@{$sql->{alias}{func}}};
             $sql->{alias}{func} = [];
             my $default_cols_sql = 0;
@@ -1593,19 +1567,19 @@ sub read_table {
             }
 
             FUNCTION: while ( 1 ) {
-                my $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                my $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 my $items_cc = @{$sql->{quote}{chosen_columns}};
                 my $items_gb = @{$sql->{quote}{group_by_cols}};
                 my $items_ag = @{$sql->{quote}{aggregate_cols}};
                 my @cols = map( "- $_", @{$sql->{print}{chosen_columns}}, @{$sql->{print}{group_by_cols}}, @{$sql->{print}{aggregate_cols}} );
                 my $choices = [ undef, @cols, $info->{_confirm} ];
-                my $index = choose(
+                my $idx = choose(
                     $choices,
-                    { prompt => 'Choose:', layout => 3, index => 1, keep => $keep, undef => $info->{_back} }
+                    { prompt => 'Choose:', layout => 3, index => 1, head => $head, undef => $info->{_back} }
                 );
-                if ( ! defined $index || $index == 0 ) {
+                if ( ! defined $idx || $idx == 0 ) {
                     for my $type ( 'quote', 'print' ) {
                         for my $stmt_key ( qw( chosen_columns group_by_cols aggregate_cols ) ) {
                             @{$sql->{$type}{$stmt_key}} = @{$backup->{$type}{$stmt_key}};
@@ -1619,37 +1593,37 @@ sub read_table {
                     $sql->{alias}{func} = [];
                     last FUNCTION;
                 }
-                $index =~ s/^\-\s//;
-                my $print_col = $choices->[$index];
+                $idx =~ s/^\-\s//;
+                my $print_col = $choices->[$idx];
                 $print_col =~ s/^\-\s//;
-                if ( $index eq $#$choices ) {
+                if ( $idx eq $#$choices ) {
                     last FUNCTION;
                 }
-                $index--;
+                $idx--;
                 my $stmt_key;
-                if ( $index <= $items_cc - 1 ) {
+                if ( $idx <= $items_cc - 1 ) {
                     $stmt_key = 'chosen_columns';
                 }
-                elsif ( $index > $items_cc - 1 && $index <= $items_cc + $items_gb - 1 ) {
+                elsif ( $idx > $items_cc - 1 && $idx <= $items_cc + $items_gb - 1 ) {
                     $stmt_key = 'group_by_cols';
-                    $index -= $items_cc;
+                    $idx -= $items_cc;
                 }
                 else {
                     $stmt_key = 'aggregate_cols';
-                    $index -= $items_cc + $items_gb;
+                    $idx -= $items_cc + $items_gb;
                 }
-                if ( $sql->{quote}{$stmt_key}[$index] ne $backup->{quote}{$stmt_key}[$index] ) {
-                    $sql->{quote}{$stmt_key}[$index] = $backup->{quote}{$stmt_key}[$index];
-                    $sql->{print}{$stmt_key}[$index] = $backup->{print}{$stmt_key}[$index];
+                if ( $sql->{quote}{$stmt_key}[$idx] ne $backup->{quote}{$stmt_key}[$idx] ) {
+                    $sql->{quote}{$stmt_key}[$idx] = $backup->{quote}{$stmt_key}[$idx];
+                    $sql->{print}{$stmt_key}[$idx] = $backup->{print}{$stmt_key}[$idx];
                     next FUNCTION;
                 }
-                $keep = print_select_statement( $info, $sql, $table );
-                $keep = keeper( $keep );
+                $head = print_select_statement( $info, $sql, $table );
+                $head = keeper( $head );
                 # Choose
                 $choices = [ undef, map( "  $_", @functions ) ];
                 my $function = choose(
                     $choices,
-                    { prompt => 'Choose:', layout => 3, keep => $keep, undef => $info->{_back} }
+                    { prompt => 'Choose:', layout => 3, head => $head, undef => $info->{_back} }
                 );
                 if ( ! defined $function ) {
                     next FUNCTION;
@@ -1657,9 +1631,12 @@ sub read_table {
                 $function =~ s/^\s\s//;
                 my $quote_col = $qt_columns->{$print_col};
                 my ( $quote_func, $print_func ) = col_functions( $info->{db_type}, $function, $quote_col, $print_col );
+                if ( ! defined $quote_func ) {
+                    next FUNCTION;
+                }
+                $sql->{quote}{$stmt_key}[$idx] = $quote_func;
+                $sql->{print}{$stmt_key}[$idx] = $print_func;
                 my $alias = $print_func;
-                $sql->{quote}{$stmt_key}[$index] = $quote_func . " AS " . $dbh->quote_identifier( $alias );
-                $sql->{print}{$stmt_key}[$index] = $print_func;
                 $qt_columns->{$alias} = $quote_func;
                 push @{$sql->{alias}{func}}, $alias;
             }
@@ -1729,14 +1706,14 @@ sub set_operator_sql {
         $stmt = 'having_stmt';
         $args = 'having_args';
     }
-    my $keep = print_select_statement( $info, $sql, $table );
-    $keep = keeper( $keep );
+    my $head = print_select_statement( $info, $sql, $table );
+    $head = keeper( $head );
     # Choose
     my $choices = [ @{$opt->{menu}{operators}[v]} ];
     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
     my $operator = choose(
         $choices,
-        { prompt => 'Choose:', %lyt_stmt, keep => $keep }
+        { prompt => 'Choose:', %lyt_stmt, head => $head }
     );
     if ( ! defined $operator ) {
         $sql->{quote}{$args} = [];
@@ -1745,7 +1722,7 @@ sub set_operator_sql {
         return;
     }
     $operator =~ s/^\s+|\s+\z//g;
-    if ( $operator !~ /\s[%_]?col[%_]?\z/ ) {
+    if ( $operator !~ /\s%?col%?\z/ ) {
         if ( $operator !~ /REGEXP\z/ ) {
             $sql->{quote}{$stmt} .= ' ' . $operator;
             $sql->{print}{$stmt} .= ' ' . $operator;
@@ -1787,7 +1764,7 @@ sub set_operator_sql {
             $sql->{quote}{$stmt} .= ' ' . '?' .      ' AND';
             $sql->{print}{$stmt} .= ' ' . $value_1 . ' AND';
             push @{$sql->{quote}{$args}}, $value_1;
-            $keep = print_select_statement( $info, $sql, $table );
+            print_select_statement( $info, $sql, $table );
             # Readline
             my $value_2 = local_read_line( prompt => 'Value_2: ' );
             $sql->{quote}{$stmt} .= ' ' . '?';
@@ -1827,14 +1804,14 @@ sub set_operator_sql {
         $operator =~ s/^\s+|\s+\z//g;
         $sql->{quote}{$stmt} .= ' ' . $operator;
         $sql->{print}{$stmt} .= ' ' . $operator;
-        my $keep = print_select_statement( $info, $sql, $table );
-        $keep = keeper( $keep );
+        my $head = print_select_statement( $info, $sql, $table );
+        $head = keeper( $head );
         # choose
         my $choices = [ @$cols ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
         my $print_col = choose(
             $choices,
-            { prompt => "$operator: ", %lyt_stmt, keep => $keep }
+            { prompt => "$operator: ", %lyt_stmt, head => $head }
         );
         if ( ! defined $print_col ) {
             $sql->{quote}{$stmt} = '';
@@ -2205,7 +2182,7 @@ sub options {
             my $current_value = $opt->{print}{limit}[v];
             $current_value =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
             # Choose_a_number
-            my $choice = choose_a_number( $info, $opt, { digits => 7, name => '"Max rows"', current => $current_value } );
+            my $choice = choose_a_number( $info, $opt, 7, '"Max rows"', $current_value );
             next OPTION if ! defined $choice;
             $opt->{print}{limit}[v] = $choice;
             $change++;
@@ -2214,7 +2191,7 @@ sub options {
             my $current_value = $opt->{print}{progress_bar}[v];
             $current_value =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
             # Choose_a_number
-            my $choice = choose_a_number( $info, $opt, { digits => 7, name => '"Threshold ProgressBar"', current => $current_value } );
+            my $choice = choose_a_number( $info, $opt, 7, '"Threshold ProgressBar"', $current_value );
             next OPTION if ! defined $choice;
             $opt->{print}{progress_bar}[v] = $choice;
             $change++;
@@ -2357,7 +2334,7 @@ sub database_setting {
     my @choices = ();
     my $db_type;
     if ( ! defined $db ) {
-        $db_type = choose( $opt->{menu}{database_types}[v], { layout => 1 } );
+        $db_type = choose( [ undef, @{$opt->{menu}{database_types}[v]} ], { layout => 1, undef => '<<' } );
         return if ! defined $db_type;
     }
     else {
@@ -2440,7 +2417,7 @@ sub database_setting {
                 my $busy_timeout = current_value( $opt, $key, $db_type, $db );
                 $busy_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
                 # Choose_a_number
-                my $choice = choose_a_number( $info, $opt, { digits => 6, name => '"Busy timeout"', current => $busy_timeout } );
+                my $choice = choose_a_number( $info, $opt, 6, '"Busy timeout"', $busy_timeout );
                 if ( ! defined $choice ) {
                     delete $new->{$section}{$key};
                     next DB_OPTION;
@@ -2453,7 +2430,7 @@ sub database_setting {
                 my $cache_size = current_value( $opt, $key, $db_type, $db );
                 $cache_size =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
                 # Choose_a_number
-                my $choice = choose_a_number( $info, $opt, { digits => 8, name => '"Cache size (kb)"', current => $cache_size } );
+                my $choice = choose_a_number( $info, $opt, 8, '"Cache size (kb)"', $cache_size );
                 if ( ! defined $choice ) {
                     delete $new->{$section}{$key};
                     next DB_OPTION;
@@ -2529,7 +2506,7 @@ sub database_setting {
                 my $connect_timeout = current_value( $opt, $key, $db_type, $db );
                 $connect_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
                 # Choose_a_number
-                my $choice = choose_a_number( $info, $opt, { digits => 4, name => '"Busy timeout"', current => $connect_timeout } );
+                my $choice = choose_a_number( $info, $opt, 4, '"Busy timeout"', $connect_timeout );
                 if ( ! defined $choice ) {
                     delete $new->{$section}{$key};
                     next DB_OPTION;
@@ -2619,13 +2596,13 @@ sub local_read_line {
 }
 
 sub keeper {
-    my ( $keep ) = @_;
-    my $remain = ( GetTerminalSize )[1] - $keep;
+    my ( $head ) = @_;
+    my $remain = ( GetTerminalSize )[1] - $head;
     if ( $remain < 6 ) {
-        $keep -= 6 - $remain;
+        $head -= 6 - $remain;
     }
-    return 0 if $keep < 0;
-    return $keep;
+    return 0 if $head < 0;
+    return $head;
 }
 
 
@@ -2678,10 +2655,7 @@ sub read_json {
 
 
 sub choose_a_number {
-    my ( $info, $opt, $c ) = @_;
-    my $digits  = $c->{digits} // 7;
-    my $name    = $c->{name} // '';
-    my $current = $c->{current};
+    my ( $info, $opt, $digits, $name, $current ) = @_;
     my $sep = $opt->{menu}{thsd_sep}[v];
     my $tab = '  -  ';
     my $gcs_tab = Unicode::GCString->new( $tab );
@@ -2740,18 +2714,18 @@ sub choose_a_number {
         }
         print GO_TO_TOP_LEFT;
         print CLEAR_EOS;
-        my $keep = 0;
+        my $head = 0;
         if ( defined $info_line_cur ) {
             say $info_line_cur;
-            $keep += 1;
+            $head += 1;
         }
         say $info_line_new . "\n";
-        $keep += 2;
-        $keep = keeper( $keep );
+        $head += 2;
+        $head = keeper( $head );
         # Choose
         my $range = choose(
             [ undef, @choices_range, $confirm ],
-            { prompt => '', layout => 3, justify => 1, keep => $keep, undef => $back }
+            { prompt => '', layout => 3, justify => 1, head => $head, undef => $back }
         );
         return if ! defined $range;
         return if $range eq $confirm && ! defined $result;
@@ -2767,7 +2741,7 @@ sub choose_a_number {
         # Choose
         my $number = choose(
             [ undef, map( $_ . $zeros, 1 .. 9 ), $reset ],
-            { prompt => '', %{$info->{lyt_h}}, keep => $keep, undef => '<<' }
+            { prompt => '', %{$info->{lyt_h}}, head => $head, undef => '<<' }
         );
         next if ! defined $number;
         if ( $number eq $reset ) {
@@ -2808,24 +2782,24 @@ sub choose_list {
         print GO_TO_TOP_LEFT;
         print CLEAR_EOS;
 
-        my $keep = 0;
+        my $head = 0;
         for my $row ( split /\R+/, $text1 ) {
             printf "%${length_key}s%s\n", $key1, $row;
             $key1 = '';
-            $keep++;
+            $head++;
         }
         for my $row ( split /\R+/, $text2 ) {
             printf "%${length_key}s%s\n", $key2, $row;
             $key2 = '';
-            $keep++;
+            $head++;
         }
         print "\n";
-        $keep++;
-        $keep = keeper( $keep );
+        $head++;
+        $head = keeper( $head );
         # Choose
         my $filter_type = choose(
             [ undef, map( "- $_", @$available ), $info->{_confirm} ],
-            { prompt => 'Choose:', layout => 3, keep => $keep, undef => $info->{_back} }
+            { prompt => 'Choose:', layout => 3, head => $head, undef => $info->{_back} }
         );
         return if ! defined $filter_type;
         if ( $filter_type eq $info->{_confirm} ) {
@@ -2929,9 +2903,7 @@ sub set_credentials {
 }
 
 
-
 ###########################################   database specific subroutines   ############################################
-
 
 
 sub get_db_handle {
@@ -2949,10 +2921,6 @@ sub get_db_handle {
         } ) or die DBI->errstr;
         $dbh->sqlite_busy_timeout(           $opt->{$db_key}{busy_timeout}[v] // $opt->{sqlite}{busy_timeout}[v] );
         $dbh->do( 'PRAGMA cache_size = ' . ( $opt->{$db_key}{cache_size}[v]   // $opt->{sqlite}{cache_size}[v] ) );
-#        $dbh->func( 'regexp', 2,
-#                sub { my ( $regex, $string ) = @_; $string //= ''; return $string =~ m/$regex/ism },
-#                'create_function'
-#        );
         $dbh->sqlite_create_function( 'regexp', 2, sub {
             my ( $regex, $string ) = @_; 
             $string //= ''; 
@@ -3237,8 +3205,8 @@ sub sql_regexp {
             return ' '. $quote_col . ' !~ ?'  if   $opt->{sql}{regexp_case}[v];
         }
         if ( $info->{db_type} eq 'oracle' ) {
-            return ' NOT REGEXP_LIKE( ' . $quote_col . ', ?, \'i\' )' if ! $opt->{sql}{regexp_case}[v];
-            return ' NOT REGEXP_LIKE( ' . $quote_col . ', ? )'        if   $opt->{sql}{regexp_case}[v];
+            return ' NOT REGEXP_LIKE(' . $quote_col . ',?,\'i\')' if ! $opt->{sql}{regexp_case}[v];
+            return ' NOT REGEXP_LIKE(' . $quote_col . ',?)'        if   $opt->{sql}{regexp_case}[v];
         }
 
     }
@@ -3255,8 +3223,8 @@ sub sql_regexp {
             return ' '. $quote_col . ' ~ ?'  if   $opt->{sql}{regexp_case}[v];
         }
         if ( $info->{db_type} eq 'oracle' ) {
-            return ' REGEXP_LIKE( ' . $quote_col . ', ?, \'i\' )' if ! $opt->{sql}{regexp_case}[v];
-            return ' REGEXP_LIKE( ' . $quote_col . ', ? )'        if   $opt->{sql}{regexp_case}[v];
+            return ' REGEXP_LIKE(' . $quote_col . ',?,\'i\')' if ! $opt->{sql}{regexp_case}[v];
+            return ' REGEXP_LIKE(' . $quote_col . ',?)'       if   $opt->{sql}{regexp_case}[v];
         }
     }
     no_entry_for_db_type( $info->{db_type} );
@@ -3265,7 +3233,7 @@ sub sql_regexp {
 
 sub concatenate {
     my ( $db_type, $arg ) = @_;
-    return 'concat( ' . join( ', ', @$arg ) . ' )' if $db_type eq 'mysql';
+    return 'concat(' . join( ',', @$arg ) . ')' if $db_type eq 'mysql';
     return join( ' || ', @$arg );
 }
 
@@ -3273,33 +3241,37 @@ sub concatenate {
 sub col_functions {
     my ( $db_type, $func, $quote_col, $print_col ) = @_;
     my ( $quote_f, $print_f, $alias );
-    if ( $func =~ /^epoch2date(?:time)?\z/i ) {
+    if ( $func =~ /^epoch_to_date(?:time)?\z/i ) {
         # Choose
         my ( $seconds, $milliseconds, $microseconds ) = ( '1 Second', '1 Millisecond', '1 Microsecond' );
-        my $interval = choose( [ $seconds, $milliseconds, $microseconds ], { prompt => 'Choose INTERVAL: ', layout => 1 } );
+        my $choices =  [ $seconds, $milliseconds, $microseconds ];
+        unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
+        my $interval = choose( $choices, { prompt => 'Choose INTERVAL: ', layout => 1, undef => '<<' } );
         return if ! defined $interval;
         my $div = $interval eq $microseconds ? 1000000 :
                 $interval eq $milliseconds ? 1000 : 1;
-        if ( $func =~ /^epoch2datetime\z/i ) {
-            $quote_f = "FROM_UNIXTIME( $quote_col / $div, '%Y-%m-%d %H:%i:%s' )"    if $db_type eq 'mysql';
-            $quote_f = "( TO_TIMESTAMP( ${quote_col}::bigint / $div ) )::timestamp" if $db_type eq 'postgres';
-            $quote_f = "DATETIME( $quote_col / $div, 'unixepoch', 'localtime' )"    if $db_type eq 'sqlite';
+        if ( $func =~ /^epoch_to_datetime\z/i ) {
+            $quote_f = "FROM_UNIXTIME($quote_col/$div,'%Y-%m-%d %H:%i:%s')"    if $db_type eq 'mysql';
+            $quote_f = "( TO_TIMESTAMP(${quote_col}::bigint/$div))::timestamp" if $db_type eq 'postgres';
+            $quote_f = "DATETIME($quote_col/$div,'unixepoch','localtime')"     if $db_type eq 'sqlite';
             $print_f = "DATETIME($print_col)";
         }
         else {
             # mysql: FROM_UNIXTIME doesn't work with negative timestamps
-            $quote_f = "FROM_UNIXTIME( $quote_col / $div, '%Y-%m-%d' )"        if $db_type eq 'mysql';
-            $quote_f = "( TO_TIMESTAMP( ${quote_col}::bigint / $div ) )::date" if $db_type eq 'postgres';
-            $quote_f = "DATE( $quote_col / $div, 'unixepoch', 'localtime' )"   if $db_type eq 'sqlite';
+            $quote_f = "FROM_UNIXTIME($quote_col/$div,'%Y-%m-%d')"       if $db_type eq 'mysql';
+            $quote_f = "(TO_TIMESTAMP(${quote_col}::bigint/$div))::date" if $db_type eq 'postgres';
+            $quote_f = "DATE($quote_col/$div,'unixepoch','localtime')"   if $db_type eq 'sqlite';
             $print_f = "DATE($print_col)";
         }
     }
     elsif ( $func =~ /^TRUNCATE\z/i ) {
-        my $precision = choose( [ 0 .. 9 ], { prompt => 'Decimal places: ', layout => 1, undef => '<<' } );
+        my $choices = [ 0 .. 9 ];
+        unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
+        my $precision = choose( $choices, { prompt => 'Decimal places: ', layout => 1, undef => '<<' } );
         return if ! defined $precision;
-        $quote_f = "TRUNCATE( $quote_col, $precision )"        if $db_type eq 'mysql';
-        $quote_f = "TRUNC( ${quote_col}::bigint, $precision )" if $db_type eq 'postgres';
-        $quote_f = "TRUNCATE( $quote_col, $precision )"        if $db_type eq 'sqlite'; # round
+        $quote_f = "TRUNCATE($quote_col,$precision)" if $db_type eq 'mysql';
+        $quote_f = "TRUNC($quote_col,$precision)"    if $db_type eq 'postgres';
+        $quote_f = "TRUNCATE($quote_col,$precision)" if $db_type eq 'sqlite'; # round
         $print_f = "TRUNCATE($print_col,$precision)";
     }
     return $quote_f, $print_f;
