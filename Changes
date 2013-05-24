@@ -1,6 +1,12 @@
 Revision history for Term::Choose
 
 
+1.045   2013-05-24
+        - Added extended SGR mouse mode (1006) support.
+        - The mouse wheel scrolls now page-wise instead of lines-wise.
+        - Updated documentation.
+        - Updated example.
+
 1.044   2013-05-23
         - Experimental option "keep" is now called "head".
         - Updated documentation.

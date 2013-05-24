@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.044';
+our $VERSION = '1.045';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -40,8 +40,8 @@ use constant {
     UNSET_EXT_MODE_MOUSE_1005       => "\e[?1005l",
     UNSET_SGR_EXT_MODE_MOUSE_1006   => "\e[?1006l",
 
-    MAX_ROW_MOUSE_1003              => 224,
-    MAX_COL_MOUSE_1003              => 224,
+    MAX_ROW_MOUSE_1003              => 223,
+    MAX_COL_MOUSE_1003              => 223,
 
     BEEP                            => "\07",
     CLEAR_SCREEN                    => "\e[2J",
@@ -124,7 +124,7 @@ sub _getch {
             elsif ( $c3 eq 'Z' ) { return KEY_BTAB; }
             elsif ( $c3 =~ /^[0-9]$/ ) {
                 my $c4 = ReadKey 0;
-                if ( $c4 eq '~' ) {
+                   if ( $c4 eq '~' ) {
                        if ( $c3 eq '2' ) { return KEY_INSERT; } # unused
                     elsif ( $c3 eq '3' ) { return KEY_DELETE; } # unused
                     elsif ( $c3 eq '5' ) { return KEY_PAGE_UP; }
@@ -134,19 +134,20 @@ sub _getch {
                     }
                 }
                 elsif ( $c4 =~ /^[;0-9]$/ ) { # response to "\e[6n"
-                    my $abs_curs_Y = 0 + $c3;
-                    while ( 1 ) {
-                        last if $c4 eq ';';
-                        $abs_curs_Y = 10 * $abs_curs_Y + $c4;
-                        $c4 = ReadKey 0;
+                    my $abs_curs_Y = $c3;
+                    my $ry = $c4;
+                    while ( $ry =~ m/^[0-9]$/ ) {
+                        $abs_curs_Y .= $ry;
+                        $ry = ReadKey 0;
                     }
-                    my $abs_curs_X = 0;
-                    while ( 1 ) {
-                        $c4 = ReadKey 0;
-                        last if $c4 !~ /^[0-9]$/;
-                        $abs_curs_X = 10 * $abs_curs_X + $c4;
+                    return NEXT_getch if $ry ne ';';
+                    my $abs_curs_X = '';
+                    my $rx = ReadKey 0;
+                    while ( $rx =~ m/^[0-9]$/ ) {
+                        $abs_curs_X .= $rx;
+                        $rx = ReadKey 0;
                     }
-                    if ( $c4 eq 'R' ) {
+                    if ( $rx eq 'R' ) {
                         $arg->{abs_curs_Y} = $abs_curs_Y;
                         $arg->{abs_curs_X} = $abs_curs_X; # unused
                     }
@@ -160,27 +161,35 @@ sub _getch {
             elsif ( $c3 eq '3' ) { return KEY_DELETE; } # unused
             elsif ( $c3 eq '5' ) { return KEY_PAGE_UP; }
             elsif ( $c3 eq '6' ) { return KEY_PAGE_DOWN; }
+            # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
             elsif ( $c3 eq 'M' && $arg->{mouse} ) {
-                # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
-                # http://leonerds-code.blogspot.co.uk/2012/04/wide-mouse-support-in-libvterm.html
-                my $event_type  = ord( ReadKey 0 ) - 32;        # byte 4
-                my $x           = ord( ReadKey 0 ) - 32;        # byte 5
-                my $y           = ord( ReadKey 0 ) - 32;        # byte 6
-                my $button_drag = ( $event_type & BIT_MASK_xx1xxxxx ) >> 5;
-                my $button_pressed;
-                my $low_2_bits = $event_type & BIT_MASK_xxxxxx11;
-                if ( $low_2_bits == 3 ) {
-                    $button_pressed = 0;
+                my $event_type = ord( ReadKey 0 ) - 32;
+                my $x          = ord( ReadKey 0 ) - 32;
+                my $y          = ord( ReadKey 0 ) - 32;
+                my $button_released = 0;
+                return _handle_mouse( $arg, $event_type, $x, $y, $button_released );
+            }
+            elsif ( $c3 eq '<' && $arg->{mouse} ) {  # SGR 1006
+                my $event_type = '';
+                my $m1;
+                while ( ( $m1 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
+                    $event_type .= $m1;
                 }
-                else {
-                    if ( $event_type & BIT_MASK_x1xxxxxx ) {
-                        $button_pressed = $low_2_bits + 4; # button 4, 5
-                    }
-                    else {
-                        $button_pressed = $low_2_bits + 1; # button 1, 2, 3
-                    }
+                return NEXT_getch if $m1 ne ';';
+                my $x = '';
+                my $m2;
+                while ( ( $m2 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
+                    $x .= $m2;
                 }
-                return _handle_mouse( $x, $y, $button_pressed, $button_drag, $arg );
+                return NEXT_getch if $m2 ne ';';
+                my $y = '';
+                my $m3;
+                while ( ( $m3 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
+                    $y .= $m3;
+                }
+                return NEXT_getch if $m3 !~ /^[mM]$/;
+                my $button_released = $m3 eq 'm' ? 1 : 0;
+                return _handle_mouse( $arg, $event_type, $x, $y, $button_released );
             }
             else {
                 return NEXT_getch;
@@ -362,13 +371,16 @@ sub _validate_option {
             delete $config->{$key};
             $warn++;
         }
-        elsif ( $validate->{$key} ) {  # the empty string is not true
+        elsif ( $validate->{$key} ) {
             if ( defined $config->{$key} && ( $config->{$key} !~ m/^[0-9]+\z/ || $config->{$key} < $validate->{$key}[MIN] || $config->{$key} > $validate->{$key}[MAX] ) ) {
                 carp "choose: \"$config->{$key}\" is not a valid value for the option \"$key\". Falling back to the default value.";
                 $config->{$key} = undef;
                 $warn++;
             }
         }
+        # elsif ( $validate->{$key} eq '' ) {
+        #     nothing to do;
+        # }
     }
     if ( $warn ) {
         print "Press a key to continue";
@@ -590,7 +602,7 @@ sub choose {
         # So e.g. the second value in the second row of the new list would be $arg->{list}[ $arg->{rowcol2list}[1][1] ].
         # On the other hand the index of the last row of the new list would be $#{$arg->{rowcol2list}}
         # or the index of the last column in the first row would be $#{$arg->{rowcol2list}[0]}.
-        
+
         if ( $c == KEY_j || $c == KEY_DOWN ) {
             if ( $#{$arg->{rowcol2list}} == 0 || ! ( $arg->{rowcol2list}[$arg->{cursor}[ROW]+1] && $arg->{rowcol2list}[$arg->{cursor}[ROW]+1][$arg->{cursor}[COL]] ) ) {
                 _beep( $arg );
@@ -900,7 +912,7 @@ sub _wr_screen {
      }
     for my $row ( $arg->{p_begin} .. $arg->{p_end} ) {
         for my $col ( 0 .. $#{$arg->{rowcol2list}[$row]} ) {
-            _wr_cell( $arg, $row, $col ); # unless $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
+            _wr_cell( $arg, $row, $col );
         }
     }
     _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
@@ -1075,17 +1087,32 @@ sub _unicode_sprintf {
 
 
 sub _handle_mouse {
-    my ( $x, $y, $button_pressed, $button_drag, $arg ) = @_;
+    my ( $arg, $event_type, $x, $y, $button_released ) = @_;
+    return NEXT_getch if $button_released;
+    my $button_drag = ( $event_type & BIT_MASK_xx1xxxxx ) >> 5;
     return NEXT_getch if $button_drag;
+    my $button_number;
+    my $low_2_bits = $event_type & BIT_MASK_xxxxxx11;
+    if ( $low_2_bits == 3 ) {
+        $button_number = 0;
+    }
+    else {
+        if ( $event_type & BIT_MASK_x1xxxxxx ) {
+            $button_number = $low_2_bits + 4; # 4, 5
+        }
+        else {
+            $button_number = $low_2_bits + 1; # 1, 2, 3
+        }
+    }
     my $top_row = $arg->{abs_curs_Y} - $arg->{cursor_row};
     # abs_curs_Y: on which row (one  based index) on the        screen is the cursor after _write_first_screen
     # cursor_row: on which row (zero based index) of the printed items is the cursor after _write_first_screen
     # top_row   : which mouse row corresponds to the first row of the printed list items
-    if ( $button_pressed == 4 ) {
-        return KEY_UP;
+    if ( $button_number == 4 ) {
+        return KEY_PAGE_UP;
     }
-    elsif ( $button_pressed == 5 ) {
-        return KEY_DOWN;
+    elsif ( $button_number == 5 ) {
+        return KEY_PAGE_DOWN;
     }
     return NEXT_getch if $y < $top_row;
     my $mouse_row = $y - $top_row;
@@ -1140,10 +1167,10 @@ sub _handle_mouse {
     }
     return NEXT_getch if ! $found;
     my $return_char = '';
-    if ( $button_pressed == 1 ) {
+    if ( $button_number == 1 ) {
         $return_char = KEY_ENTER;
     }
-    elsif ( $button_pressed == 3  ) {
+    elsif ( $button_number == 3  ) {
         $return_char = KEY_SPACE;
     }
     else {
@@ -1175,7 +1202,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.044
+Version 1.045
 
 =cut
 
@@ -1320,10 +1347,6 @@ All these modifications are made on a copy of the original array so I<choose> re
 
 =head3 Options
 
-All options are optional.
-
-Defaults may change in a future release.
-
 Options which expect a number as their value expect integers.
 
 There is a general upper limit of one billion for options which expect a number as their value and where no upper limit is mentioned.
@@ -1419,6 +1442,8 @@ If the output has more than one row and more than one column:
 
 1 - elements are ordered vertically (default)
 
+Default may change in a future release.
+
 =head4 justify
 
 0 - elements ordered in columns are left justified (default)
@@ -1475,11 +1500,11 @@ Allowed values:  0 or greater
 
 1 - mouse mode 1003 enabled
 
-2 - mouse mode 1003 enabled; maxcols/maxrows limited to 224 (mouse mode 1003 doesn't work above 224)
+2 - mouse mode 1003 enabled; maxcols/maxrows limited to 223 (mouse mode 1003 doesn't work above 223)
 
 3 - extended mouse mode (1005) - uses utf8
 
-4 - extended SGR mouse mode (1006) - mouse mode 1003 is used if mouse mode 1006 is not supported
+4 - extended SGR mouse mode (1006)
 
 =head4 beep
 
