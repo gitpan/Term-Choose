@@ -5,7 +5,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.045
+# Version 1.046
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -19,7 +19,12 @@ use DBI;
 use JSON::XS;
 use File::HomeDir qw(my_home);
 use List::MoreUtils qw(any none first_index pairwise);
+
+
+use lib '/home/mm/lib/Term-Choose/lib';
 use Term::Choose qw(choose);
+
+
 use Term::ProgressBar;
 use Term::ReadKey qw(GetTerminalSize ReadLine ReadMode);
 use Text::LineFold;
@@ -483,7 +488,6 @@ sub union_tables {
 
     UNION_TABLE: while ( 1 ) {
         my $head = print_union_statement( $info, $used_tables, $cols );
-        $head = keeper( $head );
         # Choose
         my $union_table = choose(
             [ undef, map( "+ $_", @$used_tables ), @tables_unused, $info->{_info}, $enough_tables ],
@@ -517,7 +521,6 @@ sub union_tables {
             my $void          = q[' '];
             my @short_cuts = ( ( @$saved_columns ? $privious_cols : $void ), $all_cols );
             my $head = print_union_statement( $info, $used_tables, $cols );
-            $head = keeper( $head );
             # Choose
             my $choices = [ $info->{ok}, @short_cuts, @{$data->{$db}{$schema}{col_names}{$union_table}} ];
             unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -703,7 +706,6 @@ sub join_tables {
 
     MASTER: while ( 1 ) {
         my $head = print_join_statement( $info, $join_statement_print );
-        $head = keeper( $head );
         # Choose
         $mastertable = choose(
             [ undef, @tables, $info->{_info} ],
@@ -741,7 +743,6 @@ sub join_tables {
 
             SLAVE: while ( 1 ) {
                 my $head = print_join_statement( $info, $join_statement_print );
-                $head = keeper( $head );
                 # Choose
                 $slave_table = choose(
                     [ undef, @available_tables, $info->{_info}, $enough_slaves ],
@@ -794,7 +795,6 @@ sub join_tables {
 
             ON: while ( 1 ) {
                 my $head = print_join_statement( $info, $join_statement_print );
-                $head = keeper( $head );
                 # Choose
                 my $pk_col = choose(
                     [ undef, map( "- $_", sort keys %avail_primary_key_cols ), $info->{_continue} ],
@@ -826,7 +826,6 @@ sub join_tables {
                 $join_statement_quote .= ' ' . $avail_primary_key_cols{$pk_col} . " =";
                 $join_statement_print .= ' ' . $pk_col                          . " =";
                 $head = print_join_statement( $info, $join_statement_print );
-                $head = keeper( $head );
                 # Choose
                 my $fk_col = choose(
                     [ undef, map{ "- $_" } sort keys %avail_foreign_key_cols ],
@@ -1007,7 +1006,6 @@ sub read_table {
 
     CUSTOMIZE: while ( 1 ) {
         my $head = print_select_statement( $info, $sql, $table );
-        $head = keeper( $head );
         # Choose
         my $custom = choose(
             [ $customize{hidden}, undef, @customize{@keys} ],
@@ -1036,7 +1034,6 @@ sub read_table {
 
             COLUMNS: while ( 1 ) {
                 my $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1069,7 +1066,6 @@ sub read_table {
 
             DISTINCT: while ( 1 ) {
                 my $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, $DISTINCT, $ALL ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1106,7 +1102,6 @@ sub read_table {
 
             AGGREGATE: while ( 1 ) {
                 my $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @{$info->{aggregate_functions}} ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1146,7 +1141,6 @@ sub read_table {
                 $sql->{print}{aggregate_cols}[$next_idx] = $print_aggregate_col;
                 if ( ! defined $print_col ) {
                     my $head = print_select_statement( $info, $sql, $table );
-                    $head = keeper( $head );
                     # Choose
                     my $choices = [ @cols ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1184,7 +1178,6 @@ sub read_table {
 
             WHERE: while ( 1 ) {
                 my $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1217,7 +1210,6 @@ sub read_table {
                 }
                 if ( $count > 0 ) {
                     my $head = print_select_statement( $info, $sql, $table );
-                    $head = keeper( $head );
                     # Choose
                     my $choices = [ $AND, $OR ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1261,7 +1253,6 @@ sub read_table {
 
             GROUP_BY: while ( 1 ) {
                 my $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1313,7 +1304,6 @@ sub read_table {
 
             HAVING: while ( 1 ) {
                 my $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @{$info->{aggregate_functions}}, map( '@' . $_, @{$sql->{pr_func}{aggr}} ) ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1346,7 +1336,6 @@ sub read_table {
                 }
                 if ( $count > 0 ) {
                     my $head = print_select_statement( $info, $sql, $table );
-                    $head = keeper( $head );
                     # Choose
                     my $choices = [ $AND, $OR ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1382,7 +1371,6 @@ sub read_table {
                     $sql->{print}{having_stmt} .= $AND_OR . ' ' . $func . '(';
                     if ( ! defined $print_col ) {
                         my $head = print_select_statement( $info, $sql, $table );
-                        $head = keeper( $head );
                         # Choose
                         my $choices = [ @cols ];
                         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1426,7 +1414,6 @@ sub read_table {
 
             ORDER_BY: while ( 1 ) {
                 my $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1463,7 +1450,6 @@ sub read_table {
                 $sql->{quote}{order_by_stmt} .= $info->{col_sep} . $quote_col;
                 $sql->{print}{order_by_stmt} .= $info->{col_sep} . $print_col;
                 $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 $choices = [ $ASC, $DESC ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1495,7 +1481,6 @@ sub read_table {
 
             LIMIT: while ( 1 ) {
                 my $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 my $choices = [ $info->{ok}, $only_limit, $offset_and_limit ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1569,7 +1554,6 @@ sub read_table {
 
             HIDDEN: while ( 1 ) {
                 my $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 my $items_cc = @{$sql->{quote}{chosen_columns}};
                 my $items_gb = @{$sql->{quote}{group_by_cols}};
@@ -1619,7 +1603,6 @@ sub read_table {
                     next HIDDEN;
                 }
                 $head = print_select_statement( $info, $sql, $table );
-                $head = keeper( $head );
                 # Choose
                 $choices = [ undef, map( "  $_", @functions ) ];
                 my $function = choose(
@@ -1672,14 +1655,6 @@ sub read_table {
                 $dbh->{mysql_bind_type_guessing} = 0;
                 $work_around = 1;
             }
-            
-            
-            say $select;
-            <>;
-            
-            
-            
-            
             my $sth = $dbh->prepare( $select );
             $sth->execute( @arguments );
             if ( $work_around ) {
@@ -1718,7 +1693,6 @@ sub set_operator_sql {
         $args = 'having_args';
     }
     my $head = print_select_statement( $info, $sql, $table );
-    $head = keeper( $head );
     # Choose
     my $choices = [ @{$opt->{menu}{operators}[v]} ];
     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -1816,7 +1790,6 @@ sub set_operator_sql {
         $sql->{quote}{$stmt} .= ' ' . $operator;
         $sql->{print}{$stmt} .= ' ' . $operator;
         my $head = print_select_statement( $info, $sql, $table );
-        $head = keeper( $head );
         # choose
         my $choices = [ @$cols ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -2159,6 +2132,7 @@ sub options {
            if ( ! defined $option ) { exit(); }
         elsif ( $option eq $info->{_confirm} ) { last OPTION; }
         elsif ( $option eq $info->{_help} ) { help(); choose( [ ' Close with ENTER ' ], { prompt => '' } ) }
+        
         elsif ( $option eq $opt->{"print"}{'tab_width'}[chs] ) {
             # Choose
             my $current_value = $opt->{print}{tab_width}[v];
@@ -2170,6 +2144,7 @@ sub options {
             $opt->{print}{tab_width}[v] = $choice;
             $change++;
         }
+        
         elsif ( $option eq $opt->{"print"}{'min_col_width'}[chs] ) {
             # Choose
             my $current_value = $opt->{print}{min_col_width}[v];
@@ -2606,16 +2581,6 @@ sub local_read_line {
     return $line;
 }
 
-sub keeper {
-    my ( $head ) = @_;
-    my $remain = ( GetTerminalSize )[1] - $head;
-    if ( $remain < 6 ) {
-        $head -= 6 - $remain;
-    }
-    return 0 if $head < 0;
-    return $head;
-}
-
 
 sub write_config_file {
     my ( $opt, $file ) = @_;
@@ -2701,42 +2666,18 @@ sub choose_a_number {
 
     NUMBER: while ( 1 ) {
         my $new_result = $result // '--';
-        my ( $info_line_cur, $info_line_new );
+        my $prompt = '';
         if ( defined $current ) {
-            $info_line_cur = sprintf "%s%*s", 'Current ' . $name . ': ', $longest, $current;
-            $info_line_new = sprintf "%s%*s", '    New ' . $name . ': ', $longest, $new_result;
-            my $gcs_cur = Unicode::GCString->new( $info_line_cur );
-            if ( $gcs_cur->columns > $terminal_width ) {
-                $info_line_cur = sprintf "%s%*s", 'Cur: ', $longest, $current;
-                $info_line_new = sprintf "%s%*s", 'New: ', $longest, $new_result;
-                my $gcs_cur = Unicode::GCString->new( $info_line_cur );
-                if ( $gcs_cur->columns > $terminal_width ) {
-                    $info_line_cur = undef;
-                    $info_line_new = $new_result;
-                }
-            }
+            $prompt .= sprintf "%s%*s\n",   'Current ' . $name . ': ', $longest, $current;
+            $prompt .= sprintf "%s%*s\n\n", '    New ' . $name . ': ', $longest, $new_result;
         }
         else {
-            $info_line_new = sprintf "%s%*s", $name . ': ', $longest, $new_result;
-            my $gcs_new = Unicode::GCString->new( $info_line_new );
-            if ( $gcs_new->columns > $terminal_width ) {
-                $info_line_new = $new_result;
-            }
+            $prompt = sprintf "%s%*s\n\n", $name . ': ', $longest, $new_result;
         }
-        print GO_TO_TOP_LEFT;
-        print CLEAR_EOS;
-        my $head = 0;
-        if ( defined $info_line_cur ) {
-            say $info_line_cur;
-            $head += 1;
-        }
-        say $info_line_new . "\n";
-        $head += 2;
-        $head = keeper( $head );
         # Choose
         my $range = choose(
             [ undef, @choices_range, $confirm ],
-            { prompt => '', layout => 3, justify => 1, head => $head, undef => $back }
+            { prompt => $prompt, layout => 3, justify => 1, clear_screen => 1, undef => $back }
         );
         return if ! defined $range;
         return if $range eq $confirm && ! defined $result;
@@ -2745,14 +2686,10 @@ sub choose_a_number {
         $zeros =~ s/^\s*\d//;
         ( my $zeros_no_sep = $zeros ) =~ s/\Q$sep\E//g if $sep ne '';
         my $count_zeros = length $zeros_no_sep;
-        print GO_TO_TOP_LEFT;
-        print CLEAR_EOS;
-        say $info_line_cur if defined $info_line_cur;
-        say $info_line_new . "\n";
         # Choose
         my $number = choose(
             [ undef, map( $_ . $zeros, 1 .. 9 ), $reset ],
-            { prompt => '', %{$info->{lyt_h}}, head => $head, undef => '<<' }
+            { prompt => $prompt, %{$info->{lyt_h}}, clear_screen => 1, undef => '<<' }
         );
         next if ! defined $number;
         if ( $number eq $reset ) {
@@ -2806,7 +2743,6 @@ sub choose_list {
         }
         print "\n";
         $head++;
-        $head = keeper( $head );
         # Choose
         my $filter_type = choose(
             [ undef, map( "- $_", @$available ), $info->{_confirm} ],

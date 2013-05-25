@@ -3,12 +3,13 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.045';
+our $VERSION = '1.046';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
 use Carp qw(croak carp);
 use Term::ReadKey qw(GetTerminalSize ReadKey);
+use Text::LineFold;
 use Unicode::GCString;
 
 #use warnings FATAL => qw(all);
@@ -51,12 +52,6 @@ use constant {
     UNDERLINE                       => "\e[4m",
     REVERSE                         => "\e[7m",
     BOLD                            => "\e[1m",
-};
-
-use constant {
-    BIT_MASK_xxxxxx11   => 0x03,
-    BIT_MASK_xx1xxxxx   => 0x20,
-    BIT_MASK_x1xxxxxx   => 0x40,
 };
 
 use constant {
@@ -257,7 +252,7 @@ sub _init_scr {
 
 sub DESTROY {
     my $self = shift;
-    print CR, UP x $self->{screen_row};
+    print CR, UP x ( $self->{screen_row} + $self->{prompt_lines} );
     print CLEAR_TO_END_OF_SCREEN;
     print RESET;
     if ( $self->{mouse} ) {
@@ -362,6 +357,7 @@ sub _validate_option {
         page            => [ 0,       1 ],
         prompt          => '',
         screen_width    => [ 1 ,    100 ],
+        ##st              => [ 1,  $limit ],
         undef           => '',
     };
     my $warn = 0;
@@ -417,6 +413,7 @@ sub _set_layout {
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
     #$config->{screen_width}    //= undef;
+    ##$config->{st}              //= undef;
     $config->{undef}            //= '<undef>';
     return $config;
 }
@@ -472,13 +469,28 @@ sub _prepare_page_number {
 
 sub _prepare_promptline {
     my ( $arg ) = @_;
-    $arg->{prompt} =~ s/\p{Space}/ /g;
-    $arg->{prompt} =~ s/\P{Print}/\x{fffd}/g;
-    $arg->{prompt_copy} = $arg->{prompt};
-    utf8::upgrade( $arg->{prompt_copy} );
-    my $gcs_prompt_copy = Unicode::GCString->new( $arg->{prompt_copy} );
-    if ( $gcs_prompt_copy->columns() > $arg->{avail_width} ) {
-        $arg->{prompt_copy} = _unicode_trim( $gcs_prompt_copy, $arg->{avail_width} - 3 ) . '...';
+    $arg->{prompt} =~ s/[^\N{LINE FEED}\P{Space}]/ /g;
+    $arg->{prompt} =~ s/[^\N{LINE FEED}\p{Print}]/\x{fffd}/g;
+    utf8::upgrade( $arg->{prompt} );
+    my $gcs_prompt = Unicode::GCString->new( $arg->{prompt} );
+    if ( $arg->{prompt} !~ /\n/ && $gcs_prompt->columns() <= $arg->{avail_width} ) {
+        $arg->{prompt_lines} = 1;
+        $arg->{prompt_copy} = $arg->{prompt} . "\n\r";
+    }
+    else {
+        my $line_fold = Text::LineFold->new(
+            Charset=> 'utf-8',
+            ColMax => $arg->{avail_width},
+            OutputCharset => '_UNICODE_',
+            Urgent => 'FORCE'
+        );
+        #if ( $arg->{st} ) {
+        #    $arg->{prompt_copy} = $line_fold->fold( '', ' ' x $arg->{st}, $arg->{prompt} );
+        #}
+        #else {
+            $arg->{prompt_copy} = $line_fold->fold( $arg->{prompt}, 'PLAIN' );
+        #}
+        $arg->{prompt_lines} = $arg->{prompt_copy} =~ s/\n/\n\r/g;
     }
 }
 
@@ -497,14 +509,29 @@ sub _write_first_screen {
         $arg->{avail_width}  = MAX_COL_MOUSE_1003 if $arg->{avail_width}  > MAX_COL_MOUSE_1003;
         $arg->{avail_height} = MAX_ROW_MOUSE_1003 if $arg->{avail_height} > MAX_ROW_MOUSE_1003;
     }
-    $arg->{prmt} = $arg->{prompt} ne '' ? 1 : 0;
-    $arg->{tail} = $arg->{page}         ? 1 : 0;
-    $arg->{avail_height} -= $arg->{prmt} + $arg->{tail};
+    $arg->{avail_width} = 1 if $arg->{avail_width}  < 1;
+    if ( $arg->{prompt} eq '' ) {
+        $arg->{prompt_lines} = 0;
+    }
+    else {
+        _prepare_promptline( $arg );
+    }
+    $arg->{tail} = $arg->{page} ? 1 : 0;
+    $arg->{avail_height} -= $arg->{prompt_lines} + $arg->{tail};
     $arg->{avail_height} -= $arg->{head} if defined $arg->{head};
-    $arg->{avail_width}  = 1 if $arg->{avail_width}  < 1;
-    $arg->{avail_height} = 1 if $arg->{avail_height} < 1;
+    ##########
+    if ( $arg->{avail_height} < 4 ) {
+        my $height = ( GetTerminalSize( $arg->{handle_out} ) )[1];
+        if ( $height >= 4 ) {
+            $arg->{avail_height} = 4;
+        }
+        else {
+            $arg->{avail_height} = $height;
+        }
+        $arg->{avail_height} = 1 if $arg->{avail_height} < 1;
+    }
+    ##########
     _size_and_layout( $arg );
-    _prepare_promptline( $arg ) if $arg->{prompt} ne '';
     _prepare_page_number( $arg ) if $arg->{page};
     $arg->{avail_height_idx} = $arg->{avail_height} - 1;
     $arg->{p_begin}     = 0;
@@ -520,11 +547,12 @@ sub _write_first_screen {
         print CLEAR_SCREEN;
         print GO_TO_TOP_LEFT;
     }
+    print $arg->{prompt_copy} if $arg->{prompt} ne '';
     _wr_screen( $arg );
     $arg->{abs_curs_X} = 0;
     $arg->{abs_curs_Y} = 0;
     print GET_CURSOR_POSITION if $arg->{mouse}; # in: abs_curs_X, abs_curs_Y
-    $arg->{cursor_row} = $arg->{screen_row} - $arg->{prmt}; # needed by _handle_mouse
+    $arg->{cursor_row} = $arg->{screen_row}; # needed by _handle_mouse
 }
 
 
@@ -584,7 +612,7 @@ sub choose {
         next if $c == KEY_Tilde;
         if ( $arg->{size_changed} ) {
             $arg->{list} = _copy_orig_list( $arg );
-            print CR, UP x ( $arg->{screen_row} );
+            print CR, UP x ( $arg->{screen_row} + $arg->{prompt_lines} );
             _write_first_screen( $arg );
             $arg->{size_changed} = 0;
             next;
@@ -772,7 +800,7 @@ sub choose {
             }
         }
         elsif ( $c == CONTROL_E || $c == KEY_END ) {
-            if ( $arg->{order} == 1 and $arg->{rest} ) {
+            if ( $arg->{order} == 1 && $arg->{rest} ) {
                 if ( $arg->{cursor}[COL] == $#{$arg->{rowcol2list}[$arg->{cursor}[ROW]]} && $arg->{cursor}[ROW] == $#{$arg->{rowcol2list}} - 1 ) {
                     _beep( $arg );
                 }
@@ -897,12 +925,8 @@ sub _wr_screen {
     my ( $arg ) = @_;
     _goto( $arg, 0, 0 );
     print CLEAR_TO_END_OF_SCREEN;
-    if ( $arg->{prompt} ne '' ) {
-        print $arg->{prompt_copy};
-        _goto( $arg, $arg->{prmt}, 0 );
-    }
     if ( $arg->{page} && $arg->{pp} > 1 ) {
-        _goto( $arg, $arg->{avail_height_idx} + $arg->{prmt} + $arg->{tail}, 0 );
+        _goto( $arg, $arg->{avail_height_idx} + $arg->{tail}, 0 );
         if ( $arg->{pp_printf_type} == 0 ) {
             printf $arg->{pp_printf_fmt}, $arg->{width_pp}, int( $arg->{top_listrow} / $arg->{avail_height} ) + 1, $arg->{pp};
         }
@@ -930,13 +954,13 @@ sub _wr_cell {
                 $lngth += $arg->{pad_one_row};
             }
         }
-        _goto( $arg, $row + $arg->{prmt} - $arg->{top_listrow}, $lngth );
+        _goto( $arg, $row - $arg->{top_listrow}, $lngth );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
         print REVERSE         if $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
         print $arg->{list}[$arg->{rowcol2list}[$row][$col]];
     }
     else {
-        _goto( $arg, $row + $arg->{prmt} - $arg->{top_listrow}, $col * $arg->{col_width} );
+        _goto( $arg, $row - $arg->{top_listrow}, $col * $arg->{col_width} );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
         print REVERSE         if $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
         print _unicode_sprintf( $arg, $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
@@ -1089,15 +1113,15 @@ sub _unicode_sprintf {
 sub _handle_mouse {
     my ( $arg, $event_type, $x, $y, $button_released ) = @_;
     return NEXT_getch if $button_released;
-    my $button_drag = ( $event_type & BIT_MASK_xx1xxxxx ) >> 5;
+    my $button_drag = ( $event_type & 0x20 ) >> 5;
     return NEXT_getch if $button_drag;
     my $button_number;
-    my $low_2_bits = $event_type & BIT_MASK_xxxxxx11;
+    my $low_2_bits = $event_type & 0x03;
     if ( $low_2_bits == 3 ) {
         $button_number = 0;
     }
     else {
-        if ( $event_type & BIT_MASK_x1xxxxxx ) {
+        if ( $event_type & 0x40 ) {
             $button_number = $low_2_bits + 4; # 4, 5
         }
         else {
@@ -1105,9 +1129,6 @@ sub _handle_mouse {
         }
     }
     my $top_row = $arg->{abs_curs_Y} - $arg->{cursor_row};
-    # abs_curs_Y: on which row (one  based index) on the        screen is the cursor after _write_first_screen
-    # cursor_row: on which row (zero based index) of the printed items is the cursor after _write_first_screen
-    # top_row   : which mouse row corresponds to the first row of the printed list items
     if ( $button_number == 4 ) {
         return KEY_PAGE_UP;
     }
@@ -1202,7 +1223,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.045
+Version 1.046
 
 =cut
 
@@ -1619,6 +1640,10 @@ Used modules not provided as core modules:
 =item
 
 L<Term::ReadKey>
+
+=item
+
+L<Text::LineFold>
 
 =item
 
