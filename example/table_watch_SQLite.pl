@@ -5,7 +5,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.046
+# Version 1.047
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -19,12 +19,7 @@ use DBI;
 use JSON::XS;
 use File::HomeDir qw(my_home);
 use List::MoreUtils qw(any none first_index pairwise);
-
-
-use lib '/home/mm/lib/Term-Choose/lib';
 use Term::Choose qw(choose);
-
-
 use Term::ProgressBar;
 use Term::ReadKey qw(GetTerminalSize ReadLine ReadMode);
 use Text::LineFold;
@@ -55,6 +50,7 @@ my $info = {
     home                => $home,
     config_file         => catfile( $config_dir, 'tw_config.json' ),
     db_cache_file       => catfile( $config_dir, 'tw_cache_db_search.json' ),
+    lyt_stmt            => { st => 4, layout => 1, order => 0, justify => 2, clear_screen => 1, undef => '<<' },
     lyt_h               => { layout => 1, order => 0, justify => 2, undef => '<<' },
     lyt_nr              => { layout => 1, order => 0, justify => 1, undef => '<<' },
     line_fold           => { Charset=> 'utf-8', OutputCharset => '_UNICODE_', Urgent => 'FORCE' },
@@ -487,11 +483,11 @@ sub union_tables {
     my $saved_columns = [];
 
     UNION_TABLE: while ( 1 ) {
-        my $head = print_union_statement( $info, $used_tables, $cols );
+        my $prompt = print_union_statement( $info, $used_tables, $cols, 'Choose UNION table:' );
         # Choose
         my $union_table = choose(
             [ undef, map( "+ $_", @$used_tables ), @tables_unused, $info->{_info}, $enough_tables ],
-            { prompt => 'Choose UNION table:', layout => 3, head => $head, undef => $info->{_back} }
+            { prompt => $prompt, st => 4, layout => 3, clear_screen => 1, undef => $info->{_back} }
         );
         return if ! defined $union_table;
         if ( $union_table eq $info->{_info} ) {
@@ -520,13 +516,13 @@ sub union_tables {
             my $privious_cols = q['^'];
             my $void          = q[' '];
             my @short_cuts = ( ( @$saved_columns ? $privious_cols : $void ), $all_cols );
-            my $head = print_union_statement( $info, $used_tables, $cols );
+            my $prompt = print_union_statement( $info, $used_tables, $cols, 'Choose Column:' );
             # Choose
             my $choices = [ $info->{ok}, @short_cuts, @{$data->{$db}{$schema}{col_names}{$union_table}} ];
             unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
             my $col = choose(
                 $choices,
-                { prompt => 'Choose Column: ', %{$info->{lyt_h}}, head => $head }
+                { prompt => $prompt, st => 4, %{$info->{lyt_h}}, clear_screen => 1 }
             );
             if ( ! defined $col ) {
                 if ( defined $cols->{$union_table} ) {
@@ -602,45 +598,19 @@ sub union_tables {
 
 
 sub print_union_statement {
-    my ( $info, $used_tables, $cols ) = @_;
-    my @rows = ( "SELECT * FROM (" );
+    my ( $info, $used_tables, $cols, $prompt ) = @_;
+    my $string = "SELECT * FROM (\n";
     my $c = 0;
     for my $table ( @$used_tables ) {
-        $c++;
-        my $string = "SELECT ";
+        ++$c;
+        $string .= "  SELECT ";
         $string .= defined $cols->{$table} ? join( ', ', @{$cols->{$table}} ) : '?';
         $string .= " FROM $table";
-        $string .= $c < @$used_tables ? " UNION ALL" : "";
-        push @rows, $string;
+        $string .= $c < @$used_tables ? " UNION ALL\n" : "\n";
     }
     my $derived_table_name = join '_', @$used_tables;
-    push @rows, ") AS $derived_table_name" if @$used_tables;
-    my $line_fold = Text::LineFold->new( %{$info->{line_fold}} );
-    $line_fold->config( 'ColMax', ( GetTerminalSize )[0] );
-    print GO_TO_TOP_LEFT;
-    print CLEAR_EOS;
-    my $count = 0;
-    for my $s ( split /\R+/, $line_fold->fold( '', ' ' x 2, $rows[0] ) ) {
-        say $s;
-        ++$count;
-    }
-    if ( @rows > 2 ) {
-        for my $i ( 1 .. $#rows - 1 ) {
-            for my $s ( split /\R+/, $line_fold->fold( ' ' x 2, ' ' x 4, $rows[$i] ) ) {
-                say $s;
-                ++$count;
-            }
-        }
-    }
-    if ( @rows > 1 ) {
-        for my $s ( split /\R+/, $line_fold->fold( '', ' ' x 2, $rows[$#rows] ) ) {
-            say $s;
-            ++$count;
-        }
-    }
-    print "\n";
-    ++$count;
-    return $count;
+    $string .= ") AS $derived_table_name\n" if @$used_tables;
+    return $string . "\n$prompt";
 }
 
 sub get_tables_info {
@@ -705,11 +675,11 @@ sub join_tables {
     my ( $mastertable, @used_tables, @primary_keys, @foreign_keys );
 
     MASTER: while ( 1 ) {
-        my $head = print_join_statement( $info, $join_statement_print );
+        my $prompt = print_join_statement( $info, $join_statement_print, 'Choose MASTER table:' );
         # Choose
         $mastertable = choose(
             [ undef, @tables, $info->{_info} ],
-            { prompt => 'Choose MASTER table:', layout => 3, head => $head, undef => $info->{_back} }
+            { prompt => $prompt, st => 4, layout => 3, clear_screen => 1, undef => $info->{_back} }
         );
         return if ! defined $mastertable;
         if ( $mastertable eq $info->{_info} ) {
@@ -742,11 +712,11 @@ sub join_tables {
             @old_avail_tables = @available_tables;
 
             SLAVE: while ( 1 ) {
-                my $head = print_join_statement( $info, $join_statement_print );
+                my $prompt = print_join_statement( $info, $join_statement_print, 'Add a SLAVE table:' );
                 # Choose
                 $slave_table = choose(
                     [ undef, @available_tables, $info->{_info}, $enough_slaves ],
-                    { prompt => 'Add a SLAVE table:', layout => 3, head => $head, undef => $info->{_reset} }
+                    { prompt => $prompt, st => 4, layout => 3, clear_screen => 1, undef => $info->{_reset} }
                 );
                 if ( ! defined $slave_table ) {
                     if ( @used_tables == 1 ) {
@@ -794,11 +764,11 @@ sub join_tables {
             my $AND = '';
 
             ON: while ( 1 ) {
-                my $head = print_join_statement( $info, $join_statement_print );
+                my $prompt = print_join_statement( $info, $join_statement_print, 'Choose PRIMARY KEY column:' );
                 # Choose
                 my $pk_col = choose(
                     [ undef, map( "- $_", sort keys %avail_primary_key_cols ), $info->{_continue} ],
-                    { prompt => 'Choose PRIMARY KEY column:', layout => 3, head => $head, undef => $info->{_reset} }
+                    { prompt => $prompt, st => 4, layout => 3, clear_screen => 1, undef => $info->{_reset} }
                 );
                 if ( ! defined $pk_col ) {
                     @primary_keys         = @old_primary_keys;
@@ -825,11 +795,11 @@ sub join_tables {
                 $join_statement_print .= $AND;
                 $join_statement_quote .= ' ' . $avail_primary_key_cols{$pk_col} . " =";
                 $join_statement_print .= ' ' . $pk_col                          . " =";
-                $head = print_join_statement( $info, $join_statement_print );
+                $prompt = print_join_statement( $info, $join_statement_print, 'Choose FOREIGN KEY column:' );
                 # Choose
                 my $fk_col = choose(
                     [ undef, map{ "- $_" } sort keys %avail_foreign_key_cols ],
-                    { prompt => 'Choose FOREIGN KEY column:', layout => 3, head => $head, undef => $info->{_reset} }
+                    { prompt => $prompt, st => 4, layout => 3, clear_screen => 1, undef => $info->{_reset} }
                 );
                 if ( ! defined $fk_col ) {
                     @primary_keys         = @old_primary_keys;
@@ -896,34 +866,15 @@ sub join_tables {
 
 
 sub print_join_statement {
-    my ( $info, $join_statement_print ) = @_;
-    $join_statement_print =~ s/(?=\sLEFT\sOUTER\sJOIN)/\n/g;
-    my $line_fold = Text::LineFold->new( %{$info->{line_fold}} );
-    $line_fold->config( 'ColMax', ( GetTerminalSize )[0] - 1 );
-    my @rows = split /\R+/, $join_statement_print;
-    print GO_TO_TOP_LEFT;
-    print CLEAR_EOS;
-    my $count = 0;
-    for my $s ( split /\R+/, $line_fold->fold( '', ' ' x 2, shift @rows ) ) {
-        say $s;
-        ++$count;
-    }
-    for my $row ( @rows ) {
-        for my $s ( split /\R+/, $line_fold->fold( ' ' x 1, ' ' x 4, $row ) ) {
-            say $s;
-            ++$count;
-        }
-    }
-    print "\n";
-    ++$count;
-    return $count;
-
+    my ( $info, $join_statement_print, $prompt ) = @_;
+    $join_statement_print =~ s/(?=\sLEFT\sOUTER\sJOIN)/\n\ /g;
+    return $join_statement_print . "\n\n$prompt";
 }
 
 
 
 sub print_select_statement {
-    my ( $info, $sql, $table ) = @_;
+    my ( $info, $sql, $table, $prompt ) = @_;
     my $cols_sql = '';
     if ( @{$sql->{print}{chosen_columns}} ) {
         $cols_sql = ' ' . join( ', ', @{$sql->{print}{chosen_columns}} );
@@ -936,35 +887,18 @@ sub print_select_statement {
         $cols_sql .= ' ' . join( ', ', @{$sql->{print}{aggregate_cols}} );
     }
     $cols_sql = ' *' if ! $cols_sql;
-    my @rows;
     my $string = "SELECT";
     $string .= $sql->{print}{distinct_stmt} if $sql->{print}{distinct_stmt};
-    $string .= $cols_sql;
-    push @rows, $string;
-    push @rows, " FROM $table";
-    push @rows, $sql->{print}{where_stmt}    if $sql->{print}{where_stmt};
-    push @rows, $sql->{print}{group_by_stmt} if $sql->{print}{group_by_stmt};
-    push @rows, $sql->{print}{having_stmt}   if $sql->{print}{having_stmt};
-    push @rows, $sql->{print}{order_by_stmt} if $sql->{print}{order_by_stmt};
-    push @rows, $sql->{print}{limit_stmt}    if $sql->{print}{limit_stmt};
-    my $line_fold = Text::LineFold->new( %{$info->{line_fold}} );
-    $line_fold->config( 'ColMax', ( GetTerminalSize )[0] );
-    print GO_TO_TOP_LEFT;
-    print CLEAR_EOS;
-    my $count = 0;
-    for my $s ( split /\R+/, $line_fold->fold( '', ' ' x 4, shift @rows ) ) {
-        say $s;
-        ++$count;
-    }
-    for my $row ( @rows ) {
-        for my $s ( split /\R+/, $line_fold->fold( ' ' x 1, ' ' x 4, $row ) ) {
-            say $s;
-            ++$count;
-        }
-    }
-    print "\n";
-    ++$count;
-    return $count;
+    $string .= $cols_sql . "\n";
+    $string .= "  FROM $table" . "\n";
+    $string .= ' ' . $sql->{print}{where_stmt}    . "\n" if $sql->{print}{where_stmt};
+    $string .= ' ' . $sql->{print}{group_by_stmt} . "\n" if $sql->{print}{group_by_stmt};
+    $string .= ' ' . $sql->{print}{having_stmt}   . "\n" if $sql->{print}{having_stmt};
+    $string .= ' ' . $sql->{print}{order_by_stmt} . "\n" if $sql->{print}{order_by_stmt};
+    $string .= ' ' . $sql->{print}{limit_stmt}    . "\n" if $sql->{print}{limit_stmt};
+    $string .= "\n";
+    $string .= $prompt if $prompt;
+    return $string;
 }
 
 
@@ -983,7 +917,7 @@ sub reset_stmts {
 
 sub read_table {
     my ( $info, $opt, $sql, $dbh, $table, $select_from_stmt, $qt_columns, $pr_columns  ) = @_;
-    my %lyt_stmt = %{$info->{lyt_h}};
+    my %lyt_stmt = %{$info->{lyt_stmt}};
     my @keys = ( qw( print_table columns aggregate distinct where group_by having order_by limit lock ) );
     my $lock = [ '  Lk0', '  Lk1' ];
     my %customize = (
@@ -1005,11 +939,11 @@ sub read_table {
     }
 
     CUSTOMIZE: while ( 1 ) {
-        my $head = print_select_statement( $info, $sql, $table );
+        my $prompt = print_select_statement( $info, $sql, $table );
         # Choose
         my $custom = choose(
             [ $customize{hidden}, undef, @customize{@keys} ],
-            { prompt => '', layout => 3, default => 1, head => $head, undef => $info->{back} }
+            { prompt => $prompt, st => 4, layout => 3, default => 1, clear_screen => 1, undef => $info->{back} }
         );
         if ( ! defined $custom ) {
             last CUSTOMIZE;
@@ -1033,13 +967,13 @@ sub read_table {
             $sql->{pr_func}{hidd} = [];
 
             COLUMNS: while ( 1 ) {
-                my $head = print_select_statement( $info, $sql, $table );
+                my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $print_col = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
+                    { prompt => $prompt, %lyt_stmt }
                 );
                 if ( ! defined $print_col ) {
                     if ( @{$sql->{quote}{chosen_columns}} ) {
@@ -1065,13 +999,13 @@ sub read_table {
             $sql->{print}{distinct_stmt} = '';
 
             DISTINCT: while ( 1 ) {
-                my $head = print_select_statement( $info, $sql, $table );
+                my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, $DISTINCT, $ALL ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $select_distinct = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt }
+                    { prompt => $prompt, %lyt_stmt }
                 );
                 if ( ! defined $select_distinct ) {
                     if ( $sql->{quote}{distinct_stmt} ) {
@@ -1101,13 +1035,13 @@ sub read_table {
             $sql->{print}{aggregate_cols} = [];
 
             AGGREGATE: while ( 1 ) {
-                my $head = print_select_statement( $info, $sql, $table );
+                my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, @{$info->{aggregate_functions}} ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $func = choose(
                     $choices,
-                    { prompt => 'Choose:', %lyt_stmt, head => $head }
+                    { prompt => $prompt, %lyt_stmt }
                 );
                 if ( ! defined $func ) {
                     if ( @{$sql->{quote}{aggregate_cols}} ) {
@@ -1119,7 +1053,7 @@ sub read_table {
                     }
                     else {
                         delete @{$qt_columns}{@{$sql->{pr_func}{aggr}}};
-                        $sql->{pr_func}{aggr}        = [];
+                        $sql->{pr_func}{aggr}         = [];
                         $sql->{quote}{aggregate_cols} = [];
                         $sql->{print}{aggregate_cols} = [];
                         last AGGREGATE;
@@ -1140,13 +1074,13 @@ sub read_table {
                 $sql->{quote}{aggregate_cols}[$next_idx] = $quote_aggregate_col;
                 $sql->{print}{aggregate_cols}[$next_idx] = $print_aggregate_col;
                 if ( ! defined $print_col ) {
-                    my $head = print_select_statement( $info, $sql, $table );
+                    my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                     # Choose
                     my $choices = [ @cols ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                     $print_col = choose(
                         $choices,
-                        { prompt => 'Choose:', %lyt_stmt, head => $head }
+                        { prompt => $prompt, %lyt_stmt }
                     );
                     if ( ! defined $print_col ) {
                         delete @{$qt_columns}{@{$sql->{pr_func}{aggr}}};
@@ -1177,14 +1111,15 @@ sub read_table {
             my $count = 0;
 
             WHERE: while ( 1 ) {
-                my $head = print_select_statement( $info, $sql, $table );
+                my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $print_col = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
+                    { prompt => $prompt, %lyt_stmt }
                 );
+
                 if ( ! defined $print_col ) {
                     if ( $sql->{quote}{where_stmt} ne " WHERE" ) {
                         $sql->{quote}{where_args} = [];
@@ -1209,13 +1144,13 @@ sub read_table {
                     last WHERE;
                 }
                 if ( $count > 0 ) {
-                    my $head = print_select_statement( $info, $sql, $table );
+                    my $promt = print_select_statement( $info, $sql, $table, 'Choose:' );
                     # Choose
                     my $choices = [ $AND, $OR ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                     $AND_OR = choose(
                         $choices,
-                        { prompt => 'Choose:', %lyt_stmt, head => $head }
+                        { prompt => $prompt, %lyt_stmt }
                     );
                     if ( ! defined $AND_OR ) {
                         $sql->{quote}{where_args} = [];
@@ -1252,13 +1187,13 @@ sub read_table {
             $sql->{print}{group_by_cols} = [];
 
             GROUP_BY: while ( 1 ) {
-                my $head = print_select_statement( $info, $sql, $table );
+                my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $print_col = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
+                    { prompt => $prompt, %lyt_stmt }
                 );
                 if ( ! defined $print_col ) {
                     if ( @{$sql->{quote}{group_by_cols}} ) {
@@ -1303,13 +1238,13 @@ sub read_table {
             my $count = 0;
 
             HAVING: while ( 1 ) {
-                my $head = print_select_statement( $info, $sql, $table );
+                my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, @{$info->{aggregate_functions}}, map( '@' . $_, @{$sql->{pr_func}{aggr}} ) ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $func = choose(
                     $choices,
-                    { prompt => 'Choose:', %lyt_stmt, head => $head }
+                    { prompt => $prompt, %lyt_stmt }
                 );
                 if ( ! defined $func ) {
                     if ( $sql->{quote}{having_stmt} ne " HAVING" ) {
@@ -1335,13 +1270,13 @@ sub read_table {
                     last HAVING;
                 }
                 if ( $count > 0 ) {
-                    my $head = print_select_statement( $info, $sql, $table );
+                    my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                     # Choose
                     my $choices = [ $AND, $OR ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                     $AND_OR = choose(
                         $choices,
-                        { prompt => 'Choose:', %lyt_stmt, head => $head }
+                        { prompt => $prompt, %lyt_stmt }
                     );
                     if ( ! defined $AND_OR ) {
                         $sql->{quote}{having_args} = [];
@@ -1370,13 +1305,13 @@ sub read_table {
                     $sql->{quote}{having_stmt} .= $AND_OR . ' ' . $func . '(';
                     $sql->{print}{having_stmt} .= $AND_OR . ' ' . $func . '(';
                     if ( ! defined $print_col ) {
-                        my $head = print_select_statement( $info, $sql, $table );
+                        my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                         # Choose
                         my $choices = [ @cols ];
                         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                         $print_col = choose(
                             $choices,
-                            { prompt => 'Choose:', %lyt_stmt, head => $head }
+                            { prompt => $prompt, %lyt_stmt }
                         );
                         if ( ! defined $print_col ) {
                             $sql->{quote}{having_args} = [];
@@ -1413,13 +1348,13 @@ sub read_table {
             $sql->{print}{order_by_stmt} = " ORDER BY";
 
             ORDER_BY: while ( 1 ) {
-                my $head = print_select_statement( $info, $sql, $table );
+                my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, @cols ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $print_col = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
+                    { prompt => $prompt, %lyt_stmt }
                 );
                 if ( ! defined $print_col ) {
                     if ( $sql->{quote}{order_by_stmt} ne " ORDER BY" ) {
@@ -1449,13 +1384,13 @@ sub read_table {
                 ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
                 $sql->{quote}{order_by_stmt} .= $info->{col_sep} . $quote_col;
                 $sql->{print}{order_by_stmt} .= $info->{col_sep} . $print_col;
-                $head = print_select_statement( $info, $sql, $table );
+                $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 $choices = [ $ASC, $DESC ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $direction = choose(
                     $choices,
-                    { prompt => 'Choose:', %lyt_stmt, head => $head }
+                    { prompt => $prompt, %lyt_stmt }
                 );
                 if ( ! defined $direction ){
                     $sql->{quote}{order_by_args} = [];
@@ -1480,13 +1415,13 @@ sub read_table {
             my ( $only_limit, $offset_and_limit ) = ( 'LIMIT', 'OFFSET-LIMIT' );
 
             LIMIT: while ( 1 ) {
-                my $head = print_select_statement( $info, $sql, $table );
+                my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, $only_limit, $offset_and_limit ];
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $choice = choose(
                     $choices,
-                    { prompt => 'Choose: ', %lyt_stmt, head => $head }
+                    { prompt => $prompt, %lyt_stmt }
                 );
                 if ( ! defined $choice ) {
                     if ( @{$sql->{quote}{limit_args}} ) {
@@ -1553,16 +1488,16 @@ sub read_table {
             }
 
             HIDDEN: while ( 1 ) {
-                my $head = print_select_statement( $info, $sql, $table );
-                # Choose
                 my $items_cc = @{$sql->{quote}{chosen_columns}};
                 my $items_gb = @{$sql->{quote}{group_by_cols}};
                 my $items_ag = @{$sql->{quote}{aggregate_cols}};
+                my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
+                # Choose
                 my @cols = map( "- $_", @{$sql->{print}{chosen_columns}}, @{$sql->{print}{group_by_cols}}, @{$sql->{print}{aggregate_cols}} );
                 my $choices = [ undef, @cols, $info->{_confirm} ];
                 my $idx = choose(
                     $choices,
-                    { prompt => 'Choose:', layout => 3, index => 1, head => $head, undef => $info->{_back} }
+                    { prompt => $prompt, st => 4, layout => 3, index => 1, clear_screen => 1, undef => $info->{_back} }
                 );
                 if ( ! defined $idx || $idx == 0 ) {
                     for my $type ( 'quote', 'print' ) {
@@ -1602,12 +1537,12 @@ sub read_table {
                     $sql->{print}{$stmt_key}[$idx] = $backup->{print}{$stmt_key}[$idx];
                     next HIDDEN;
                 }
-                $head = print_select_statement( $info, $sql, $table );
+                $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 $choices = [ undef, map( "  $_", @functions ) ];
                 my $function = choose(
                     $choices,
-                    { prompt => 'Choose:', layout => 3, head => $head, undef => $info->{_back} }
+                    { prompt => $prompt, st => 4, layout => 3, clear_screen => 1, undef => $info->{_back} }
                 );
                 if ( ! defined $function ) {
                     next HIDDEN;
@@ -1683,7 +1618,7 @@ sub read_table {
 sub set_operator_sql {
     my ( $info, $opt, $sql, $clause, $table, $cols, $qt_columns, $quote_col ) = @_;
     my ( $stmt, $args );
-    my %lyt_stmt = %{$info->{lyt_h}};
+    my %lyt_stmt = %{$info->{lyt_stmt}};
     if ( $clause eq 'where' ) {
         $stmt = 'where_stmt';
         $args = 'where_args';
@@ -1692,13 +1627,13 @@ sub set_operator_sql {
         $stmt = 'having_stmt';
         $args = 'having_args';
     }
-    my $head = print_select_statement( $info, $sql, $table );
+    my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
     # Choose
     my $choices = [ @{$opt->{menu}{operators}[v]} ];
     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
     my $operator = choose(
         $choices,
-        { prompt => 'Choose:', %lyt_stmt, head => $head }
+        { prompt => $prompt, %lyt_stmt }
     );
     if ( ! defined $operator ) {
         $sql->{quote}{$args} = [];
@@ -1721,10 +1656,10 @@ sub set_operator_sql {
             $sql->{print}{$stmt} .= '(';
 
             IN: while ( 1 ) {
-                print_select_statement( $info, $sql, $table );
+                my $prompt => print_select_statement( $info, $sql, $table );
                 # Readline
                 state $count = 1;
-                my $value = local_read_line( prompt => 'Value ' . $count++ . ': ' );
+                my $value = local_read_line( info => $prompt, prompt => 'Value ' . $count++ . ': ' );
                 if ( $value eq '' ) {
                     if ( $info->{col_sep} eq ' ' ) {
                         $sql->{quote}{$args} = [];
@@ -1743,24 +1678,24 @@ sub set_operator_sql {
             }
         }
         elsif ( $operator =~ /^(?:NOT\s)?BETWEEN\z/ ) {
-            print_select_statement( $info, $sql, $table );
+            my $prompt1 = print_select_statement( $info, $sql, $table );
             # Readline
-            my $value_1 = local_read_line( prompt => 'Value_1: ' );
+            my $value_1 = local_read_line( info => $prompt1, prompt => 'Value_1: ' );
             $sql->{quote}{$stmt} .= ' ' . '?' .      ' AND';
             $sql->{print}{$stmt} .= ' ' . $value_1 . ' AND';
             push @{$sql->{quote}{$args}}, $value_1;
-            print_select_statement( $info, $sql, $table );
+            my $prompt2 = print_select_statement( $info, $sql, $table );
             # Readline
-            my $value_2 = local_read_line( prompt => 'Value_2: ' );
+            my $value_2 = local_read_line( info => $prompt2, prompt => 'Value_2: ' );
             $sql->{quote}{$stmt} .= ' ' . '?';
             $sql->{print}{$stmt} .= ' ' . $value_2;
             push @{$sql->{quote}{$args}}, $value_2;
         }
         elsif ( $operator =~ /REGEXP\z/ ) {
             $sql->{print}{$stmt} .= ' ' . $operator;
-            print_select_statement( $info, $sql, $table );
+            my $prompt = print_select_statement( $info, $sql, $table );
             # Readline
-            my $value = local_read_line( prompt => 'Pattern: ' );
+            my $value = local_read_line( info => $prompt, prompt => 'Pattern: ' );
             $value = '^$' if ! length $value;
             if ( $info->{db_type} eq 'sqlite' ) {
                 $value = qr/$value/i if ! $opt->{sql}{regexp_case}[v];
@@ -1772,9 +1707,9 @@ sub set_operator_sql {
             push @{$sql->{quote}{$args}}, $value;
         }
         else {
-            print_select_statement( $info, $sql, $table );
+            my $prompt = print_select_statement( $info, $sql, $table );
             # Readline
-            my $value = local_read_line( prompt => $operator =~ /LIKE\z/ ? 'Pattern: ' : 'Value: ' );
+            my $value = local_read_line( info => $prompt, prompt => $operator =~ /LIKE\z/ ? 'Pattern: ' : 'Value: ' );
             $sql->{quote}{$stmt} .= ' ' . '?';
             $sql->{print}{$stmt} .= ' ' . "'$value'";
             push @{$sql->{quote}{$args}}, $value;
@@ -1789,13 +1724,13 @@ sub set_operator_sql {
         $operator =~ s/^\s+|\s+\z//g;
         $sql->{quote}{$stmt} .= ' ' . $operator;
         $sql->{print}{$stmt} .= ' ' . $operator;
-        my $head = print_select_statement( $info, $sql, $table );
+        my $prompt = print_select_statement( $info, $sql, $table, "$operator:" );
         # choose
         my $choices = [ @$cols ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
         my $print_col = choose(
             $choices,
-            { prompt => "$operator: ", %lyt_stmt, head => $head }
+            { prompt => $prompt, %lyt_stmt }
         );
         if ( ! defined $print_col ) {
             $sql->{quote}{$stmt} = '';
@@ -2570,9 +2505,20 @@ sub print_error_message {
 
 sub local_read_line {
     my %args = @_;
+    if ( defined $args{info} ) {
+        my $line_fold = Text::LineFold->new(
+            Charset=> 'utf-8',
+            ColMax => ( GetTerminalSize )[0],
+            OutputCharset => '_UNICODE_',
+            Urgent => 'FORCE'
+        );
+        print GO_TO_TOP_LEFT;
+        print CLEAR_EOS;
+        print $line_fold->fold( '', ' ' x 4, $args{info} );
+    }
+    print $args{prompt};
     ReadMode 'noecho' if $args{no_echo};
     my $line;
-    print $args{prompt};
     while ( ! defined( $line ) ) {
         $line = ReadLine( -1 );
     }
@@ -2719,34 +2665,13 @@ sub choose_list {
     my $length_key = $gcs_cur->columns > $gcs_new->columns ? $gcs_cur->columns : $gcs_new->columns;
     my $line_fold = Text::LineFold->new( %{$info->{line_fold}} );
     while ( 1 ) {
-        my ( $terminal_width ) = GetTerminalSize;
-        my $key1 = $key_cur;
-        my $key2 = $key_new;
-        $line_fold->config( 'ColMax', $terminal_width - $length_key );
-        my $text1 = $line_fold->fold( '' , '', join ', ', map { "\"$_\"" } @$current );
-        my $text2 = $line_fold->fold( '' , '', join ', ', map { "\"$_\"" } @$new );
-        $text1 = ' ' if ! $text1;
-        $text2 = ' ' if ! $text2;
-        print GO_TO_TOP_LEFT;
-        print CLEAR_EOS;
-
-        my $head = 0;
-        for my $row ( split /\R+/, $text1 ) {
-            printf "%${length_key}s%s\n", $key1, $row;
-            $key1 = '';
-            $head++;
-        }
-        for my $row ( split /\R+/, $text2 ) {
-            printf "%${length_key}s%s\n", $key2, $row;
-            $key2 = '';
-            $head++;
-        }
-        print "\n";
-        $head++;
+        my $prompt = $key_cur . join( ', ', map { "\"$_\"" } @$current ) . "\n";
+        $prompt   .= $key_new . join( ', ', map { "\"$_\"" } @$new )     . "\n\n";
+        $prompt   .= 'Choose:';
         # Choose
         my $filter_type = choose(
             [ undef, map( "- $_", @$available ), $info->{_confirm} ],
-            { prompt => 'Choose:', layout => 3, head => $head, undef => $info->{_back} }
+            { prompt => $prompt, st => $length_key, layout => 3, undef => $info->{_back} }    #, head => $head
         );
         return if ! defined $filter_type;
         if ( $filter_type eq $info->{_confirm} ) {

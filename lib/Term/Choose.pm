@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.046';
+our $VERSION = '1.047';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -19,7 +19,6 @@ use Unicode::GCString;
 use constant {
     ROW     => 0,
     COL     => 1,
-
     MIN     => 0,
     MAX     => 1,
 };
@@ -129,22 +128,22 @@ sub _getch {
                     }
                 }
                 elsif ( $c4 =~ /^[;0-9]$/ ) { # response to "\e[6n"
-                    my $abs_curs_Y = $c3;
+                    my $abs_curs_y = $c3;
                     my $ry = $c4;
                     while ( $ry =~ m/^[0-9]$/ ) {
-                        $abs_curs_Y .= $ry;
+                        $abs_curs_y .= $ry;
                         $ry = ReadKey 0;
                     }
                     return NEXT_getch if $ry ne ';';
-                    my $abs_curs_X = '';
+                    my $abs_curs_x = '';
                     my $rx = ReadKey 0;
                     while ( $rx =~ m/^[0-9]$/ ) {
-                        $abs_curs_X .= $rx;
+                        $abs_curs_x .= $rx;
                         $rx = ReadKey 0;
                     }
                     if ( $rx eq 'R' ) {
-                        $arg->{abs_curs_Y} = $abs_curs_Y;
-                        $arg->{abs_curs_X} = $abs_curs_X; # unused
+                        $arg->{abs_cursor_y} = $abs_curs_y;
+                        $arg->{abs_cursor_x} = $abs_curs_x; # unused
                     }
                     return NEXT_getch;
                 }
@@ -161,8 +160,7 @@ sub _getch {
                 my $event_type = ord( ReadKey 0 ) - 32;
                 my $x          = ord( ReadKey 0 ) - 32;
                 my $y          = ord( ReadKey 0 ) - 32;
-                my $button_released = 0;
-                return _handle_mouse( $arg, $event_type, $x, $y, $button_released );
+                return _handle_mouse( $arg, $event_type, $x, $y );
             }
             elsif ( $c3 eq '<' && $arg->{mouse} ) {  # SGR 1006
                 my $event_type = '';
@@ -184,7 +182,8 @@ sub _getch {
                 }
                 return NEXT_getch if $m3 !~ /^[mM]$/;
                 my $button_released = $m3 eq 'm' ? 1 : 0;
-                return _handle_mouse( $arg, $event_type, $x, $y, $button_released );
+                return NEXT_getch if $button_released;
+                return _handle_mouse( $arg, $event_type, $x, $y );
             }
             else {
                 return NEXT_getch;
@@ -252,7 +251,7 @@ sub _init_scr {
 
 sub DESTROY {
     my $self = shift;
-    print CR, UP x ( $self->{screen_row} + $self->{prompt_lines} );
+    print CR, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
     print CLEAR_TO_END_OF_SCREEN;
     print RESET;
     if ( $self->{mouse} ) {
@@ -357,7 +356,7 @@ sub _validate_option {
         page            => [ 0,       1 ],
         prompt          => '',
         screen_width    => [ 1 ,    100 ],
-        ##st              => [ 1,  $limit ],
+        st              => [ 0,  $limit ],
         undef           => '',
     };
     my $warn = 0;
@@ -408,12 +407,12 @@ sub _set_layout {
     $config->{limit}            //= 100_000;
     $config->{mouse}            //= 0;
     $config->{order}            //= 1;
-    $config->{pad}              //= 2; # before "pad_one_row"
+    $config->{pad}              //= 2;
     $config->{pad_one_row}      //= $config->{pad};
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
     #$config->{screen_width}    //= undef;
-    ##$config->{st}              //= undef;
+    #$config->{st}              //= undef;
     $config->{undef}            //= '<undef>';
     return $config;
 }
@@ -433,9 +432,9 @@ sub _set_default_cell {
         # }
     }
     while ( $arg->{tmp_cursor}[ROW] > $arg->{p_end} ) {
-        $arg->{top_listrow} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) + 1 );
-        $arg->{cursor}[ROW] = $arg->{top_listrow};
-        $arg->{p_begin} = $arg->{top_listrow};
+        $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) + 1 );
+        $arg->{cursor}[ROW] = $arg->{row_on_top};
+        $arg->{p_begin} = $arg->{row_on_top};
         $arg->{p_end} = $arg->{p_begin} + $arg->{avail_height} - 1;
         $arg->{p_end} = $#{$arg->{rowcol2list}} if $arg->{p_end} > $#{$arg->{rowcol2list}};
     }
@@ -474,7 +473,7 @@ sub _prepare_promptline {
     utf8::upgrade( $arg->{prompt} );
     my $gcs_prompt = Unicode::GCString->new( $arg->{prompt} );
     if ( $arg->{prompt} !~ /\n/ && $gcs_prompt->columns() <= $arg->{avail_width} ) {
-        $arg->{prompt_lines} = 1;
+        $arg->{nr_prompt_lines} = 1;
         $arg->{prompt_copy} = $arg->{prompt} . "\n\r";
     }
     else {
@@ -484,13 +483,13 @@ sub _prepare_promptline {
             OutputCharset => '_UNICODE_',
             Urgent => 'FORCE'
         );
-        #if ( $arg->{st} ) {
-        #    $arg->{prompt_copy} = $line_fold->fold( '', ' ' x $arg->{st}, $arg->{prompt} );
-        #}
-        #else {
+        if ( $arg->{st} ) {
+            $arg->{prompt_copy} = $line_fold->fold( '', ' ' x $arg->{st}, $arg->{prompt} );
+        }
+        else {
             $arg->{prompt_copy} = $line_fold->fold( $arg->{prompt}, 'PLAIN' );
-        #}
-        $arg->{prompt_lines} = $arg->{prompt_copy} =~ s/\n/\n\r/g;
+        }
+        $arg->{nr_prompt_lines} = $arg->{prompt_copy} =~ s/\n/\n\r/g;
     }
 }
 
@@ -511,13 +510,13 @@ sub _write_first_screen {
     }
     $arg->{avail_width} = 1 if $arg->{avail_width}  < 1;
     if ( $arg->{prompt} eq '' ) {
-        $arg->{prompt_lines} = 0;
+        $arg->{nr_prompt_lines} = 0;
     }
     else {
         _prepare_promptline( $arg );
     }
     $arg->{tail} = $arg->{page} ? 1 : 0;
-    $arg->{avail_height} -= $arg->{prompt_lines} + $arg->{tail};
+    $arg->{avail_height} -= $arg->{nr_prompt_lines} + $arg->{tail};
     $arg->{avail_height} -= $arg->{head} if defined $arg->{head};
     ##########
     if ( $arg->{avail_height} < 4 ) {
@@ -534,25 +533,26 @@ sub _write_first_screen {
     _size_and_layout( $arg );
     _prepare_page_number( $arg ) if $arg->{page};
     $arg->{avail_height_idx} = $arg->{avail_height} - 1;
-    $arg->{p_begin}     = 0;
-    $arg->{p_end}       = $arg->{avail_height_idx};
-    $arg->{p_end}       = $#{$arg->{rowcol2list}} if $arg->{avail_height_idx} > $#{$arg->{rowcol2list}};
-    $arg->{marked}      = [];
-    $arg->{top_listrow} = 0;
-    $arg->{screen_row}  = 0;
-    $arg->{cursor}      = [ 0, 0 ];
+    $arg->{p_begin}    = 0;
+    $arg->{p_end}      = $arg->{avail_height_idx};
+    $arg->{p_end}      = $#{$arg->{rowcol2list}} if $arg->{avail_height_idx} > $#{$arg->{rowcol2list}};
+    $arg->{marked}     = [];
+    $arg->{row_on_top} = 0;
+    $arg->{screen_row} = 0;
+    $arg->{cursor}     = [ 0, 0 ];
     _set_default_cell( $arg ) if defined $arg->{default} && $arg->{default} <= $#{$arg->{list}};
-    # No printing before clear_screen!
     if ( $arg->{clear_screen} ) {
         print CLEAR_SCREEN;
         print GO_TO_TOP_LEFT;
     }
     print $arg->{prompt_copy} if $arg->{prompt} ne '';
     _wr_screen( $arg );
-    $arg->{abs_curs_X} = 0;
-    $arg->{abs_curs_Y} = 0;
-    print GET_CURSOR_POSITION if $arg->{mouse}; # in: abs_curs_X, abs_curs_Y
-    $arg->{cursor_row} = $arg->{screen_row}; # needed by _handle_mouse
+    if ( $arg->{mouse} ) {
+        $arg->{abs_cursor_x} = 0;
+        $arg->{abs_cursor_y} = 0;
+        print GET_CURSOR_POSITION;
+        $arg->{cursor_row} = $arg->{screen_row};
+    }
 }
 
 
@@ -612,7 +612,7 @@ sub choose {
         next if $c == KEY_Tilde;
         if ( $arg->{size_changed} ) {
             $arg->{list} = _copy_orig_list( $arg );
-            print CR, UP x ( $arg->{screen_row} + $arg->{prompt_lines} );
+            print CR, UP x ( $arg->{screen_row} + $arg->{nr_prompt_lines} );
             _write_first_screen( $arg );
             $arg->{size_changed} = 0;
             next;
@@ -642,7 +642,7 @@ sub choose {
                     _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
                 }
                 else {
-                    $arg->{top_listrow} = $arg->{cursor}[ROW];
+                    $arg->{row_on_top} = $arg->{cursor}[ROW];
                     $arg->{p_begin} = $arg->{p_end} + 1;
                     $arg->{p_end}   = $arg->{p_end} + $arg->{avail_height};
                     $arg->{p_end}   = $#{$arg->{rowcol2list}} if $arg->{p_end} > $#{$arg->{rowcol2list}};
@@ -665,7 +665,7 @@ sub choose {
                     _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
                 }
                 else {
-                    $arg->{top_listrow} = $arg->{cursor}[ROW] - ( $arg->{avail_height} - 1 );
+                    $arg->{row_on_top} = $arg->{cursor}[ROW] - ( $arg->{avail_height} - 1 );
                     $arg->{p_end}   = $arg->{p_begin} - 1;
                     $arg->{p_begin} = $arg->{p_begin} - $arg->{avail_height};
                     $arg->{p_begin} = 0 if $arg->{p_begin} < 0;
@@ -691,7 +691,7 @@ sub choose {
                         _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
                     }
                     else {
-                        $arg->{top_listrow} = $arg->{cursor}[ROW];
+                        $arg->{row_on_top} = $arg->{cursor}[ROW];
                         $arg->{p_begin} = $arg->{p_end} + 1;
                         $arg->{p_end}   = $arg->{p_end} + $arg->{avail_height};
                         $arg->{p_end}   = $#{$arg->{rowcol2list}} if $arg->{p_end} > $#{$arg->{rowcol2list}};
@@ -719,7 +719,7 @@ sub choose {
                         _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
                     }
                     else {
-                        $arg->{top_listrow} = $arg->{cursor}[ROW] - ( $arg->{avail_height} - 1 );
+                        $arg->{row_on_top} = $arg->{cursor}[ROW] - ( $arg->{avail_height} - 1 );
                         $arg->{p_end}   = $arg->{p_begin} - 1;
                         $arg->{p_begin} = $arg->{p_begin} - $arg->{avail_height};
                         $arg->{p_begin} = 0 if $arg->{p_begin} < 0;
@@ -755,13 +755,13 @@ sub choose {
                 _beep( $arg );
             }
             else {
-                $arg->{top_listrow} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) - 1 );
-                $arg->{cursor}[ROW] = $arg->{top_listrow};
+                $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) - 1 );
+                $arg->{cursor}[ROW] = $arg->{row_on_top};
                 if ( defined $arg->{backup_col} ) {
                     $arg->{cursor}[COL] = $arg->{backup_col};
                     $arg->{backup_col} = undef;
                 }
-                $arg->{p_begin} = $arg->{top_listrow};
+                $arg->{p_begin} = $arg->{row_on_top};
                 $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
                 _wr_screen( $arg );
             }
@@ -771,15 +771,15 @@ sub choose {
                 _beep( $arg );
             }
             else {
-                $arg->{top_listrow} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) + 1 );
-                $arg->{cursor}[ROW] = $arg->{top_listrow};
+                $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) + 1 );
+                $arg->{cursor}[ROW] = $arg->{row_on_top};
                 # if it remains only the last row (which is then also the first row) for the last page
                 # and the column in use doesn't exist in the last row, then backup col
-                if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{cursor}[COL] >= $arg->{rest}) {
+                if ( $arg->{row_on_top} == $#{$arg->{rowcol2list}} && $arg->{rest} && $arg->{cursor}[COL] >= $arg->{rest}) {
                     $arg->{backup_col} = $arg->{cursor}[COL];
                     $arg->{cursor}[COL] = $#{$arg->{rowcol2list}[$arg->{cursor}[ROW]]};
                 }
-                $arg->{p_begin} = $arg->{top_listrow};
+                $arg->{p_begin} = $arg->{row_on_top};
                 $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
                 $arg->{p_end}   = $#{$arg->{rowcol2list}} if $arg->{p_end} > $#{$arg->{rowcol2list}};
                 _wr_screen( $arg );
@@ -790,10 +790,10 @@ sub choose {
                 _beep( $arg );
             }
             else {
-                $arg->{top_listrow} = 0;
-                $arg->{cursor}[ROW] = $arg->{top_listrow};
+                $arg->{row_on_top} = 0;
+                $arg->{cursor}[ROW] = $arg->{row_on_top};
                 $arg->{cursor}[COL] = 0;
-                $arg->{p_begin} = $arg->{top_listrow};
+                $arg->{p_begin} = $arg->{row_on_top};
                 $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
                 $arg->{p_end}   = $#{$arg->{rowcol2list}} if $arg->{p_end} > $#{$arg->{rowcol2list}};
                 _wr_screen( $arg );
@@ -805,16 +805,16 @@ sub choose {
                     _beep( $arg );
                 }
                 else {
-                    $arg->{top_listrow}  = @{$arg->{rowcol2list}} - ( @{$arg->{rowcol2list}} % $arg->{avail_height} || $arg->{avail_height} );
+                    $arg->{row_on_top} = @{$arg->{rowcol2list}} - ( @{$arg->{rowcol2list}} % $arg->{avail_height} || $arg->{avail_height} );
                     $arg->{cursor}[ROW] = $#{$arg->{rowcol2list}} - 1;
                     $arg->{cursor}[COL] = $#{$arg->{rowcol2list}[$arg->{cursor}[ROW]]};
-                    if ( $arg->{top_listrow} == $#{$arg->{rowcol2list}} ) {
-                        $arg->{top_listrow} = $arg->{top_listrow} - $arg->{avail_height};
-                        $arg->{p_begin}  = $arg->{top_listrow};
-                        $arg->{p_end}    = $arg->{p_begin} + $arg->{avail_height} - 1;
+                    if ( $arg->{row_on_top} == $#{$arg->{rowcol2list}} ) {
+                        $arg->{row_on_top} = $arg->{row_on_top} - $arg->{avail_height};
+                        $arg->{p_begin} = $arg->{row_on_top};
+                        $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
                     }
                     else {
-                        $arg->{p_begin} = $arg->{top_listrow};
+                        $arg->{p_begin} = $arg->{row_on_top};
                         $arg->{p_end}   = $#{$arg->{rowcol2list}};
                     }
                     _wr_screen( $arg );
@@ -825,10 +825,10 @@ sub choose {
                     _beep( $arg );
                 }
                 else {
-                    $arg->{top_listrow} = @{$arg->{rowcol2list}} - ( @{$arg->{rowcol2list}} % $arg->{avail_height} || $arg->{avail_height} );
+                    $arg->{row_on_top} = @{$arg->{rowcol2list}} - ( @{$arg->{rowcol2list}} % $arg->{avail_height} || $arg->{avail_height} );
                     $arg->{cursor}[ROW] = $#{$arg->{rowcol2list}};
                     $arg->{cursor}[COL] = $#{$arg->{rowcol2list}[$arg->{cursor}[ROW]]};
-                    $arg->{p_begin} = $arg->{top_listrow};
+                    $arg->{p_begin} = $arg->{row_on_top};
                     $arg->{p_end}   = $#{$arg->{rowcol2list}};
                     _wr_screen( $arg );
                 }
@@ -897,7 +897,7 @@ sub choose {
             _beep( $arg );
         }
     }
-    warn "choose: shouldn't reach here ...\n";
+    die "choose: shouldn't reach here ...\n";
 }
 
 
@@ -928,10 +928,10 @@ sub _wr_screen {
     if ( $arg->{page} && $arg->{pp} > 1 ) {
         _goto( $arg, $arg->{avail_height_idx} + $arg->{tail}, 0 );
         if ( $arg->{pp_printf_type} == 0 ) {
-            printf $arg->{pp_printf_fmt}, $arg->{width_pp}, int( $arg->{top_listrow} / $arg->{avail_height} ) + 1, $arg->{pp};
+            printf $arg->{pp_printf_fmt}, $arg->{width_pp}, int( $arg->{row_on_top} / $arg->{avail_height} ) + 1, $arg->{pp};
         }
         elsif ( $arg->{pp_printf_type} == 1 ) {
-            printf $arg->{pp_printf_fmt}, $arg->{width_pp}, $arg->{width_pp}, int( $arg->{top_listrow} / $arg->{avail_height} ) + 1;
+            printf $arg->{pp_printf_fmt}, $arg->{width_pp}, $arg->{width_pp}, int( $arg->{row_on_top} / $arg->{avail_height} ) + 1;
         }
      }
     for my $row ( $arg->{p_begin} .. $arg->{p_end} ) {
@@ -954,13 +954,13 @@ sub _wr_cell {
                 $lngth += $arg->{pad_one_row};
             }
         }
-        _goto( $arg, $row - $arg->{top_listrow}, $lngth );
+        _goto( $arg, $row - $arg->{row_on_top}, $lngth );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
         print REVERSE         if $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
         print $arg->{list}[$arg->{rowcol2list}[$row][$col]];
     }
     else {
-        _goto( $arg, $row - $arg->{top_listrow}, $col * $arg->{col_width} );
+        _goto( $arg, $row - $arg->{row_on_top}, $col * $arg->{col_width} );
         print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
         print REVERSE         if $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
         print _unicode_sprintf( $arg, $arg->{list}[$arg->{rowcol2list}[$row][$col]] );
@@ -1111,8 +1111,7 @@ sub _unicode_sprintf {
 
 
 sub _handle_mouse {
-    my ( $arg, $event_type, $x, $y, $button_released ) = @_;
-    return NEXT_getch if $button_released;
+    my ( $arg, $event_type, $abs_mouse_x, $abs_mouse_y ) = @_;
     my $button_drag = ( $event_type & 0x20 ) >> 5;
     return NEXT_getch if $button_drag;
     my $button_number;
@@ -1128,16 +1127,16 @@ sub _handle_mouse {
             $button_number = $low_2_bits + 1; # 1, 2, 3
         }
     }
-    my $top_row = $arg->{abs_curs_Y} - $arg->{cursor_row};
     if ( $button_number == 4 ) {
         return KEY_PAGE_UP;
     }
     elsif ( $button_number == 5 ) {
         return KEY_PAGE_DOWN;
     }
-    return NEXT_getch if $y < $top_row;
-    my $mouse_row = $y - $top_row;
-    my $mouse_col = $x;
+    my $pos_top_row = $arg->{abs_cursor_y} - $arg->{cursor_row};
+    return NEXT_getch if $abs_mouse_y < $pos_top_row;
+    my $mouse_row = $abs_mouse_y - $pos_top_row;
+    my $mouse_col = $abs_mouse_x;
     my( $found_row, $found_col );
     my $found = 0;
     if ( $#{$arg->{rowcol2list}} == 0 ) {
@@ -1155,7 +1154,7 @@ sub _handle_mouse {
                 }
                 if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
                     $found = 1;
-                    $found_row = $row + $arg->{top_listrow};
+                    $found_row = $row + $arg->{row_on_top};
                     $found_col = $col;
                     last;
                 }
@@ -1177,7 +1176,7 @@ sub _handle_mouse {
                     }
                     if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
                         $found = 1;
-                        $found_row = $row + $arg->{top_listrow};
+                        $found_row = $row + $arg->{row_on_top};
                         $found_col = $col;
                         last;
                     }
@@ -1195,12 +1194,12 @@ sub _handle_mouse {
         $return_char = KEY_SPACE;
     }
     else {
-        return NEXT_getch; # xterm
+        return NEXT_getch;
     }
     if ( $found_row != $arg->{cursor}[ROW] || $found_col != $arg->{cursor}[COL] ) {
-        my $t = $arg->{cursor};
+        my $tmp = $arg->{cursor};
         $arg->{cursor} = [ $found_row, $found_col ];
-        _wr_cell( $arg, $t->[0], $t->[1] );
+        _wr_cell( $arg, $tmp->[0], $tmp->[1] );
         _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
     }
     return $return_char;
@@ -1223,7 +1222,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.046
+Version 1.047
 
 =cut
 
@@ -1563,7 +1562,7 @@ Use I<head> instead.
 
 =head4 head
 
-This option is experimental.
+This option is experimental!
 
 Reduces the available terminal rows by I<head> rows.
 
@@ -1573,9 +1572,23 @@ Allowed values: 0 or greater
 
 (default: undef)
 
+=head4 st
+
+This option is experimental!!
+
+Subsequent Tab: If I<prompt> lines are folded setting I<st> inserts I<st> spaces at beginning of all broken lines apart from the beginning of paragrafhs.
+
+See SUBSEQUENT_TAB in L<Text::LineFold>.
+
+Allowed values: 0 or greater
+
+(default: undef)
+
 =head4 ll
 
-This option is experimental.
+This option is experimental!
+
+The meaning of this option may change with the next release.
 
 If the length of the element with the largest length is known before calling I<choose> it can be passed with this option.
 

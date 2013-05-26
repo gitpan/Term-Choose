@@ -1,6 +1,12 @@
 Revision history for Term::Choose
 
 
+1.047   2013-05-26
+        - Added experimental option "st".
+        - Code cleanup.
+        - Update documentation.
+        - Update example.
+
 1.046   2013-05-25
         - Added support for multi-line prompt.
         - Added "Text::LineFold" as a required module.
@@ -11,7 +17,7 @@ Revision history for Term::Choose
 
 1.045   2013-05-24
         - Added extended SGR mouse mode (1006) support.
-        - The mouse wheel scrolls now page-wise instead of lines-wise.
+        - The mouse wheel scrolls now page-wise instead of line-wise.
         - Updated documentation.
         - Updated example.
 
