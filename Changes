@@ -1,6 +1,13 @@
 Revision history for Term::Choose
 
 
+1.048   2013-05-29
+        - Code refactoring: reuse the length of strings calculated in "_length_longest".
+        - Removed deprecated option name "keep".
+        - Update documentation.
+        - Removed option "max-depth" from the example.
+        - Update example.
+
 1.047   2013-05-26
         - Added experimental option "st".
         - Code cleanup.

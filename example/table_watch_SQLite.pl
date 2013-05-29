@@ -5,7 +5,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.047
+# Version 1.048
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -29,10 +29,8 @@ use Unicode::GCString;
 use constant {
     GO_TO_TOP_LEFT => "\e[1;1H",
     CLEAR_EOS      => "\e[0J",
-};
-use constant {
-    v   => 0,
-    chs => 1,
+    v              => 0,
+    chs            => 1,
 };
 
 my $home = File::HomeDir->my_home();
@@ -97,9 +95,8 @@ sub help {
 Usage:
     table_watch_SQLite.pl [-h|--help]   (SQLite/MySQL/PostgreSQL)
 
-    table_watch_SQLite.pl [-s|--search] [-m|--max-depth] [directories to be searched] (only SQLite)
+    table_watch_SQLite.pl [-s|--search] [directories to be searched] (only SQLite)
       -s|--search   : new search of SQLite databases instead of using cached data.
-      -m|--max-depth: levels to descend at most when searching in directories for SQLite databases.
     If no directories are passed the home directory is searched for SQLite databases.
 
 Options:
@@ -110,7 +107,7 @@ Options:
     Undef          : Set the string that will be shown on the screen if a table value is undefined.
     Rows           : Set the maximum number of table rows available at once.
     ProgressBar    : Set the progress bar threshold. The threshold refers to the list size.
-    Expand
+    Expand         : Set behavior of different menus.
     Length         : Choose the function which should investigate the string length on output.
                         "mbswidth" or "gcstring"
                         "mbswidth" is probably faster but may not support recently added unicode characters.
@@ -118,7 +115,7 @@ Options:
     Database types : Choose the needed database types.
     Operators      : Choose the needed operators.
     Separator      : Choose the thousands separator displayed in menus.
-    Sssc mode      : With the Sssc mode "compat" enabled back-arrows are offered in the sql "sub-statement" menu.
+    Sssc mode      : With the Sssc mode "compat" enabled back-arrows are offered in the sql "sub-statement" menus.
                      To reset a sql "sub-statement" (e.g WHERE) in the "simple" mode re-enter into
                      the "sub-statement" and choose '- OK -' or use the "q" key.
 
@@ -149,13 +146,19 @@ my $default_operators = [ "REGEXP", " = ", " != ", " < ", " > ", "IS NULL", "IS 
 
 my $opt = {
     print => {
-        tab_width      => [ 2,      '- Tabwidth' ],
-        min_col_width  => [ 30,     '- Colwidth' ],
-        undef          => [ '',     '- Undef' ],
-        limit          => [ 80_000, '- Rows' ],
-        progress_bar   => [ 20_000, '- ProgressBar' ],
-        expand         => [ 1,      '- Expand' ],
-        fast_width     => [ 0,      '- Length' ]
+        tab_width       => [ 2,      '- Tabwidth' ],
+        min_col_width   => [ 30,     '- Colwidth' ],
+        undef           => [ '',     '- Undef' ],
+        limit           => [ 80_000, '- Rows' ],
+        progress_bar    => [ 20_000, '- ProgressBar' ],
+
+        expand          => [ 1,      '- Expand' ],
+        choose_database => [ 0,      '- Choose Database' ],
+        choose_schema   => [ 0,      '- Choose Schema' ],
+        choose_table    => [ 0,      '- Choose Table' ],
+        print_table     => [ 1,      '- Print  Table' ],
+
+        fast_width      => [ 0,      '- Length' ]
     },
     sql => {
         lock_stmt      => [ 0, '- Lock' ],
@@ -174,7 +177,6 @@ my $opt = {
     },
     sqlite => {
         reset_cache         => [ 0,       '- New search' ],
-        max_depth           => [ undef,   '- Max depth' ],
         unicode             => [ 1,       '- Unicode' ],
         see_if_its_a_number => [ 1,       '- See if its a number' ],
         busy_timeout        => [ 3_000,   '- Busy timeout (ms)' ],
@@ -195,18 +197,18 @@ my $opt = {
 };
 
 $info->{option_sections} = [ qw( print sql menu dbs ) ];
-$info->{print}{keys}     = [ qw( tab_width min_col_width undef limit progress_bar expand fast_width ) ];
-
+$info->{print}{keys}     = [ qw( tab_width min_col_width undef limit progress_bar expand 
+                                 choose_database choose_schema choose_table print_table fast_width ) ];
 $info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case ) ];
 $info->{dbs}{keys}       = [ qw( db_login db_defaults ) ];
 $info->{menu}{keys}      = [ qw( thsd_sep database_types operators sssc_mode ) ];
-
 $info->{db_sections}     = [ qw( sqlite mysql postgres ) ];
-$info->{sqlite}{keys}    = [ qw( reset_cache max_depth unicode see_if_its_a_number busy_timeout cache_size binary_filter ) ];
+$info->{sqlite}{keys}    = [ qw( reset_cache unicode see_if_its_a_number busy_timeout cache_size binary_filter ) ];
 $info->{mysql}{keys}     = [ qw( enable_utf8 connect_timeout bind_type_guessing ChopBlanks binary_filter ) ];
 $info->{postgres}{keys}  = [ qw( pg_enable_utf8 binary_filter ) ];
 
-$info->{sqlite}{commandline_only} = [ qw( reset_cache max_depth ) ];
+$info->{sub_expand}{print} = [ qw( choose_database choose_schema choose_table print_table ) ];
+$info->{cmdline_only}{sqlite} = [ qw( reset_cache ) ];
 
 for my $section ( @{$info->{option_sections}}, @{$info->{db_sections}} ) {
     if ( join( ' ', sort keys %{$opt->{$section}} ) ne join( ' ', sort @{$info->{$section}{keys}} ) ) {
@@ -220,9 +222,8 @@ if ( ! eval {
     $opt = read_config_file( $opt, $info->{config_file} );
     my $help;
     GetOptions (
-        'h|help'        => \$help,
-        's|search'      => \$opt->{sqlite}{reset_cache}[v],
-        'm|max-depth:i' => \$opt->{sqlite}{max_depth}[v],
+        'h|help'   => \$help,
+        's|search' => \$opt->{sqlite}{reset_cache}[v],
     );
     $opt = options( $info, $opt ) if $help;
     1 }
@@ -233,17 +234,23 @@ if ( ! eval {
 }
 
 $info->{ok} = '<OK>' if $opt->{menu}{sssc_mode}[v];
-
+my $sqlite_search = $opt->{sqlite}{reset_cache}[v] ? 1 : 0;
 
 
 DB_TYPES: while ( 1 ) {
 
-    $info->{db_type} = choose(
-        [ undef, @{$opt->{menu}{database_types}[v]} ],
-        { prompt => 'Database Type: ', %{$info->{lyt_h}}, undef => 'Quit' }
-    );
-    last DB_TYPES if ! defined $info->{db_type};
-    $info->{db_type} =~ s/^\s|\s\z//g;
+    if ( $sqlite_search ) {
+        $info->{db_type} = 'sqlite';
+        $sqlite_search = 0;
+    }
+    else {
+        $info->{db_type} = choose(
+            [ undef, @{$opt->{menu}{database_types}[v]} ],
+            { prompt => 'Database Type: ', %{$info->{lyt_h}}, undef => 'Quit' }
+        );
+        last DB_TYPES if ! defined $info->{db_type};
+        $info->{db_type} =~ s/^\s|\s\z//g;
+    }
 
     $info->{cached} = '';
     my $db_type = $info->{db_type};
@@ -285,18 +292,31 @@ DB_TYPES: while ( 1 ) {
     my $new_db_settings = 0;
     my $db;
     my $data = {};
-    my %lyt_v_cs = ( layout => 3, clear_screen => 1 );
+    my %lyt_v_cs = ( layout => 3, index => 1, clear_screen => 1, undef => $info->{_back} );
+    my $old_idx_db = 0;
 
     DATABASES: while ( 1 ) {
 
         if ( ! $new_db_settings ) {
             # $data = {};
             # Choose
-            $db = choose(
-                [ undef, @$databases ],
-                { prompt => 'Choose Database' . $info->{cached}, %lyt_v_cs, undef => 'BACK' }
+            my $t = $db_type eq 'sqlite' ? '' : ' ' x 2;
+            my $choices = [ undef, @$databases ];
+            my $idx_db = choose(
+                $choices,
+                { prompt => 'Choose Database' . $info->{cached}, default => $old_idx_db, %lyt_v_cs, undef => $t . 'BACK' }
             );
+            $db = $choices->[$idx_db] if defined $idx_db;
             next DB_TYPES if ! defined $db;
+            if ( $opt->{print}{choose_database}[v] ) {
+                if ( $old_idx_db == $idx_db ) {
+                    $old_idx_db = 0;
+                    next DATABASES;
+                }
+                else {
+                    $old_idx_db = $idx_db;
+                }
+            }
             $db =~ s/^[-\ ]\s// if $db_type ne 'sqlite';
         }
         else {
@@ -317,6 +337,7 @@ DB_TYPES: while ( 1 ) {
             # remove database from @databases
             next DATABASES;
         }
+        my $old_idx_sch = 0;
 
         SCHEMA: while ( 1 ) {
 
@@ -325,6 +346,8 @@ DB_TYPES: while ( 1 ) {
                 $schema = $data->{$db}{schemas}[0];
             }
             elsif ( @{$data->{$db}{schemas}} > 1 ) {
+                my $choices;
+                my $idx_sch;
                 if ( $opt->{sql}{system_info}[v] && $db_type eq 'postgres' ) {
                     my @system;
                     my @normal;
@@ -336,25 +359,34 @@ DB_TYPES: while ( 1 ) {
                             push @normal, $schema;
                         }
                     }
-                    # Choose
-                    $schema = choose(
-                        [ undef, map( "- $_", @normal ), map( "  $_", @system ) ],
-                        { prompt => 'DB "'. basename( $db ) . '" - choose Schema:', %lyt_v_cs, undef => $info->{_back} }
-                    );
+                    $choices = [ undef, map( "- $_", @normal ), map( "  $_", @system ) ];
                 }
                 else {
-                    # Choose
-                    $schema = choose(
-                        [ undef, map( "- $_", @{$data->{$db}{schemas}} ) ],
-                        { prompt => 'DB "'. basename( $db ) . '" - choose Schema:', %lyt_v_cs, undef => $info->{_back} }
-                    );
+                    $choices = [ undef, map( "- $_", @{$data->{$db}{schemas}} ) ];
                 }
+                # Choose
+                $idx_sch = choose(
+                    $choices,
+                    { prompt => 'DB "'. basename( $db ) . '" - choose Schema:', default => $old_idx_sch, %lyt_v_cs }
+                );
+                $schema = $choices->[$idx_sch] if defined $idx_sch;
                 next DATABASES if ! defined $schema;
+                if ( $opt->{print}{choose_schema}[v] ) {
+                    if ( $old_idx_sch == $idx_sch ) {
+                        $old_idx_sch = 0;
+                        next SCHEMA;
+                    }
+                    else {
+                        $old_idx_sch = $idx_sch;
+                    }
+                }
                 $schema =~ s/^[-\ ]\s//;
             }
 
-            if ( ! eval {
-                $data->{$db}{$schema}{tables} = get_table_names( $dbh, $db, $schema ) if ! defined $data->{$db}{$schema}{tables};
+            if ( ! eval { 
+                if ( ! defined $data->{$db}{$schema}{tables} ) {
+                    $data->{$db}{$schema}{tables} = get_table_names( $dbh, $db, $schema );
+                }
                 1 }
             ) {
                 say 'Get table names:';
@@ -369,6 +401,7 @@ DB_TYPES: while ( 1 ) {
             my @tables = ();
             push @tables, map { "- $_" } @{$data->{$db}{$schema}{tables}};
             push @tables, '  sqlite_master' if $db_type eq 'sqlite' && $opt->{sql}{system_info}[v];
+            my $old_idx_tbl = 0;
 
             TABLES: while ( 1 ) {
 
@@ -376,13 +409,25 @@ DB_TYPES: while ( 1 ) {
                 $prompt .= '.' . $schema if defined $data->{$db}{schemas} && @{$data->{$db}{schemas}} > 1;
                 $prompt .= '"';
                 # Choose
-                my $table = choose(
-                    [ undef, @tables, $join_tables, $union_tables, $db_setting ],
-                    { prompt => $prompt, %lyt_v_cs, undef => $info->{_back} }
+                my $choices = [ undef, @tables, $join_tables, $union_tables, $db_setting ];
+                my $idx_tbl = choose(
+                    $choices,
+                    { prompt => $prompt, default => $old_idx_tbl, %lyt_v_cs }
                 );
+                my $table;
+                $table = $choices->[$idx_tbl] if defined $idx_tbl;
                 if ( ! defined $table ) {
                     next SCHEMA if defined $data->{$db}{schemas} && @{$data->{$db}{schemas}} > 1;
                     next DATABASES;
+                }
+                if ( $opt->{print}{choose_table}[v] ) {
+                    if ( $old_idx_tbl == $idx_tbl ) {
+                        $old_idx_tbl = 0;
+                        next TABLES;
+                    }
+                    else {
+                        $old_idx_tbl = $idx_tbl;
+                    }
                 }
                 my $select_from_stmt = '';
                 my $print_and_quote_cols = [];
@@ -429,8 +474,8 @@ DB_TYPES: while ( 1 ) {
                     my $qt_columns = {};
                     my $pr_columns = [];
                     my $sql;
-                    $sql->{stmt_keys}    = [ qw( distinct_stmt where_stmt group_by_stmt having_stmt order_by_stmt limit_stmt ) ];
-                    $sql->{list_keys}    = [ qw( chosen_columns aggregate_cols where_args group_by_cols having_args limit_args ) ];
+                    $sql->{stmt_keys} = [ qw( distinct_stmt where_stmt group_by_stmt having_stmt order_by_stmt limit_stmt ) ];
+                    $sql->{list_keys} = [ qw( chosen_columns aggregate_cols where_args group_by_cols having_args limit_args ) ];
                     $sql->{pr_func_keys} = [ qw( aggr have hidd ) ];
                     reset_stmts( $sql, $qt_columns );
 
@@ -453,7 +498,8 @@ DB_TYPES: while ( 1 ) {
                     }
 
                     MAIN_LOOP: while ( 1 ) {
-                        my ( $all_arrayref, $pr_columns ) = read_table( $info, $opt, $sql, $dbh, $table, $select_from_stmt, $qt_columns, $pr_columns );
+                        my ( $all_arrayref, $pr_columns ) = read_table( $info, $opt, $sql, $dbh, $table, 
+                                                                        $select_from_stmt, $qt_columns, $pr_columns );
                         last MAIN_LOOP if ! defined $all_arrayref;
                         split_and_print_table( $info, $opt, $dbh, $db, $all_arrayref, $pr_columns );
                     }
@@ -494,7 +540,8 @@ sub union_tables {
             if ( ! defined $data->{$db}{$schema}{tables_info} ) {
                 $data->{$db}{$schema}{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
             }
-            choose( $data->{$db}{$schema}{tables_info}, { prompt => '', layout => 3, clear_screen => 1 } );
+            my $tbls_info = print_table_info( $data, $db, $schema );
+            choose( $tbls_info, { prompt => '', layout => 3, clear_screen => 1 } );
             next UNION_TABLE;
         }
         if ( $union_table eq $enough_tables ) {
@@ -613,14 +660,15 @@ sub print_union_statement {
     return $string . "\n$prompt";
 }
 
+
 sub get_tables_info {
     my ( $info, $dbh, $db, $schema, $data ) = @_;
-    my %print_hash;
+    my $tables_info = {};
     my $sth;
     my ( $pk, $fk ) = primary_and_foreign_keys( $info, $dbh, $db, $schema, $data );
     for my $table ( @{$data->{$db}{$schema}{tables}}  ) {
-        push @{$print_hash{$table}}, [ 'Table: ', '== ' . $table . ' ==' ];
-        push @{$print_hash{$table}}, [
+        push @{$tables_info->{$table}}, [ 'Table: ', '== ' . $table . ' ==' ];
+        push @{$tables_info->{$table}}, [
             'Columns: ',
             join( ' | ',
                 pairwise { no warnings q(once); lc( $a ) . ' ' . $b }
@@ -629,11 +677,11 @@ sub get_tables_info {
             )
         ];
         if ( @{$pk->{$table}} ) {
-            push @{$print_hash{$table}}, [ 'PK: ', 'primary key (' . join( ',', @{$pk->{$table}} ) . ')' ];
+            push @{$tables_info->{$table}}, [ 'PK: ', 'primary key (' . join( ',', @{$pk->{$table}} ) . ')' ];
         }
         for my $fk_name ( sort keys %{$fk->{$table}} ) {
             if ( $fk->{$table}{$fk_name} ) {
-                push @{$print_hash{$table}}, [
+                push @{$tables_info->{$table}}, [
                     'FK: ',
                     'foreign key (' . join( ',', @{$fk->{$table}{$fk_name}{foreign_key_col}} ) .
                     ') references ' . $fk->{$table}{$fk_name}{reference_table} .
@@ -642,25 +690,33 @@ sub get_tables_info {
             }
         }
     }
+    return $tables_info;
+}
+
+
+sub print_table_info {
+    my ( $data, $db, $schema ) = @_;
+    my $tables_info = $data->{$db}{$schema}{tables_info};
+    my $tables      = $data->{$db}{$schema}{tables};
     my $longest = 10;
     my ( $terminal_width ) = GetTerminalSize;
     my $col_max = $terminal_width - $longest;
     my $line_fold = Text::LineFold->new( %{$info->{line_fold}} );
     $line_fold->config( 'ColMax', $col_max > 140 ? 140 : $col_max );
-    my $tables_info = [];
-    push @{$tables_info}, 'Close with ENTER';
-    for my $table ( @{$data->{$db}{$schema}{tables}} ) {
-        push @{$tables_info}, " ";
-        for my $line ( @{$print_hash{$table}} ) {
+    my $ch_info = [];
+    push @{$ch_info}, 'Close with ENTER';
+    for my $table ( @$tables ) {
+        push @{$ch_info}, " ";
+        for my $line ( @{$tables_info->{$table}} ) {
             my $key = $line->[0];
             my $text = $line_fold->fold( '' , '', $line->[1] );
             for my $row ( split /\R+/, $text ) {
-                push @{$tables_info}, sprintf "%${longest}s%s", $key, $row;
+                push @{$ch_info}, sprintf "%${longest}s%s", $key, $row;
                 $key = '' if $key;
             }
         }
     }
-    return $tables_info;
+    return $ch_info;
 }
 
 
@@ -686,7 +742,8 @@ sub join_tables {
             if ( ! defined $data->{$db}{$schema}{tables_info} ) {
                 $data->{$db}{$schema}{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
             }
-            choose( $data->{$db}{$schema}{tables_info}, { prompt => '', layout => 3, clear_screen => 1 } );
+            my $tbls_info = print_table_info( $data, $db, $schema );
+            choose( $tbls_info, { prompt => '', layout => 3, clear_screen => 1 } );
             next MASTER;
         }
         my $idx = first_index { $_ eq $mastertable } @tables;
@@ -740,7 +797,8 @@ sub join_tables {
                     if ( ! defined $data->{$db}{$schema}{tables_info} ) {
                         $data->{$db}{$schema}{tables_info} = get_tables_info( $info, $dbh, $db, $schema, $data );
                     }
-                    choose( $data->{$db}{$schema}{tables_info}, { prompt => '', layout => 3, clear_screen => 1 } );
+                    my $tbls_info = print_table_info( $data, $db, $schema );
+                    choose( $tbls_info, { prompt => '', layout => 3, clear_screen => 1 } );
                     next SLAVE;
                 }
                 last SLAVE;
@@ -919,7 +977,7 @@ sub read_table {
     my ( $info, $opt, $sql, $dbh, $table, $select_from_stmt, $qt_columns, $pr_columns  ) = @_;
     my %lyt_stmt = %{$info->{lyt_stmt}};
     my @keys = ( qw( print_table columns aggregate distinct where group_by having order_by limit lock ) );
-    my $lock = [ '  Lk0', '  Lk1' ];
+    my $lk = [ '  Lk0', '  Lk1' ];
     my %customize = (
         hidden          => 'Customize:',
         print_table     => 'Print TABLE',
@@ -931,7 +989,7 @@ sub read_table {
         having          => '- HAVING',
         order_by        => '- ORDER BY',
         limit           => '- LIMIT',
-        lock            => $lock->[$info->{lock}],
+        lock            => $lk->[$info->{lock}],
     );
     my ( $DISTINCT, $ALL, $ASC, $DESC, $AND, $OR ) = ( "DISTINCT", "ALL", "ASC", "DESC", "AND", "OR" );
     if ( $info->{lock} == 0 ) {
@@ -951,12 +1009,12 @@ sub read_table {
         elsif ( $custom eq $customize{'lock'} ) {
             if ( $info->{lock} == 1 ) {
                 $info->{lock} = 0;
-                $customize{lock} = $lock->[0];
+                $customize{lock} = $lk->[0];
                 reset_stmts( $sql, $qt_columns );
             }
             elsif ( $info->{lock} == 0 )   {
                 $info->{lock} = 1;
-                $customize{lock} = $lock->[1];
+                $customize{lock} = $lk->[1];
             }
         }
         elsif( $custom eq $customize{'columns'} ) {
@@ -1342,7 +1400,9 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'order_by'} ) {
-            my @cols = ( @$pr_columns, map( '@' . $_, @{$sql->{pr_func}{aggr}}, @{$sql->{pr_func}{have}}, @{$sql->{pr_func}{hidd}} ) );
+            my @cols = ( @$pr_columns, map( '@' . $_, @{$sql->{pr_func}{aggr}}, 
+                                                      @{$sql->{pr_func}{have}}, 
+                                                      @{$sql->{pr_func}{hidd}} ) );
             $info->{col_sep} = ' ';
             $sql->{quote}{order_by_stmt} = " ORDER BY";
             $sql->{print}{order_by_stmt} = " ORDER BY";
@@ -1378,7 +1438,10 @@ sub read_table {
                     }
                     last ORDER_BY;
                 }
-                if ( any { '@' . $_ eq $print_col } @{$sql->{pr_func}{aggr}}, @{$sql->{pr_func}{have}}, @{$sql->{pr_func}{hidd}} ) {
+                if ( any { '@' . $_ eq $print_col } @{$sql->{pr_func}{aggr}}, 
+                                                    @{$sql->{pr_func}{have}}, 
+                                                    @{$sql->{pr_func}{hidd}} 
+                ) {
                     $print_col =~ s/^\@//;
                 }
                 ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
@@ -1471,11 +1534,17 @@ sub read_table {
             }
         }
         elsif ( $custom eq $customize{'hidden'} ) {
+            if ( $info->{lock} && @{$sql->{pr_func}{hidd}} ) {
+                next CUSTOMIZE;
+            }
             my @functions = ( qw( Epoch_to_Date Truncate Epoch_to_DateTime ) );
             delete @{$qt_columns}{@{$sql->{pr_func}{hidd}}};
             $sql->{pr_func}{hidd} = [];
             my $default_cols_sql = 0;
-            if ( ! @{$sql->{quote}{chosen_columns}} && ! @{$sql->{quote}{group_by_cols}} && ! @{$sql->{quote}{aggregate_cols}} ) {
+            if (    ! @{$sql->{quote}{chosen_columns}} 
+                 && ! @{$sql->{quote}{group_by_cols}} 
+                 && ! @{$sql->{quote}{aggregate_cols}} 
+             ) {
                 @{$sql->{quote}{chosen_columns}} = map { $qt_columns->{$_} } @$pr_columns;
                 @{$sql->{print}{chosen_columns}} = @$pr_columns;
                 $default_cols_sql = 1;
@@ -1493,13 +1562,18 @@ sub read_table {
                 my $items_ag = @{$sql->{quote}{aggregate_cols}};
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
-                my @cols = map( "- $_", @{$sql->{print}{chosen_columns}}, @{$sql->{print}{group_by_cols}}, @{$sql->{print}{aggregate_cols}} );
+                my @cols = map( "- $_", @{$sql->{print}{chosen_columns}}, 
+                                        @{$sql->{print}{group_by_cols}}, 
+                                        @{$sql->{print}{aggregate_cols}} 
+                           );
                 my $choices = [ undef, @cols, $info->{_confirm} ];
                 my $idx = choose(
                     $choices,
                     { prompt => $prompt, st => 4, layout => 3, index => 1, clear_screen => 1, undef => $info->{_back} }
                 );
-                if ( ! defined $idx || $idx == 0 ) {
+                my $print_col;
+                $print_col = $choices->[$idx] if defined $idx;
+                if ( ! defined $print_col ) {
                     for my $type ( 'quote', 'print' ) {
                         for my $stmt_key ( qw( chosen_columns group_by_cols aggregate_cols ) ) {
                             @{$sql->{$type}{$stmt_key}} = @{$backup->{$type}{$stmt_key}};
@@ -1513,12 +1587,10 @@ sub read_table {
                     $sql->{pr_func}{hidd} = [];
                     last HIDDEN;
                 }
-                $idx =~ s/^\-\s//;
-                my $print_col = $choices->[$idx];
-                $print_col =~ s/^\-\s//;
-                if ( $idx eq $#$choices ) {
+                if ( $print_col eq $info->{_confirm} ) {
                     last HIDDEN;
                 }
+                $print_col =~ s/^\-\s//;
                 $idx--;
                 my $stmt_key;
                 if ( $idx <= $items_cc - 1 ) {
@@ -1549,7 +1621,7 @@ sub read_table {
                 }
                 $function =~ s/^\s\s//;
                 my $quote_col = $qt_columns->{$print_col};
-                my ( $quote_func, $print_func ) = col_functions( $info->{db_type}, $function, $quote_col, $print_col );
+                my ( $quote_func, $print_func ) = col_functions( $info, $sql, $table, $function, $quote_col, $print_col );
                 if ( ! defined $quote_func ) {
                     next HIDDEN;
                 }
@@ -1559,7 +1631,9 @@ sub read_table {
                 $sql->{print}{$stmt_key}[$idx] = $print_func;
                 my $pr_func = $print_func;
                 $qt_columns->{$pr_func} = $quote_func;
-                push @{$sql->{pr_func}{hidd}}, $pr_func if none { $print_col =~ /^\Q$_\E/ } map { /^([^(]+\()/ } @{$info->{aggregate_functions}};
+                if ( none { $print_col =~ /^\Q$_\E/ } map { /^([^(]+\()/ } @{$info->{aggregate_functions}} ) {
+                    push @{$sql->{pr_func}{hidd}}, $pr_func;
+                }
             }
         }
         elsif( $custom eq $customize{'print_table'} ) {
@@ -1967,7 +2041,7 @@ sub func_print_tbl {
     $progress->update( $total ) if $total >= $next_update && $items > $start; #
     say 'Computing: ...' if $items > $start * 3;                              #
     my $length_longest = sum( @$width_columns, $opt->{print}{tab_width}[v] * $#{$width_columns} );
-    if ( $opt->{print}{expand}[v] ) {
+    if ( $opt->{print}{print_table}[v] ) {
         my $length_key = 0;
         for my $width ( @$cols_head_width ) {
             $length_key = $width if $width > $length_key;
@@ -1993,7 +2067,8 @@ sub func_print_tbl {
             }
             my $idx_row = choose(
                 \@list,
-                { prompt => '', layout => 3, index => 1, default => $idx_old, clear_screen => 1, limit => $opt->{print}{limit}[v] + 1, ll => $length_longest }
+                { prompt => '', layout => 3, index => 1, default => $idx_old, clear_screen => 1, 
+                  limit => $opt->{print}{limit}[v] + 1, ll => $length_longest }
             );
             return if ! defined $idx_row;
             return if $idx_row == 0;
@@ -2053,6 +2128,12 @@ sub options {
             }
         }
     }
+    for my $section ( keys %{$info->{sub_expand}} ) {
+        for my $key ( @{$info->{sub_expand}{$section}} ) {
+            my $idx = first_index { $_ eq $opt->{$section}{$key}[chs] } @choices;
+            splice( @choices, $idx, 1 );
+        }
+    }
     my $change = 0;
 
     OPTION: while ( 1 ) {
@@ -2064,10 +2145,16 @@ sub options {
         my %lyt_nr = %{$info->{lyt_nr}};
         my %lyt_bol = %{$info->{lyt_h}};
         my ( $true, $false ) = ( 'YES', 'NO' );
-           if ( ! defined $option ) { exit(); }
-        elsif ( $option eq $info->{_confirm} ) { last OPTION; }
-        elsif ( $option eq $info->{_help} ) { help(); choose( [ ' Close with ENTER ' ], { prompt => '' } ) }
-        
+        if ( ! defined $option ) { 
+            exit();
+        }
+        elsif ( $option eq $info->{_confirm} ) { 
+            last OPTION; 
+        }
+        elsif ( $option eq $info->{_help} ) { 
+            help(); 
+            choose( [ ' Close with ENTER ' ], { prompt => '' } );
+        }
         elsif ( $option eq $opt->{"print"}{'tab_width'}[chs] ) {
             # Choose
             my $current_value = $opt->{print}{tab_width}[v];
@@ -2079,7 +2166,6 @@ sub options {
             $opt->{print}{tab_width}[v] = $choice;
             $change++;
         }
-        
         elsif ( $option eq $opt->{"print"}{'min_col_width'}[chs] ) {
             # Choose
             my $current_value = $opt->{print}{min_col_width}[v];
@@ -2094,7 +2180,9 @@ sub options {
         elsif ( $option eq $opt->{"print"}{'undef'}[chs] ) {
             # Readline
             my $current_value = $opt->{print}{undef}[v];
-            my $choice = local_read_line( prompt => 'Print replacement for undefined table vales ["' . $current_value . '"]: ' );
+            my $choice = local_read_line( 
+                prompt => 'Print replacement for undefined table vales ["' . $current_value . '"]: ' 
+            );
             next OPTION if ! defined $choice;
             $opt->{print}{undef}[v] = $choice;
             $change++;
@@ -2118,15 +2206,40 @@ sub options {
             $change++;
         }
         elsif ( $option eq $opt->{"print"}{'expand'}[chs] ) {
-            # Choose
-            my $current_value = $opt->{print}{expand}[v] ? 'YES' : 'NO';
-            my $choice = choose(
-                [ undef, $true, $false ],
-                { prompt => 'Expand [' . $current_value . ']:', %lyt_bol }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{print}{expand}[v] = $choice eq $true ? 1 : 0;
-            $change++;
+            my $count;
+            my ( $memory, $simple ) = ( 'Enchanted', 'Simple' );
+            my @keys = @{$info->{sub_expand}{print}};
+            my $tmp = {};
+            for my $key ( @keys ) {
+                $tmp->{print}{$key}[v] = $opt->{print}{$key}[v];
+            }
+            while ( 1 ) {
+                my $choices = [ undef ];
+                for my $key ( @keys ) {
+                    my $current = $tmp->{print}{$key}[v] ? $memory : $simple;
+                    push @$choices, sprintf "%-18s[%s]", $opt->{print}{$key}[chs], $current;
+                }
+                push @$choices, $info->{_continue};
+                # Choose
+                my $idx = choose( 
+                    $choices, 
+                    { prompt => 'Choose:', layout => 3, index => 1, clear_screen => 1, undef => $info->{_back}} 
+                );
+                my $type = $choices->[$idx] if defined $idx;
+                next OPTION if ! defined $type;
+                if ( $type eq $info->{_continue} ) {
+                    if ( $count ) {
+                        for my $key ( @keys ) {
+                            $opt->{print}{$key}[v] = $tmp->{print}{$key}[v];
+                        }
+                        $change++;
+                    }
+                    next OPTION;
+                }
+                my $key = $keys[$idx-1];
+                $tmp->{print}{$key}[v] = $tmp->{print}{$key}[v] ? 0 : 1;
+                $count++;
+            }
         }
         elsif ( $option eq $opt->{"print"}{'fast_width'}[chs] ) {
             # Choose
@@ -2255,7 +2368,11 @@ sub database_setting {
     my @choices = ();
     my $db_type;
     if ( ! defined $db ) {
-        $db_type = choose( [ undef, @{$opt->{menu}{database_types}[v]} ], { layout => 1, undef => '<<' } );
+        # Choose
+        $db_type = choose( 
+            [ undef, @{$opt->{menu}{database_types}[v]} ], 
+            { layout => 1, undef => '<<' } 
+        );
         return if ! defined $db_type;
     }
     else {
@@ -2269,8 +2386,8 @@ sub database_setting {
             push @choices, $opt->{$db_type}{$key}[chs];
         }
     }
-    if ( defined $info->{$db_type}{commandline_only} ) {
-        for my $key ( @{$info->{$db_type}{commandline_only}} ) {
+    if ( defined $info->{cmdline_only}{$db_type} ) {
+        for my $key ( @{$info->{cmdline_only}{$db_type}} ) {
             my $idx = first_index { $_ eq $opt->{$db_type}{$key}[chs] } @choices;
             splice( @choices, $idx, 1 );
         }
@@ -2605,7 +2722,6 @@ sub choose_a_number {
         $confirm = $info->{confirm};
         $back    = $info->{back};
     }
-
     my $reset = 'reset';
     my %numbers;
     my $result;
@@ -2783,16 +2899,21 @@ sub get_db_handle {
     my $dbh;
     my $db_key = $info->{db_type} . '_' . $db;
     if ( $info->{db_type} eq 'sqlite' ) {
+        my $unicode       = $opt->{$db_key}{unicode}[v]             // $opt->{sqlite}{unicode}[v];
+        my $see_if_number = $opt->{$db_key}{see_if_its_a_number}[v] // $opt->{sqlite}{see_if_its_a_number}[v];
+        my $busy_timeout  = $opt->{$db_key}{busy_timeout}[v]        // $opt->{sqlite}{busy_timeout}[v];
+        my $cache_size    = $opt->{$db_key}{cache_size}[v]          // $opt->{sqlite}{cache_size}[v];
+    
         die "\"$db\": $!. Maybe the cached data is not up to date." if ! -f $db;
         $dbh = DBI->connect( "DBI:SQLite:dbname=$db", '', '', {
             PrintError => 0,
             RaiseError => 1,
             AutoCommit => 1,
-            sqlite_unicode             => $opt->{$db_key}{unicode}[v]             // $opt->{sqlite}{unicode}[v],
-            sqlite_see_if_its_a_number => $opt->{$db_key}{see_if_its_a_number}[v] // $opt->{sqlite}{see_if_its_a_number}[v],
+            sqlite_unicode => $unicode,
+            sqlite_see_if_its_a_number => $see_if_number,
         } ) or die DBI->errstr;
-        $dbh->sqlite_busy_timeout(           $opt->{$db_key}{busy_timeout}[v] // $opt->{sqlite}{busy_timeout}[v] );
-        $dbh->do( 'PRAGMA cache_size = ' . ( $opt->{$db_key}{cache_size}[v]   // $opt->{sqlite}{cache_size}[v] ) );
+        $dbh->sqlite_busy_timeout( $busy_timeout );
+        $dbh->do( 'PRAGMA cache_size = ' . $cache_size );
         $dbh->sqlite_create_function( 'regexp', 2, sub {
             my ( $regex, $string ) = @_; 
             $string //= ''; 
@@ -2806,15 +2927,19 @@ sub get_db_handle {
         );
     }
     elsif ( $info->{db_type} eq 'mysql' )  {
+        my $enable_utf8        = $opt->{$db_key}{enable_utf8}[v]        // $opt->{mysql}{enable_utf8}[v];
+        my $connect_timeout    = $opt->{$db_key}{connect_timeout}[v]    // $opt->{mysql}{connect_timeout}[v];
+        my $bind_type_guessing = $opt->{$db_key}{bind_type_guessing}[v] // $opt->{mysql}{bind_type_guessing}[v];
+        my $chop_blanks        = $opt->{$db_key}{ChopBlanks}[v]         // $opt->{mysql}{ChopBlanks}[v];
         my ( $user, $passwd ) = set_credentials( $info, $opt, $db );
         $dbh = DBI->connect( "DBI:mysql:dbname=$db", $user, $passwd, {
             PrintError  => 0,
             RaiseError  => 1,
             AutoCommit  => 1,
-            mysql_enable_utf8        => $opt->{$db_key}{enable_utf8}[v]        // $opt->{mysql}{enable_utf8}[v],
-            mysql_connect_timeout    => $opt->{$db_key}{connect_timeout}[v]    // $opt->{mysql}{connect_timeout}[v],
-            mysql_bind_type_guessing => $opt->{$db_key}{bind_type_guessing}[v] // $opt->{mysql}{bind_type_guessing}[v],
-            ChopBlanks               => $opt->{$db_key}{ChopBlanks}[v]         // $opt->{mysql}{ChopBlanks}[v],
+            mysql_enable_utf8        => $enable_utf8,
+            mysql_connect_timeout    => $connect_timeout,
+            mysql_bind_type_guessing => $bind_type_guessing,
+            ChopBlanks               => $chop_blanks,
         } ) or die DBI->errstr;
     }
     elsif ( $info->{db_type} eq 'postgres' ) {
@@ -2839,15 +2964,14 @@ sub available_databases {
     if ( $info->{db_type} eq 'sqlite' ) {
         my @dirs = map { decode_utf8( $_ ) } @ARGV ? @ARGV : ( $info->{home} );
         my $c_dirs  = join ' ', @dirs;
-        my $c_depth = $opt->{sqlite}{max_depth}[v] // '';
         $info->{cache} = read_json( $info->{db_cache_file} );
         if ( $opt->{sqlite}{reset_cache}[v] ) {
-            delete $info->{cache}{$c_dirs}{$c_depth};
+            delete $info->{cache}{$c_dirs};
             $info->{cached} = '';
         }
         else {
-            if ( $info->{cache}{$c_dirs}{$c_depth} ) {
-                $databases = $info->{cache}{$c_dirs}{$c_depth};
+            if ( $info->{cache}{$c_dirs} ) {
+                $databases = $info->{cache}{$c_dirs};
                 $info->{cached} = ' (cached)';
             }
             else {
@@ -2857,25 +2981,7 @@ sub available_databases {
         if ( ! $info->{cached} ) {
             say 'Searching...';
             for my $dir ( @dirs ) {
-                my $max_depth;
-                if ( defined $opt->{sqlite}{max_depth}[v] ) {
-                    $max_depth = $opt->{sqlite}{max_depth}[v];
-                    $dir = rel2abs $dir;
-                    $max_depth += $dir =~ tr[/][];
-                    $max_depth--;
-                }
                 find( {
-                    preprocess => sub {
-                        if ( defined $max_depth ) {
-                            my $depth = $File::Find::dir =~ tr[/][];
-                            return @_ if $depth < $max_depth;
-                            return grep { ! -d } @_ if $depth == $max_depth;
-                            return;
-                        }
-                        else {
-                            return @_;
-                        }
-                    },
                     wanted     => sub {
                         my $file = $File::Find::name;
                         return if ! -f $file;
@@ -2896,7 +3002,7 @@ sub available_databases {
                 },
                 encode_utf8( $dir ) );
             }
-            $info->{cache}{$c_dirs}{$c_depth} = $databases;
+            $info->{cache}{$c_dirs} = $databases;
             write_json( $info->{db_cache_file}, $info->{cache} );
             say 'Ended searching';
         }
@@ -2906,8 +3012,10 @@ sub available_databases {
         my $stmt;
         if ( ! $opt->{sql}{system_info}[v] ) {
             $stmt = "SELECT schema_name FROM information_schema.schemata
-                     WHERE schema_name != 'mysql' AND schema_name != 'information_schema' AND schema_name != 'performance_schema'
-                     ORDER BY schema_name";
+                        WHERE schema_name != 'mysql' 
+                          AND schema_name != 'information_schema' 
+                          AND schema_name != 'performance_schema'
+                        ORDER BY schema_name";
         }
         elsif ( $opt->{sql}{system_info}[v] ) {
             $stmt = "SELECT schema_name FROM information_schema.schemata
@@ -2920,8 +3028,9 @@ sub available_databases {
         my $stmt;
         if ( ! $opt->{sql}{system_info}[v] ) {
             $stmt = "SELECT datname FROM pg_database
-                     WHERE datistemplate = false AND datname != 'postgres'
-                     ORDER BY datname";
+                        WHERE datistemplate = false 
+                          AND datname != 'postgres'
+                        ORDER BY datname";
         }
         elsif ( $opt->{sql}{system_info}[v] ) {
             $stmt = "SELECT datname FROM pg_database
@@ -2945,8 +3054,9 @@ sub get_schema_names {
         my $stmt;
         if ( ! $opt->{sql}{system_info}[v] ) {
             $stmt = "SELECT schema_name FROM information_schema.schemata
-                     WHERE schema_name != 'information_schema' AND schema_name !~ '^pg_'
-                     ORDER BY schema_name";
+                        WHERE schema_name != 'information_schema' 
+                          AND schema_name !~ '^pg_'
+                        ORDER BY schema_name";
         }
         elsif ( $opt->{sql}{system_info}[v] ) {
             $stmt = "SELECT schema_name FROM information_schema.schemata
@@ -2963,10 +3073,14 @@ sub get_table_names {
     my ( $dbh, $db, $schema ) = @_;
     my $tables = [];
     if ( $info->{db_type} eq 'sqlite' ) {
-        $tables = $dbh->selectcol_arrayref( "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name" );
+        my $stmt = "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name";
+        $tables = $dbh->selectcol_arrayref( $stmt );
     }
     else {
-        my $stmt = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name";  # AND table_type = 'BASE TABLE'
+        my $stmt = "SELECT table_name FROM information_schema.tables 
+                        WHERE table_schema = ? 
+                        ORDER BY table_name";
+                        # AND table_type = 'BASE TABLE'
         $tables = $dbh->selectcol_arrayref( $stmt, {}, ( $schema ) );
     }
     return $tables;
@@ -2997,8 +3111,12 @@ sub column_names_and_types {
     }
     else {
         my $stmt;
-        $stmt = "SELECT table_name, column_name, column_type FROM information_schema.columns WHERE table_schema = ?" if $info->{db_type} eq 'mysql';
-        $stmt = "SELECT table_name, column_name, data_type   FROM information_schema.columns WHERE table_schema = ?" if $info->{db_type} eq 'postgres';
+        $stmt = "SELECT table_name, column_name, column_type 
+                    FROM information_schema.columns 
+                    WHERE table_schema = ?" if $info->{db_type} eq 'mysql';
+        $stmt = "SELECT table_name, column_name, data_type 
+                    FROM information_schema.columns 
+                    WHERE table_schema = ?" if $info->{db_type} eq 'postgres';
         my $sth = $dbh->prepare( $stmt );
         $sth->execute( $schema );
         while ( my $row = $sth->fetchrow_arrayref() ) {
@@ -3012,53 +3130,70 @@ sub column_names_and_types {
 
 sub primary_and_foreign_keys {
     my ( $info, $dbh, $db, $schema, $data ) = @_;
-    my $foreign_keys        = {};
-    my $primary_key_columns = {};
+    my $fks     = {};
+    my $pk_cols = {};
     my $sth;
     if ( $info->{db_type} eq 'mysql' ) {
-        my $stmt = "SELECT constraint_name, table_name, column_name, referenced_table_name, referenced_column_name, position_in_unique_constraint
+        my $stmt = "SELECT constraint_name, table_name, column_name, referenced_table_name, 
+                           referenced_column_name, position_in_unique_constraint
                     FROM information_schema.key_column_usage
-                    WHERE table_schema = ? AND table_name = ? AND referenced_table_name IS NOT NULL";
+                    WHERE table_schema = ? 
+                      AND table_name = ? 
+                      AND referenced_table_name IS NOT NULL";
         $sth = $dbh->prepare( $stmt );
     }
     elsif ( $info->{db_type} eq 'sqlite' ) {
         my $stmt = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?";
         $sth = $dbh->prepare( $stmt );
     }
-    for my $table ( @{$data->{$db}{$schema}{tables}} ) {
+    for my $tbl ( @{$data->{$db}{$schema}{tables}} ) {
         if ( $info->{db_type} eq 'sqlite' ) {
-            $sth->execute( $table );
+            $sth->execute( $tbl );
             my $a_ref = $sth->fetchrow_arrayref();
             my @references = grep { /FOREIGN\sKEY/ } split /\s*\n\s*/, $a_ref->[0];
             for my $i ( 0 .. $#references ) {
                 if ( $references[$i] =~ /FOREIGN\sKEY\s?\(([^)]+)\)\sREFERENCES\s([^(]+)\(([^)]+)\),?/ ) {
-                    $foreign_keys->{$table}{$i}{foreign_key_col}   = [ split /\s*,\s*/, $1 ];
-                    $foreign_keys->{$table}{$i}{reference_key_col} = [ split /\s*,\s*/, $3 ];
-                    $foreign_keys->{$table}{$i}{reference_table}   = $2;
+                    $fks->{$tbl}{$i}{foreign_key_col}   = [ split /\s*,\s*/, $1 ];
+                    $fks->{$tbl}{$i}{reference_key_col} = [ split /\s*,\s*/, $3 ];
+                    $fks->{$tbl}{$i}{reference_table}   = $2;
                 }
             }
         }
         elsif ( $info->{db_type} eq 'mysql' ) {
-            $sth->execute( $schema, $table );
+            $sth->execute( $schema, $tbl );
             while ( my $row = $sth->fetchrow_hashref ) {
-                $foreign_keys->{$table}{$row->{constraint_name}}{foreign_key_col  }[$row->{position_in_unique_constraint}-1] = $row->{column_name};
-                $foreign_keys->{$table}{$row->{constraint_name}}{reference_key_col}[$row->{position_in_unique_constraint}-1] = $row->{referenced_column_name};
-                $foreign_keys->{$table}{$row->{constraint_name}}{reference_table} = $row->{referenced_table_name} if ! $foreign_keys->{$table}{$row->{constraint_name}}{reference_table};
-            }
-        }
-        elsif ( $info->{db_type} eq 'postgres' ) {
-            my $sth = $dbh->foreign_key_info( undef, undef, undef, undef, $schema, $table );
-            if ( defined $sth ) {
-                while ( my $row = $sth->fetchrow_hashref ) {
-                    push @{$foreign_keys->{$table}{$row->{FK_NAME}}{foreign_key_col  }}, $row->{FK_COLUMN_NAME};
-                    push @{$foreign_keys->{$table}{$row->{FK_NAME}}{reference_key_col}}, $row->{UK_COLUMN_NAME};
-                    $foreign_keys->{$table}{$row->{FK_NAME}}{reference_table} = $row->{UK_TABLE_NAME} if ! $foreign_keys->{$table}{$row->{FK_NAME}}{reference_table};
+                $fks->{$tbl}
+                      {$row->{constraint_name}}
+                      {foreign_key_col}
+                      [$row->{position_in_unique_constraint}-1] = $row->{column_name};
+                $fks->{$tbl}
+                      {$row->{constraint_name}}
+                      {reference_key_col}
+                      [$row->{position_in_unique_constraint}-1] = $row->{referenced_column_name};
+                if ( ! $fks->{$tbl}{$row->{constraint_name}}{reference_table} ) {
+                    $fks->{$tbl}
+                          {$row->{constraint_name}}
+                          {reference_table} = $row->{referenced_table_name};
                 }
             }
         }
-        $primary_key_columns->{$table} = [ $dbh->primary_key( undef, $schema, $table ) ];
+        elsif ( $info->{db_type} eq 'postgres' ) {
+            my $sth = $dbh->foreign_key_info( undef, undef, undef, undef, $schema, $tbl );
+            if ( defined $sth ) {
+                while ( my $row = $sth->fetchrow_hashref ) {
+                    push @{$fks->{$tbl}{$row->{FK_NAME}}{foreign_key_col  }}, $row->{FK_COLUMN_NAME};
+                    push @{$fks->{$tbl}{$row->{FK_NAME}}{reference_key_col}}, $row->{UK_COLUMN_NAME};
+                    if ( ! $fks->{$tbl}{$row->{FK_NAME}}{reference_table} ) {
+                        $fks->{$tbl}
+                              {$row->{FK_NAME}}
+                              {reference_table} = $row->{UK_TABLE_NAME};
+                    }
+                }
+            }
+        }
+        $pk_cols->{$tbl} = [ $dbh->primary_key( undef, $schema, $tbl ) ];
     }
-    return $primary_key_columns, $foreign_keys;
+    return $pk_cols, $fks;
 }
 
 
@@ -3078,7 +3213,7 @@ sub sql_regexp {
         }
         if ( $info->{db_type} eq 'oracle' ) {
             return ' NOT REGEXP_LIKE(' . $quote_col . ',?,\'i\')' if ! $opt->{sql}{regexp_case}[v];
-            return ' NOT REGEXP_LIKE(' . $quote_col . ',?)'        if   $opt->{sql}{regexp_case}[v];
+            return ' NOT REGEXP_LIKE(' . $quote_col . ',?)'       if   $opt->{sql}{regexp_case}[v];
         }
 
     }
@@ -3111,14 +3246,18 @@ sub concatenate {
 
 
 sub col_functions {
-    my ( $db_type, $func, $quote_col, $print_col ) = @_;
+    my ( $info, $sql, $table, $func, $quote_col, $print_col ) = @_;
+    my %lyt_stmt = %{$info->{lyt_stmt}};
+    my $db_type = $info->{db_type};
     my ( $quote_f, $print_f );
     if ( $func =~ /^epoch_to_date(?:time)?\z/i ) {
         # Choose
+        $print_f = $func eq 'epoch_to_date' ? "DATE($print_col)" : "DATETIME($print_col)";
+        my $prompt = print_select_statement( $info, $sql, $table, "$print_f\nInterval:" );
         my ( $seconds, $milliseconds, $microseconds ) = ( '1 Second', '1 Millisecond', '1 Microsecond' );
         my $choices =  [ $seconds, $milliseconds, $microseconds ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
-        my $interval = choose( $choices, { prompt => 'Choose INTERVAL: ', layout => 1, undef => '<<' } );
+        my $interval = choose( $choices, { prompt => $prompt, %lyt_stmt } );
         return if ! defined $interval;
         my $div = $interval eq $microseconds ? 1000000 :
                 $interval eq $milliseconds ? 1000 : 1;
@@ -3126,20 +3265,19 @@ sub col_functions {
             $quote_f = "FROM_UNIXTIME($quote_col/$div,'%Y-%m-%d %H:%i:%s')"    if $db_type eq 'mysql';
             $quote_f = "( TO_TIMESTAMP(${quote_col}::bigint/$div))::timestamp" if $db_type eq 'postgres';
             $quote_f = "DATETIME($quote_col/$div,'unixepoch','localtime')"     if $db_type eq 'sqlite';
-            $print_f = "DATETIME($print_col)";
         }
         else {
             # mysql: FROM_UNIXTIME doesn't work with negative timestamps
             $quote_f = "FROM_UNIXTIME($quote_col/$div,'%Y-%m-%d')"       if $db_type eq 'mysql';
             $quote_f = "(TO_TIMESTAMP(${quote_col}::bigint/$div))::date" if $db_type eq 'postgres';
             $quote_f = "DATE($quote_col/$div,'unixepoch','localtime')"   if $db_type eq 'sqlite';
-            $print_f = "DATE($print_col)";
         }
     }
     elsif ( $func =~ /^TRUNCATE\z/i ) {
+        my $prompt = print_select_statement( $info, $sql, $table, "TRUNC $print_col\nDecimal places:" );
         my $choices = [ 0 .. 9 ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
-        my $precision = choose( $choices, { prompt => 'Decimal places: ', layout => 1, undef => '<<' } );
+        my $precision = choose( $choices, { prompt => $prompt, %lyt_stmt } );
         return if ! defined $precision;
         $quote_f = "TRUNCATE($quote_col,$precision)" if $db_type eq 'mysql';
         $quote_f = "TRUNC($quote_col,$precision)"    if $db_type eq 'postgres';
