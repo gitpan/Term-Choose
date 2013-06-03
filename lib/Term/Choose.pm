@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.048';
+our $VERSION = '1.049';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -363,7 +363,8 @@ sub _validate_option {
         pad_one_row     => [ 0,  $limit ],
         page            => [ 0,       1 ],
         prompt          => '',
-        screen_width    => [ 1 ,    100 ],
+        screen_width    => [ 1 ,    100 ], # ###
+        #screen_width    => [ 1 , $limit ],
         st              => [ 0,  $limit ],
         undef           => '',
     };
@@ -377,7 +378,7 @@ sub _validate_option {
         elsif ( $validate->{$key} ) {
             if ( defined $config->{$key} && (   $config->{$key} !~ m/^[0-9]+\z/
                                              || $config->{$key} < $validate->{$key}[MIN]
-                                             || $config->{$key} > $validate->{$key}[MAX] ) 
+                                             || $config->{$key} > $validate->{$key}[MAX] )
             ) {
                 carp "choose: \"$config->{$key}\" is not a valid value for the option \"$key\"."
                    . " Falling back to the default value.";
@@ -509,9 +510,14 @@ sub _write_first_screen {
 #        print GO_TO_TOP_LEFT;
 #    }
     ( $arg->{avail_width}, $arg->{avail_height} ) = GetTerminalSize( $arg->{handle_out} );
-    if ( $arg->{screen_width} ) {
+    #######################
+    if ( $arg->{screen_width} ) { # ###
         $arg->{avail_width} = int( $arg->{avail_width} * $arg->{screen_width} / 100 );
     }
+    #if ( $arg->{screen_width} && $arg->{avail_width} > $arg->{screen_width} ) {
+    #    $arg->{avail_width} = $arg->{screen_width};
+    #}
+    ########################
     if ( $arg->{mouse} == 2 ) {
         $arg->{avail_width}  = MAX_COL_MOUSE_1003 if $arg->{avail_width}  > MAX_COL_MOUSE_1003;
         $arg->{avail_height} = MAX_ROW_MOUSE_1003 if $arg->{avail_height} > MAX_ROW_MOUSE_1003;
@@ -527,7 +533,7 @@ sub _write_first_screen {
     $arg->{avail_height} -= $arg->{nr_prompt_lines} + $arg->{tail};
     $arg->{avail_height} -= $arg->{head} if defined $arg->{head};
     ##############################################
-    $arg->{keep} = 4; #
+    $arg->{keep} = 4; # ###
     if ( $arg->{avail_height} < $arg->{keep} ) {
         my $height = ( GetTerminalSize( $arg->{handle_out} ) )[1];
         $arg->{avail_height} = $height >= $arg->{keep} ? $arg->{keep} : $height;
@@ -535,7 +541,7 @@ sub _write_first_screen {
     }
     #=head4 keep
     #
-    #I<keep> prevents that setting the option I<head> or a lot of prompt lines eat up all the terminal height.
+    #I<keep> prevents that a lot of prompt lines eat up all the terminal height.
     #
     #Setting I<keep> ensures that at least I<keep> rows are available for printing list rows.
     #
@@ -581,7 +587,7 @@ sub choose {
         . "The first argument has to be an ARRAY reference." if ! defined $orig_list_ref;
     croak "choose: The first argument is not a reference. "
         . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) eq '';
-    croak "choose: The first argument is not an ARRAY reference. " 
+    croak "choose: The first argument is not an ARRAY reference. "
         . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) ne 'ARRAY';
     if ( defined $config ) {
         croak "choose: The second argument is not a reference. "
@@ -653,8 +659,8 @@ sub choose {
         # or the index of the last column in the first row would be $#{$arg->{rc2idx}[0]}.
 
         if ( $c == KEY_j || $c == KEY_DOWN ) {
-            if ( $#{$arg->{rc2idx}} == 0 || ! ( $arg->{rc2idx}[$arg->{cursor}[ROW]+1] 
-                                             && $arg->{rc2idx}[$arg->{cursor}[ROW]+1][$arg->{cursor}[COL]] ) 
+            if ( $#{$arg->{rc2idx}} == 0 || ! ( $arg->{rc2idx}[$arg->{cursor}[ROW]+1]
+                                             && $arg->{rc2idx}[$arg->{cursor}[ROW]+1][$arg->{cursor}[COL]] )
             ) {
                 _beep( $arg );
             }
@@ -697,8 +703,8 @@ sub choose {
             }
         }
         elsif ( $c == KEY_TAB || $c == CONTROL_I ) {
-            if (    $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]} 
-                 && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}} 
+            if (    $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
+                 && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
             ) {
                 _beep( $arg );
             }
@@ -773,7 +779,7 @@ sub choose {
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] + 1 );
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
                 # don't memorize col if col is changed deliberately
-                $arg->{backup_col} = undef if defined $arg->{backup_col}; 
+                $arg->{backup_col} = undef if defined $arg->{backup_col};
             }
         }
         elsif ( $c == CONTROL_B || $c == KEY_PAGE_UP ) {
@@ -827,8 +833,8 @@ sub choose {
         }
         elsif ( $c == CONTROL_E || $c == KEY_END ) {
             if ( $arg->{order} == 1 && $arg->{rest} ) {
-                if (    $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]} 
-                     && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}} - 1 
+                if (    $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
+                     && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}} - 1
                 ) {
                     _beep( $arg );
                 }
@@ -849,8 +855,8 @@ sub choose {
                 }
             }
             else {
-                if (    $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]} 
-                     && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}} 
+                if (    $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
+                     && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
                 ) {
                     _beep( $arg );
                 }
@@ -1047,7 +1053,7 @@ sub _size_and_layout {
     else {
         # auto_format
         my $tmp_avail_width = $arg->{avail_width};
-        if ( ( $arg->{layout} == 1 || $arg->{layout} == 2 ) && $arg->{avail_height} > 0 ) {
+        if ( ( $arg->{layout} == 1 || $arg->{layout} == 2 ) ) {
             my $tmc = int( @{$arg->{list}} / $arg->{avail_height} );
             $tmc++ if @{$arg->{list}} % $arg->{avail_height};
             $tmc *= $arg->{col_width};
@@ -1256,7 +1262,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.048
+Version 1.049
 
 =cut
 
@@ -1476,7 +1482,9 @@ From broad to narrow: 0 > 1 > 2 > 3
 
 =back
 
-=head4 screen_width
+=head4 screen_width ANNOUNCEMENT
+
+Announcement: the meaning of this option will change in the next or in a future release.
 
 If set, restricts the screen width to the integer value of I<screen_width> percentage of the effective screen width.
 
@@ -1485,6 +1493,14 @@ If the integer value of I<screen_width> percentage of the screen width is zero t
 If not defined all the screen width is used.
 
 Allowed values: from 1 to 100
+
+(default: undef)
+
+The future meaning:
+
+If defined, sets the screen width to I<screen_width> if the screen width is greater than I<screen_width>.
+
+Allowed values: from 1 or greater
 
 (default: undef)
 
@@ -1560,6 +1576,8 @@ Allowed values:  0 or greater
 
 4 - extended SGR mouse mode (1006)
 
+If a mouse mode is enabled STDIN is marked as UTF-8 with ":encoding(UTF-8)" before leaving I<choose>.
+
 =head4 beep
 
 0 - off (default)
@@ -1590,7 +1608,9 @@ Sets the string displayed on the screen instead an empty string.
 
 default: '<empty>'
 
-=head4 head
+=head4 head ANNOUNCEMENT
+
+This option probably will be removed in the next version.
 
 This option is experimental!
 
@@ -1604,7 +1624,7 @@ Allowed values: 0 or greater
 
 =head4 st
 
-This option is experimental!!
+This option is experimental!
 
 Subsequent Tab: If I<prompt> lines are folded setting I<st> inserts I<st> spaces at beginning of all broken lines apart from the beginning of paragrafhs.
 
@@ -1659,6 +1679,8 @@ Allowed values: 1 or greater
 =item * If an option does not exist I<choose> warns.
 
 =item * If an option value is not valid  I<choose> warns an falls back to the default value.
+
+=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> I<choose> warns with "EOT: $!" and returns I<undef> resp. an empty list.
 
 =back
 
