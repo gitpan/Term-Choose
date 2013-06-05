@@ -5,7 +5,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.049
+# Version 1.050
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -21,12 +21,14 @@ use File::HomeDir qw(my_home);
 use List::MoreUtils qw(any none first_index pairwise);
 use Term::Choose qw(choose);
 use Term::ProgressBar;
-use Term::ReadKey qw(GetTerminalSize ReadLine ReadMode);
+use Term::ReadKey qw(GetTerminalSize ReadKey ReadMode);
+END { ReadMode 0 }
 use Text::LineFold;
 use Text::CharWidth qw(mbswidth);
 use Unicode::GCString;
 
 use constant {
+    BSPACE         => 0x7f,
     GO_TO_TOP_LEFT => "\e[1;1H",
     CLEAR_EOS      => "\e[0J",
     v              => 0,
@@ -136,7 +138,7 @@ Options:
     DB login    : If enabled username and password are asked for each new DB connection.
                   If not enabled username and password are asked once and used for all connections.
 
-    "q" key goes back.
+    "q" key goes back ("Ctrl-D" instead of "q" if prompted for a string).
 
 HELP
 }
@@ -465,7 +467,7 @@ DB_TYPES: while ( 1 ) {
                     my $pr_columns = [];
                     my $sql;
                     $sql->{stmt_keys} = [ qw( distinct_stmt where_stmt group_by_stmt having_stmt order_by_stmt limit_stmt ) ];
-                    $sql->{list_keys} = [ qw( chosen_columns aggregate_cols where_args group_by_cols having_args limit_args ) ];
+                    $sql->{list_keys} = [ qw( chosen_cols aggregate_cols where_args group_by_cols having_args limit_args ) ];
                     $sql->{pr_func_keys} = [ qw( aggr have hidd ) ];
                     reset_stmts( $sql, $qt_columns );
 
@@ -918,10 +920,10 @@ sub print_join_statement {
 sub print_select_statement {
     my ( $info, $sql, $table, $prompt ) = @_;
     my $cols_sql = '';
-    if ( @{$sql->{print}{chosen_columns}} ) {
-        $cols_sql = ' ' . join( ', ', @{$sql->{print}{chosen_columns}} );
+    if ( @{$sql->{print}{chosen_cols}} ) {
+        $cols_sql = ' ' . join( ', ', @{$sql->{print}{chosen_cols}} );
     }
-    if ( ! @{$sql->{print}{chosen_columns}} && @{$sql->{print}{group_by_cols}} ) {
+    if ( ! @{$sql->{print}{chosen_cols}} && @{$sql->{print}{group_by_cols}} ) {
         $cols_sql = ' ' . join( ', ', @{$sql->{print}{group_by_cols}} );
     }
     if ( @{$sql->{print}{aggregate_cols}} ) {
@@ -1003,8 +1005,8 @@ sub read_table {
         }
         elsif( $custom eq $customize{'columns'} ) {
             my @cols = @$pr_columns;
-            $sql->{quote}{chosen_columns} = [];
-            $sql->{print}{chosen_columns} = [];
+            $sql->{quote}{chosen_cols} = [];
+            $sql->{print}{chosen_cols} = [];
             delete @{$qt_columns}{@{$sql->{pr_func}{hidd}}};
             $sql->{pr_func}{hidd} = [];
 
@@ -1018,22 +1020,22 @@ sub read_table {
                     { prompt => $prompt, %lyt_stmt }
                 );
                 if ( ! defined $print_col ) {
-                    if ( @{$sql->{quote}{chosen_columns}} ) {
-                        $sql->{quote}{chosen_columns} = [];
-                        $sql->{print}{chosen_columns} = [];
+                    if ( @{$sql->{quote}{chosen_cols}} ) {
+                        $sql->{quote}{chosen_cols} = [];
+                        $sql->{print}{chosen_cols} = [];
                         next COLUMNS;
                     }
                     else {
-                        $sql->{quote}{chosen_columns} = [];
-                        $sql->{print}{chosen_columns} = [];
+                        $sql->{quote}{chosen_cols} = [];
+                        $sql->{print}{chosen_cols} = [];
                         last COLUMNS;
                     }
                 }
                 if ( $print_col eq $info->{ok} ) {
                     last COLUMNS;
                 }
-                push @{$sql->{quote}{chosen_columns}}, $qt_columns->{$print_col};
-                push @{$sql->{print}{chosen_columns}}, $print_col;
+                push @{$sql->{quote}{chosen_cols}}, $qt_columns->{$print_col};
+                push @{$sql->{print}{chosen_cols}}, $print_col;
             }
         }
         elsif( $custom eq $customize{'distinct'} ) {
@@ -1262,7 +1264,7 @@ sub read_table {
                     last GROUP_BY;
                 }
                 ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
-                if ( ! @{$sql->{quote}{chosen_columns}} ) {
+                if ( ! @{$sql->{quote}{chosen_cols}} ) {
                     push @{$sql->{quote}{group_by_cols}}, $quote_col;
                     push @{$sql->{print}{group_by_cols}}, $print_col;
                 }
@@ -1525,28 +1527,28 @@ sub read_table {
             delete @{$qt_columns}{@{$sql->{pr_func}{hidd}}};
             $sql->{pr_func}{hidd} = [];
             my $default_cols_sql = 0;
-            if (    ! @{$sql->{quote}{chosen_columns}}
+            if (    ! @{$sql->{quote}{chosen_cols}}
                  && ! @{$sql->{quote}{group_by_cols}}
                  && ! @{$sql->{quote}{aggregate_cols}}
              ) {
-                @{$sql->{quote}{chosen_columns}} = map { $qt_columns->{$_} } @$pr_columns;
-                @{$sql->{print}{chosen_columns}} = @$pr_columns;
+                @{$sql->{quote}{chosen_cols}} = map { $qt_columns->{$_} } @$pr_columns;
+                @{$sql->{print}{chosen_cols}} = @$pr_columns;
                 $default_cols_sql = 1;
             }
             my $backup = {};
             for my $type ( 'quote', 'print' ) {
-                for my $stmt_key ( qw( chosen_columns group_by_cols aggregate_cols ) ) {
+                for my $stmt_key ( qw( chosen_cols group_by_cols aggregate_cols ) ) {
                     @{$backup->{$type}{$stmt_key}} = @{$sql->{$type}{$stmt_key}};
                 }
             }
 
             HIDDEN: while ( 1 ) {
-                my $items_cc = @{$sql->{quote}{chosen_columns}};
+                my $items_cc = @{$sql->{quote}{chosen_cols}};
                 my $items_gb = @{$sql->{quote}{group_by_cols}};
                 my $items_ag = @{$sql->{quote}{aggregate_cols}};
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
-                my @cols = map( "- $_", @{$sql->{print}{chosen_columns}},
+                my @cols = map( "- $_", @{$sql->{print}{chosen_cols}},
                                         @{$sql->{print}{group_by_cols}},
                                         @{$sql->{print}{aggregate_cols}}
                            );
@@ -1559,13 +1561,13 @@ sub read_table {
                 $print_col = $choices->[$idx] if defined $idx;
                 if ( ! defined $print_col ) {
                     for my $type ( 'quote', 'print' ) {
-                        for my $stmt_key ( qw( chosen_columns group_by_cols aggregate_cols ) ) {
+                        for my $stmt_key ( qw( chosen_cols group_by_cols aggregate_cols ) ) {
                             @{$sql->{$type}{$stmt_key}} = @{$backup->{$type}{$stmt_key}};
                         }
                     }
                     if ( $default_cols_sql ) {
-                        $sql->{quote}{chosen_columns} = [];
-                        $sql->{print}{chosen_columns} = [];
+                        $sql->{quote}{chosen_cols} = [];
+                        $sql->{print}{chosen_cols} = [];
                     }
                     delete @{$qt_columns}{@{$sql->{pr_func}{hidd}}};
                     $sql->{pr_func}{hidd} = [];
@@ -1578,7 +1580,7 @@ sub read_table {
                 $idx--;
                 my $stmt_key;
                 if ( $idx <= $items_cc - 1 ) {
-                    $stmt_key = 'chosen_columns';
+                    $stmt_key = 'chosen_cols';
                 }
                 elsif ( $idx > $items_cc - 1 && $idx <= $items_cc + $items_gb - 1 ) {
                     $stmt_key = 'group_by_cols';
@@ -1623,10 +1625,10 @@ sub read_table {
         elsif( $custom eq $customize{'print_table'} ) {
             my ( $default_cols_sql, $from_stmt ) = $select_from_stmt =~ /^SELECT\s(.*?)(\sFROM\s.*)\z/;
             my $cols_sql = '';
-            if ( @{$sql->{quote}{chosen_columns}} ) {
-                $cols_sql = ' ' . join( ', ', @{$sql->{quote}{chosen_columns}} );
+            if ( @{$sql->{quote}{chosen_cols}} ) {
+                $cols_sql = ' ' . join( ', ', @{$sql->{quote}{chosen_cols}} );
             }
-            elsif ( ! @{$sql->{quote}{chosen_columns}} && @{$sql->{quote}{group_by_cols}} ) {
+            elsif ( ! @{$sql->{quote}{chosen_cols}} && @{$sql->{quote}{group_by_cols}} ) {
                 $cols_sql = ' ' . join( ', ', @{$sql->{quote}{group_by_cols}} );
             }
             if ( @{$sql->{quote}{aggregate_cols}} ) {
@@ -1655,7 +1657,7 @@ sub read_table {
                 $work_around = 0;
             }
             my $col_names = $sth->{NAME};
-            if ( $info->{db_type} eq 'sqlite' && $table eq 'union_tables' && @{$sql->{quote}{chosen_columns}} ) {
+            if ( $info->{db_type} eq 'sqlite' && $table eq 'union_tables' && @{$sql->{quote}{chosen_cols}} ) {
                 $col_names = [ map { s/^"([^"]+)"\z/$1/; $_ } @$col_names ];
             }
             my $all_arrayref = $sth->fetchall_arrayref;
@@ -1709,15 +1711,20 @@ sub set_operator_sql {
             # do nothing
         }
         elsif ( $operator =~ /^(?:NOT\s)?IN\z/ ) {
-            $info->{col_sep} = ' ';
+            $info->{col_sep} = '';
             $sql->{quote}{$stmt} .= '(';
             $sql->{print}{$stmt} .= '(';
 
             IN: while ( 1 ) {
-                my $prompt => print_select_statement( $info, $sql, $table );
+                my $status = print_select_statement( $info, $sql, $table );
                 # Readline
-                state $count = 1;
-                my $value = local_read_line( info => $prompt, prompt => 'Value ' . $count++ . ': ' );
+                my $value = local_readline( $info, { status => $status, prompt => 'Value: ' } );
+                if ( ! defined $value ) {
+                    $sql->{quote}{$args} = [];
+                    $sql->{quote}{$stmt} = '';
+                    $sql->{print}{$stmt} = '';
+                    return;
+                }
                 if ( $value eq '' ) {
                     if ( $info->{col_sep} eq ' ' ) {
                         $sql->{quote}{$args} = [];
@@ -1725,35 +1732,53 @@ sub set_operator_sql {
                         $sql->{print}{$stmt} = '';
                         return;
                     }
-                    $sql->{quote}{$stmt} .= ' )';
-                    $sql->{print}{$stmt} .= ' )';
+                    $sql->{quote}{$stmt} .= ')';
+                    $sql->{print}{$stmt} .= ')';
                     last IN;
                 }
                 $sql->{quote}{$stmt} .= $info->{col_sep} . '?';
                 $sql->{print}{$stmt} .= $info->{col_sep} . $value;
                 push @{$sql->{quote}{$args}}, $value;
-                $info->{col_sep} = ', ';
+                $info->{col_sep} = ',';
             }
         }
         elsif ( $operator =~ /^(?:NOT\s)?BETWEEN\z/ ) {
-            my $prompt1 = print_select_statement( $info, $sql, $table );
+            my $status1 = print_select_statement( $info, $sql, $table );
             # Readline
-            my $value_1 = local_read_line( info => $prompt1, prompt => 'Value_1: ' );
+            my $value_1 = local_readline( $info, { status => $status1, prompt => 'Value: ' } );
+            if ( ! defined $value_1 ) {
+                $sql->{quote}{$args} = [];
+                $sql->{quote}{$stmt} = '';
+                $sql->{print}{$stmt} = '';
+                return;
+            }
             $sql->{quote}{$stmt} .= ' ' . '?' .      ' AND';
             $sql->{print}{$stmt} .= ' ' . $value_1 . ' AND';
             push @{$sql->{quote}{$args}}, $value_1;
-            my $prompt2 = print_select_statement( $info, $sql, $table );
+            my $status2 = print_select_statement( $info, $sql, $table );
             # Readline
-            my $value_2 = local_read_line( info => $prompt2, prompt => 'Value_2: ' );
+            my $value_2 = local_readline( $info, { status => $status2, prompt => 'Value: ' } );
+            if ( ! defined $value_2 ) {
+                $sql->{quote}{$args} = [];
+                $sql->{quote}{$stmt} = '';
+                $sql->{print}{$stmt} = '';
+                return;
+            }
             $sql->{quote}{$stmt} .= ' ' . '?';
             $sql->{print}{$stmt} .= ' ' . $value_2;
             push @{$sql->{quote}{$args}}, $value_2;
         }
         elsif ( $operator =~ /REGEXP\z/ ) {
             $sql->{print}{$stmt} .= ' ' . $operator;
-            my $prompt = print_select_statement( $info, $sql, $table );
+            my $status = print_select_statement( $info, $sql, $table );
             # Readline
-            my $value = local_read_line( info => $prompt, prompt => 'Pattern: ' );
+            my $value = local_readline( $info, { status => $status, prompt => 'Pattern: ' } );
+            if ( ! defined $value ) {
+                $sql->{quote}{$args} = [];
+                $sql->{quote}{$stmt} = '';
+                $sql->{print}{$stmt} = '';
+                return;
+            }
             $value = '^$' if ! length $value;
             if ( $info->{db_type} eq 'sqlite' ) {
                 $value = qr/$value/i if ! $opt->{sql}{regexp_case}[v];
@@ -1765,9 +1790,16 @@ sub set_operator_sql {
             push @{$sql->{quote}{$args}}, $value;
         }
         else {
-            my $prompt = print_select_statement( $info, $sql, $table );
+            my $status = print_select_statement( $info, $sql, $table );
+            my $prompt = $operator =~ /LIKE\z/ ? 'Pattern: ' : 'Value: ';
             # Readline
-            my $value = local_read_line( info => $prompt, prompt => $operator =~ /LIKE\z/ ? 'Pattern: ' : 'Value: ' );
+            my $value = local_readline( $info, { status => $status, prompt => $prompt } );
+            if ( ! defined $value ) {
+                $sql->{quote}{$args} = [];
+                $sql->{quote}{$stmt} = '';
+                $sql->{print}{$stmt} = '';
+                return;
+            }
             $sql->{quote}{$stmt} .= ' ' . '?';
             $sql->{print}{$stmt} .= ' ' . "'$value'";
             push @{$sql->{quote}{$args}}, $value;
@@ -1782,7 +1814,7 @@ sub set_operator_sql {
         $operator =~ s/^\s+|\s+\z//g;
         $sql->{quote}{$stmt} .= ' ' . $operator;
         $sql->{print}{$stmt} .= ' ' . $operator;
-        my $prompt = print_select_statement( $info, $sql, $table, "$operator:" );
+        my $status = print_select_statement( $info, $sql, $table, "$operator:" );
         # choose
         my $choices = [ @$cols ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -2165,8 +2197,8 @@ sub options {
         elsif ( $option eq $opt->{"print"}{'undef'}[chs] ) {
             # Readline
             my $current_value = $opt->{print}{undef}[v];
-            my $choice = local_read_line(
-                prompt => 'Print replacement for undefined table vales ["' . $current_value . '"]: '
+            my $choice = local_readline( $info,
+                { prompt => 'Print replacement for undefined table vales ["' . $current_value . '"]: ' }
             );
             next OPTION if ! defined $choice;
             $opt->{print}{undef}[v] = $choice;
@@ -2605,28 +2637,55 @@ sub print_error_message {
 }
 
 
-sub local_read_line {
-    my %args = @_;
-    if ( defined $args{info} ) {
-        my $line_fold = Text::LineFold->new(
-            Charset=> 'utf-8',
+sub local_readline {
+    my ( $info, $args ) = @_;
+    my $str = '';
+    local_readline_print( $info, $args, $str );
+    ReadMode 4;
+    while ( 1 ) {
+        my $key = ReadKey;
+        return if ! defined $key;
+        if ( $key eq "\cC" ) {
+            print "\n";
+            say "^C"; 
+            exit 1;
+        }
+        elsif ( $key eq "\cD" ) {
+            print "\n";
+            return;
+        }
+        elsif ( $key eq "\n" ) { 
+            print "\n"; 
+            return $str;
+        }
+        elsif ( ord( $key ) == BSPACE || $key eq "\cH" ) {
+            $str =~ s/.\z// if $str;
+            local_readline_print( $info, $args, $str );
+            next;
+        }
+        elsif ( $key !~ /^\p{Print}\z/ ) {
+            local_readline_print( $info, $args, $str );
+            next;
+        }
+        $str .= $key;
+        local_readline_print( $info, $args, $str );
+    }
+    ReadMode 0;
+    return $str;
+}
+
+sub local_readline_print {
+    my ( $info, $args, $str ) = @_;
+    print GO_TO_TOP_LEFT;
+    print CLEAR_EOS;
+    if ( defined $args->{status} ) {
+        my $line_fold = Text::LineFold->new( 
+            %{$info->{line_fold}},
             ColMax => ( GetTerminalSize )[0],
-            OutputCharset => '_UNICODE_',
-            Urgent => 'FORCE'
         );
-        print GO_TO_TOP_LEFT;
-        print CLEAR_EOS;
-        print $line_fold->fold( '', ' ' x 4, $args{info} );
+        print $line_fold->fold( '', ' ' x 4, $args->{status} );
     }
-    print $args{prompt};
-    ReadMode 'noecho' if $args{no_echo};
-    my $line;
-    while ( ! defined( $line ) ) {
-        $line = ReadLine( -1 );
-    }
-    ReadMode 'restore' if $args{no_echo};
-    chomp $line;
-    return $line;
+    print $args->{prompt} . ( $args->{no_echo} ? '' : $str );
 }
 
 
@@ -2862,15 +2921,15 @@ sub set_credentials {
         print CLEAR_EOS;
         say "Database: $db";
         # Readline
-        $user   = local_read_line( prompt => 'Username: ' )               if ! defined $user;
-        $passwd = local_read_line( prompt => 'Password: ', no_echo => 1 ) if ! defined $passwd;
+        $user   = local_readline( $info, { prompt => 'Username: ' } )               if ! defined $user;
+        $passwd = local_readline( $info, { prompt => 'Password: ', no_echo => 1 } ) if ! defined $passwd;
     }
     else {
         $user   = $info->{login}{$info->{db_type}}{user};
         $passwd = $info->{login}{$info->{db_type}}{passwd};
         # Readline
-        $user   = local_read_line( prompt => 'Enter username: ' )               if ! defined $user;
-        $passwd = local_read_line( prompt => 'Enter password: ', no_echo => 1 ) if ! defined $passwd;
+        $user   = local_readline( $info, { prompt => 'Enter username: ' } )               if ! defined $user;
+        $passwd = local_readline( $info, { prompt => 'Enter password: ', no_echo => 1 } ) if ! defined $passwd;
     }
     return $user, $passwd;
 }
@@ -2928,12 +2987,13 @@ sub get_db_handle {
         } ) or die DBI->errstr;
     }
     elsif ( $info->{db_type} eq 'postgres' ) {
+        my $enable_utf8 = $opt->{$db_key}{pg_enable_utf8}[v] // $opt->{postgres}{pg_enable_utf8}[v];
         my ( $user, $passwd ) = set_credentials( $info, $opt, $db );
         $dbh = DBI->connect( "DBI:Pg:dbname=$db", $user, $passwd, {
             PrintError => 0,
             RaiseError => 1,
             AutoCommit => 1,
-            pg_enable_utf8 => $opt->{$db_key}{pg_enable_utf8}[v] // $opt->{postgres}{pg_enable_utf8}[v],
+            pg_enable_utf8 => $enable_utf8,
         } ) or die DBI->errstr;
     }
     else {

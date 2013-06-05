@@ -7,7 +7,7 @@ unless ( $ENV{RELEASE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 
-my @long = ( qw( pad pad_one_row empty undef ll default limit screen_width head st ) );
+my @long = ( qw( pad pad_one_row empty undef ll default limit screen_width st ) );
 my @simple = ( qw( justify layout order clear_screen page mouse beep hide_cursor index ) ); # prompt
 my @all = ( @long, @simple );
 my @deprecated = ( qw(keep) );

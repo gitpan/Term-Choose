@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.049';
+our $VERSION = '1.050';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -349,7 +349,6 @@ sub _validate_option {
         clear_screen    => [ 0,       1 ],
         default         => [ 0,  $limit ],
         empty           => '',
-        head            => [ 0,  $limit ],
         hide_cursor     => [ 0,       1 ],
         index           => [ 0,       1 ],
         justify         => [ 0,       2 ],
@@ -410,7 +409,6 @@ sub _set_layout {
     $config->{index}            //= 0;
     $config->{justify}          //= 0;
     ##$config->{keep}             //= 5;
-    #$config->{head}            //= undef;
     $config->{layout}           //= 1;
     #$config->{ll}              //= undef;
     $config->{limit}            //= 100_000;
@@ -531,7 +529,6 @@ sub _write_first_screen {
     }
     $arg->{tail} = $arg->{page} ? 1 : 0;
     $arg->{avail_height} -= $arg->{nr_prompt_lines} + $arg->{tail};
-    $arg->{avail_height} -= $arg->{head} if defined $arg->{head};
     ##############################################
     $arg->{keep} = 4; # ###
     if ( $arg->{avail_height} < $arg->{keep} ) {
@@ -1053,7 +1050,7 @@ sub _size_and_layout {
     else {
         # auto_format
         my $tmp_avail_width = $arg->{avail_width};
-        if ( ( $arg->{layout} == 1 || $arg->{layout} == 2 ) ) {
+        if ( $arg->{layout} == 1 || $arg->{layout} == 2 ) {
             my $tmc = int( @{$arg->{list}} / $arg->{avail_height} );
             $tmc++ if @{$arg->{list}} % $arg->{avail_height};
             $tmc *= $arg->{col_width};
@@ -1262,7 +1259,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.049
+Version 1.050
 
 =cut
 
@@ -1484,7 +1481,7 @@ From broad to narrow: 0 > 1 > 2 > 3
 
 =head4 screen_width ANNOUNCEMENT
 
-Announcement: the meaning of this option will change in the next or in a future release.
+Announcement: the meaning of this option will change in the next release.
 
 If set, restricts the screen width to the integer value of I<screen_width> percentage of the effective screen width.
 
@@ -1500,7 +1497,9 @@ The future meaning:
 
 If defined, sets the screen width to I<screen_width> if the screen width is greater than I<screen_width>.
 
-Allowed values: from 1 or greater
+Screen width refers here to the number of print columns.
+
+Allowed values: 1 or greater
 
 (default: undef)
 
@@ -1576,7 +1575,7 @@ Allowed values:  0 or greater
 
 4 - extended SGR mouse mode (1006)
 
-If a mouse mode is enabled STDIN is marked as UTF-8 with ":encoding(UTF-8)" before leaving I<choose>.
+If a mouse mode is enabled layers for STDIN are changed. Then before leaving I<choose> as a cleanup STDIN is marked as UTF-8 with ":encoding(UTF-8)".
 
 =head4 beep
 
@@ -1608,25 +1607,11 @@ Sets the string displayed on the screen instead an empty string.
 
 default: '<empty>'
 
-=head4 head ANNOUNCEMENT
-
-This option probably will be removed in the next version.
-
-This option is experimental!
-
-Reduces the available terminal rows by I<head> rows.
-
-This means that I<choose> doesn't overwrite the I<head> lines above the I<choose> output.
-
-Allowed values: 0 or greater
-
-(default: undef)
-
 =head4 st
 
 This option is experimental!
 
-Subsequent Tab: If I<prompt> lines are folded setting I<st> inserts I<st> spaces at beginning of all broken lines apart from the beginning of paragrafhs.
+Subsequent Tab: If I<prompt> lines are folded setting I<st> inserts I<st> spaces at beginning of all broken lines apart from the beginning of paragraphs.
 
 See SUBSEQUENT_TAB in L<Text::LineFold>.
 

@@ -1,6 +1,12 @@
 Revision history for Term::Choose
 
 
+1.050   2013-06-05
+        - Removed experimental option "head".
+        - Update documentation.
+        - Example: changed local_readline.
+        - Example: bugfix.
+
 1.049   2013-06-03
         - Announcements.
         - Code refactoring.
