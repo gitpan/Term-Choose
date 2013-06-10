@@ -1,6 +1,13 @@
 Revision history for Term::Choose
 
 
+1.051   2013-06-10
+        - Fixed bug (size_changed).
+        - Added option "keep".
+        - Removed experimental option "st".
+        - Added experimental option "lf".
+        - Update documentation.
+
 1.050   2013-06-05
         - Removed experimental option "head".
         - Update documentation.

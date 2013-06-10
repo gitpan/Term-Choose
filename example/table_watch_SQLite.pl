@@ -5,7 +5,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.050
+# Version 1.051
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -50,7 +50,7 @@ my $info = {
     home                => $home,
     config_file         => catfile( $config_dir, 'tw_config.json' ),
     db_cache_file       => catfile( $config_dir, 'tw_cache_db_search.json' ),
-    lyt_stmt            => { layout => 1, order => 0, justify => 2, undef => '<<', st => 4, clear_screen => 1  },
+    lyt_stmt            => { layout => 1, order => 0, justify => 2, undef => '<<', lf => { st => 4 }, clear_screen => 1  },
     lyt_1               => { layout => 1, order => 0, justify => 2, undef => '<<' },
     lyt_0               => { layout => 0 },
     lyt_3_cs            => { layout => 3, clear_screen => 1, undef => '  BACK' },
@@ -525,7 +525,7 @@ sub union_tables {
         # Choose
         my $union_table = choose(
             [ undef, map( "+ $_", @$used_tables ), @tables_unused, $info->{_info}, $enough_tables ],
-            { prompt => $prompt, st => 4, %{$info->{lyt_3_cs}} }
+            { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}} }
         );
         return if ! defined $union_table;
         if ( $union_table eq $info->{_info} ) {
@@ -561,7 +561,7 @@ sub union_tables {
             unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
             my $col = choose(
                 $choices,
-                { prompt => $prompt, st => 4, %{$info->{lyt_1}}, clear_screen => 1 }
+                { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_1}}, clear_screen => 1 }
             );
             if ( ! defined $col ) {
                 if ( defined $cols->{$union_table} ) {
@@ -721,7 +721,7 @@ sub join_tables {
         # Choose
         $master = choose(
             [ undef, @tables, $info->{_info} ],
-            { prompt => $prompt, st => 4, %{$info->{lyt_3_cs}} }
+            { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}} }
         );
         return if ! defined $master;
         if ( $master eq $info->{_info} ) {
@@ -759,7 +759,7 @@ sub join_tables {
                 # Choose
                 $slave = choose(
                     [ undef, @avail_tables, $info->{_info}, $enough_slaves ],
-                    { prompt => $prompt, st => 4, %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
+                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
                 );
                 if ( ! defined $slave ) {
                     if ( @used_tables == 1 ) {
@@ -812,7 +812,7 @@ sub join_tables {
                 # Choose
                 my $pk_col = choose(
                     [ undef, map( "- $_", sort keys %avail_pk_cols ), $info->{_continue} ],
-                    { prompt => $prompt, st => 4, %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
+                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
                 );
                 if ( ! defined $pk_col ) {
                     @pks          = @old_pks;
@@ -843,7 +843,7 @@ sub join_tables {
                 # Choose
                 my $fk_col = choose(
                     [ undef, map{ "- $_" } sort keys %avail_fk_cols ],
-                    { prompt => $prompt, st => 4, %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
+                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
                 );
                 if ( ! defined $fk_col ) {
                     @pks          = @old_pks;
@@ -987,7 +987,7 @@ sub read_table {
         # Choose
         my $custom = choose(
             [ $customize{hidden}, undef, @customize{@keys} ],
-            { prompt => $prompt, st => 4, %{$info->{lyt_3_cs}}, default => 1, undef => $info->{back} }
+            { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, default => 1, undef => $info->{back} }
         );
         if ( ! defined $custom ) {
             last CUSTOMIZE;
@@ -1224,7 +1224,7 @@ sub read_table {
         }
         elsif( $custom eq $customize{'group_by'} ) {
             my @cols = ( @$pr_columns, @{$sql->{pr_func}{hidd}} );
-            $info->{col_sep} = ' ';
+            my $col_sep = ' ';
             $sql->{quote}{group_by_stmt} = " GROUP BY";
             $sql->{print}{group_by_stmt} = " GROUP BY";
             $sql->{quote}{group_by_cols} = [];
@@ -1245,7 +1245,7 @@ sub read_table {
                         $sql->{print}{group_by_stmt} = " GROUP BY";
                         $sql->{quote}{group_by_cols} = [];
                         $sql->{print}{group_by_cols} = [];
-                        $info->{col_sep} = ' ';
+                        $col_sep = ' ';
                         next GROUP_BY;
                     }
                     else {
@@ -1257,7 +1257,7 @@ sub read_table {
                     }
                 }
                 if ( $print_col eq $info->{ok} ) {
-                    if ( $info->{col_sep} eq ' ' ) {
+                    if ( $col_sep eq ' ' ) {
                         $sql->{quote}{group_by_stmt} = '';
                         $sql->{print}{group_by_stmt} = '';
                     }
@@ -1268,9 +1268,9 @@ sub read_table {
                     push @{$sql->{quote}{group_by_cols}}, $quote_col;
                     push @{$sql->{print}{group_by_cols}}, $print_col;
                 }
-                $sql->{quote}{group_by_stmt} .= $info->{col_sep} . $quote_col;
-                $sql->{print}{group_by_stmt} .= $info->{col_sep} . $print_col;
-                $info->{col_sep} = ', ';
+                $sql->{quote}{group_by_stmt} .= $col_sep . $quote_col;
+                $sql->{print}{group_by_stmt} .= $col_sep . $print_col;
+                $col_sep = ', ';
             }
         }
         elsif( $custom eq $customize{'having'} ) {
@@ -1389,7 +1389,7 @@ sub read_table {
             my @cols = ( @$pr_columns, map( '@' . $_, @{$sql->{pr_func}{aggr}},
                                                       @{$sql->{pr_func}{have}},
                                                       @{$sql->{pr_func}{hidd}} ) );
-            $info->{col_sep} = ' ';
+            my $col_sep = ' ';
             $sql->{quote}{order_by_stmt} = " ORDER BY";
             $sql->{print}{order_by_stmt} = " ORDER BY";
 
@@ -1407,7 +1407,7 @@ sub read_table {
                         $sql->{quote}{order_by_args} = [];
                         $sql->{quote}{order_by_stmt} = " ORDER BY";
                         $sql->{print}{order_by_stmt} = " ORDER BY";
-                        $info->{col_sep} = ' ';
+                        $col_sep = ' ';
                         next ORDER_BY;
                     }
                     else {
@@ -1418,7 +1418,7 @@ sub read_table {
                     }
                 }
                 if ( $print_col eq $info->{ok} ) {
-                    if ( $info->{col_sep} eq ' ' ) {
+                    if ( $col_sep eq ' ' ) {
                         $sql->{quote}{order_by_stmt} = '';
                         $sql->{print}{order_by_stmt} = '';
                     }
@@ -1431,8 +1431,8 @@ sub read_table {
                     $print_col =~ s/^\@//;
                 }
                 ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
-                $sql->{quote}{order_by_stmt} .= $info->{col_sep} . $quote_col;
-                $sql->{print}{order_by_stmt} .= $info->{col_sep} . $print_col;
+                $sql->{quote}{order_by_stmt} .= $col_sep . $quote_col;
+                $sql->{print}{order_by_stmt} .= $col_sep . $print_col;
                 $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 $choices = [ $ASC, $DESC ];
@@ -1445,13 +1445,13 @@ sub read_table {
                     $sql->{quote}{order_by_args} = [];
                     $sql->{quote}{order_by_stmt} = " ORDER BY";
                     $sql->{print}{order_by_stmt} = " ORDER BY";
-                    $info->{col_sep} = ' ';
+                    $col_sep = ' ';
                     next ORDER_BY;
                 }
                 $direction =~ s/^\s+|\s+\z//g;
                 $sql->{quote}{order_by_stmt} .= ' ' . $direction;
                 $sql->{print}{order_by_stmt} .= ' ' . $direction;
-                $info->{col_sep} = ', ';
+                $col_sep = ', ';
             }
         }
         elsif( $custom eq $customize{'limit'} ) {
@@ -1555,7 +1555,7 @@ sub read_table {
                 my $choices = [ undef, @cols, $info->{_confirm} ];
                 my $idx = choose(
                     $choices,
-                    { prompt => $prompt, st => 4, %{$info->{lyt_3_cs}}, index => 1 }
+                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, index => 1 }
                 );
                 my $print_col;
                 $print_col = $choices->[$idx] if defined $idx;
@@ -1600,7 +1600,7 @@ sub read_table {
                 $choices = [ undef, map( "  $_", @functions ) ];
                 my $function = choose(
                     $choices,
-                    { prompt => $prompt, st => 4, %{$info->{lyt_3_cs}} }
+                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}} }
                 );
                 if ( ! defined $function ) {
                     next HIDDEN;
@@ -1711,7 +1711,7 @@ sub set_operator_sql {
             # do nothing
         }
         elsif ( $operator =~ /^(?:NOT\s)?IN\z/ ) {
-            $info->{col_sep} = '';
+            my $col_sep = '';
             $sql->{quote}{$stmt} .= '(';
             $sql->{print}{$stmt} .= '(';
 
@@ -1726,7 +1726,7 @@ sub set_operator_sql {
                     return;
                 }
                 if ( $value eq '' ) {
-                    if ( $info->{col_sep} eq ' ' ) {
+                    if ( $col_sep eq ' ' ) {
                         $sql->{quote}{$args} = [];
                         $sql->{quote}{$stmt} = '';
                         $sql->{print}{$stmt} = '';
@@ -1736,10 +1736,10 @@ sub set_operator_sql {
                     $sql->{print}{$stmt} .= ')';
                     last IN;
                 }
-                $sql->{quote}{$stmt} .= $info->{col_sep} . '?';
-                $sql->{print}{$stmt} .= $info->{col_sep} . $value;
+                $sql->{quote}{$stmt} .= $col_sep . '?';
+                $sql->{print}{$stmt} .= $col_sep . $value;
                 push @{$sql->{quote}{$args}}, $value;
-                $info->{col_sep} = ',';
+                $col_sep = ',';
             }
         }
         elsif ( $operator =~ /^(?:NOT\s)?BETWEEN\z/ ) {
@@ -2647,15 +2647,15 @@ sub local_readline {
         return if ! defined $key;
         if ( $key eq "\cC" ) {
             print "\n";
-            say "^C"; 
+            say "^C";
             exit 1;
         }
         elsif ( $key eq "\cD" ) {
             print "\n";
             return;
         }
-        elsif ( $key eq "\n" ) { 
-            print "\n"; 
+        elsif ( $key eq "\n" ) {
+            print "\n";
             return $str;
         }
         elsif ( ord( $key ) == BSPACE || $key eq "\cH" ) {
@@ -2679,7 +2679,7 @@ sub local_readline_print {
     print GO_TO_TOP_LEFT;
     print CLEAR_EOS;
     if ( defined $args->{status} ) {
-        my $line_fold = Text::LineFold->new( 
+        my $line_fold = Text::LineFold->new(
             %{$info->{line_fold}},
             ColMax => ( GetTerminalSize )[0],
         );
@@ -2831,7 +2831,7 @@ sub choose_list {
         # Choose
         my $filter_type = choose(
             [ undef, map( "- $_", @$available ), $info->{_confirm} ],
-            { prompt => $prompt, st => $length_key, %{$info->{lyt_3_cs}} }
+            { prompt => $prompt, lf => { st => $length_key }, %{$info->{lyt_3_cs}} }
         );
         return if ! defined $filter_type;
         if ( $filter_type eq $info->{_confirm} ) {

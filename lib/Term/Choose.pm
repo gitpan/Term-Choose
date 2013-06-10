@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.050';
+our $VERSION = '1.051';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -352,8 +352,9 @@ sub _validate_option {
         hide_cursor     => [ 0,       1 ],
         index           => [ 0,       1 ],
         justify         => [ 0,       2 ],
-        #keep            => [ 1,  $limit ],
+        keep            => [ 1,  $limit ],
         layout          => [ 0,       3 ],
+        lf              => 'HASH',
         ll              => [ 1,  $limit ],
         limit           => [ 1,  $limit ],
         mouse           => [ 0,       4 ],
@@ -362,8 +363,7 @@ sub _validate_option {
         pad_one_row     => [ 0,  $limit ],
         page            => [ 0,       1 ],
         prompt          => '',
-        screen_width    => [ 1 ,    100 ], # ###
-        #screen_width    => [ 1 , $limit ],
+        screen_width    => [ 1,  $limit ],
         st              => [ 0,  $limit ],
         undef           => '',
     };
@@ -375,12 +375,40 @@ sub _validate_option {
             $warn++;
         }
         elsif ( $validate->{$key} ) {
-            if ( defined $config->{$key} && (   $config->{$key} !~ m/^[0-9]+\z/
-                                             || $config->{$key} < $validate->{$key}[MIN]
-                                             || $config->{$key} > $validate->{$key}[MAX] )
+            next if ! defined $config->{$key};
+            if ( $key eq 'lf' ) {
+                my $warn_str;
+                if ( ref( $config->{$key} ) ne 'HASH' ) {
+                    $warn_str = "choose: the value for the option \"$key\" is not a HASH reference.";
+                }
+                else {
+                    for my $k ( keys %{$config->{$key}} ) {
+                        if ( $k =~ /^(?:it|st)\z/ ) {
+                            if ( defined $config->{$key}{$k} && $config->{$key}{$k} !~ m/^[0-9]+\z/ ) {
+                                my $sep = $warn_str ? "\n" : "";
+                                $warn_str .= "choose: option \"$key\": ";
+                                $warn_str .= "'$config->{$key}{$k}' is not a valid value for the key '$k'.$sep";
+                            }
+                        }
+                        else {
+                            my $sep = $warn_str ? "\n" : "";
+                            $warn_str .= "choose: option \"$key\": '$k' is not a valid key.$sep";
+                        }
+                    }
+                }
+                if ( $warn_str ) {
+                    $warn_str .= " Falling back to the default value.";
+                    carp $warn_str;
+                    $config->{$key} = undef;
+                    $warn++;
+                }
+            }
+            elsif (   $config->{$key} !~ m/^[0-9]+\z/
+                || $config->{$key} < $validate->{$key}[MIN]
+                || $config->{$key} > $validate->{$key}[MAX]
             ) {
                 carp "choose: \"$config->{$key}\" is not a valid value for the option \"$key\"."
-                   . " Falling back to the default value.";
+                    . " Falling back to the default value.";
                 $config->{$key} = undef;
                 $warn++;
             }
@@ -400,6 +428,13 @@ sub _validate_option {
 sub _set_layout {
     my ( $wantarray, $config ) = @_;
     my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
+
+    # ### #####
+    if ( defined $config->{st} && ! exists $config->{lf}{st} ) {
+        $config->{lf}{st} = $config->{st};
+    }
+    # ### #####
+
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
@@ -408,8 +443,9 @@ sub _set_layout {
     $config->{hide_cursor}      //= 1;
     $config->{index}            //= 0;
     $config->{justify}          //= 0;
-    ##$config->{keep}             //= 5;
+    $config->{keep}             //= 5;
     $config->{layout}           //= 1;
+    #$config->{lf}              //= undef;
     #$config->{ll}              //= undef;
     $config->{limit}            //= 100_000;
     $config->{mouse}            //= 0;
@@ -490,8 +526,8 @@ sub _prepare_promptline {
             OutputCharset => '_UNICODE_',
             Urgent => 'FORCE'
         );
-        if ( $arg->{st} ) {
-            $arg->{prompt_copy} = $line_fold->fold( '', ' ' x $arg->{st}, $arg->{prompt} );
+        if ( defined $arg->{lf} ) {
+            $arg->{prompt_copy} = $line_fold->fold( ' ' x $arg->{lf}{it} // 0, ' ' x $arg->{lf}{st} // 0, $arg->{prompt} );
         }
         else {
             $arg->{prompt_copy} = $line_fold->fold( $arg->{prompt}, 'PLAIN' );
@@ -508,14 +544,9 @@ sub _write_first_screen {
 #        print GO_TO_TOP_LEFT;
 #    }
     ( $arg->{avail_width}, $arg->{avail_height} ) = GetTerminalSize( $arg->{handle_out} );
-    #######################
-    if ( $arg->{screen_width} ) { # ###
-        $arg->{avail_width} = int( $arg->{avail_width} * $arg->{screen_width} / 100 );
+    if ( $arg->{screen_width} && $arg->{avail_width} > $arg->{screen_width} ) {
+        $arg->{avail_width} = $arg->{screen_width};
     }
-    #if ( $arg->{screen_width} && $arg->{avail_width} > $arg->{screen_width} ) {
-    #    $arg->{avail_width} = $arg->{screen_width};
-    #}
-    ########################
     if ( $arg->{mouse} == 2 ) {
         $arg->{avail_width}  = MAX_COL_MOUSE_1003 if $arg->{avail_width}  > MAX_COL_MOUSE_1003;
         $arg->{avail_height} = MAX_ROW_MOUSE_1003 if $arg->{avail_height} > MAX_ROW_MOUSE_1003;
@@ -529,25 +560,11 @@ sub _write_first_screen {
     }
     $arg->{tail} = $arg->{page} ? 1 : 0;
     $arg->{avail_height} -= $arg->{nr_prompt_lines} + $arg->{tail};
-    ##############################################
-    $arg->{keep} = 4; # ###
     if ( $arg->{avail_height} < $arg->{keep} ) {
         my $height = ( GetTerminalSize( $arg->{handle_out} ) )[1];
         $arg->{avail_height} = $height >= $arg->{keep} ? $arg->{keep} : $height;
         $arg->{avail_height} = 1 if $arg->{avail_height} < 1;
     }
-    #=head4 keep
-    #
-    #I<keep> prevents that a lot of prompt lines eat up all the terminal height.
-    #
-    #Setting I<keep> ensures that at least I<keep> rows are available for printing list rows.
-    #
-    #If the terminal height is less than I<keep> I<keep> is set to the terminal height.
-    #
-    #Allowed values: 1 or greater
-    #
-    #(default: 5)
-    ##############################################
     _size_and_layout( $arg );
     _prepare_page_number( $arg ) if $arg->{page};
     $arg->{avail_height_idx} = $arg->{avail_height} - 1;
@@ -637,6 +654,7 @@ sub choose {
         if ( $arg->{size_changed} ) {
             $arg->{list} = _copy_orig_list( $arg );
             print CR, UP x ( $arg->{screen_row} + $arg->{nr_prompt_lines} );
+            print CLEAR_TO_END_OF_SCREEN;
             _write_first_screen( $arg );
             $arg->{size_changed} = 0;
             next;
@@ -700,8 +718,8 @@ sub choose {
             }
         }
         elsif ( $c == KEY_TAB || $c == CONTROL_I ) {
-            if (    $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
-                 && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
+            if (    $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
+                 && $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
             ) {
                 _beep( $arg );
             }
@@ -775,7 +793,7 @@ sub choose {
                 $arg->{cursor}[COL]--;
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] + 1 );
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
-                # don't memorize col if col is changed deliberately
+                # remove backup_col if col has been changed deliberately
                 $arg->{backup_col} = undef if defined $arg->{backup_col};
             }
         }
@@ -802,9 +820,10 @@ sub choose {
             else {
                 $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) + 1 );
                 $arg->{cursor}[ROW] = $arg->{row_on_top};
-                # if it remains only the last row (which is then also the first row) for the last page
-                # and the column in use doesn't exist in the last row, then backup col
-                if ( $arg->{row_on_top} == $#{$arg->{rc2idx}} && $arg->{rest} && $arg->{cursor}[COL] >= $arg->{rest}) {
+                if (    $arg->{rest}
+                     && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
+                     && $arg->{cursor}[COL] > $arg->{rest} - 1
+                ) {
                     $arg->{backup_col} = $arg->{cursor}[COL];
                     $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
                 }
@@ -830,8 +849,8 @@ sub choose {
         }
         elsif ( $c == CONTROL_E || $c == KEY_END ) {
             if ( $arg->{order} == 1 && $arg->{rest} ) {
-                if (    $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
-                     && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}} - 1
+                if (    $arg->{cursor}[ROW] == $#{$arg->{rc2idx}} - 1
+                     && $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
                 ) {
                     _beep( $arg );
                 }
@@ -852,8 +871,8 @@ sub choose {
                 }
             }
             else {
-                if (    $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
-                     && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
+                if (    $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
+                     && $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
                 ) {
                     _beep( $arg );
                 }
@@ -1259,7 +1278,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.050
+Version 1.051
 
 =cut
 
@@ -1479,21 +1498,7 @@ From broad to narrow: 0 > 1 > 2 > 3
 
 =back
 
-=head4 screen_width ANNOUNCEMENT
-
-Announcement: the meaning of this option will change in the next release.
-
-If set, restricts the screen width to the integer value of I<screen_width> percentage of the effective screen width.
-
-If the integer value of I<screen_width> percentage of the screen width is zero the virtual screen width is set to one screen column.
-
-If not defined all the screen width is used.
-
-Allowed values: from 1 to 100
-
-(default: undef)
-
-The future meaning:
+=head4 screen_width
 
 If defined, sets the screen width to I<screen_width> if the screen width is greater than I<screen_width>.
 
@@ -1577,6 +1582,18 @@ Allowed values:  0 or greater
 
 If a mouse mode is enabled layers for STDIN are changed. Then before leaving I<choose> as a cleanup STDIN is marked as UTF-8 with ":encoding(UTF-8)".
 
+=head4 keep
+
+I<keep> prevents that prompt lines eat up all the terminal height.
+
+Setting I<keep> ensures that at least I<keep> rows are available for printing list rows.
+
+If the terminal height is less than I<keep> I<keep> is set to the terminal height.
+
+Allowed values: 1 or greater
+
+(default: 5)
+
 =head4 beep
 
 0 - off (default)
@@ -1607,15 +1624,35 @@ Sets the string displayed on the screen instead an empty string.
 
 default: '<empty>'
 
-=head4 st
+=head4 st DEPRECATED
 
 This option is experimental!
+
+This option is deprecated and will be removed with the next release. Use I<lf> instead.
 
 Subsequent Tab: If I<prompt> lines are folded setting I<st> inserts I<st> spaces at beginning of all broken lines apart from the beginning of paragraphs.
 
 See SUBSEQUENT_TAB in L<Text::LineFold>.
 
 Allowed values: 0 or greater
+
+(default: undef)
+
+=head4 lf
+
+This option is experimental!
+
+If I<prompt> lines are folded the option I<lf> allowes to insert spaces at beginning of the folded lines.
+
+The option I<lf> expects a hash reference as its value. The two valid keys for the hash reference are
+
+- I<it> (INITIAL_TAB): the number of spaces inserted at beginning of paragraphs
+
+- I<st> (SUBSEQUENT_TAB): the number of spaces inserted at the beginning of all broken lines apart from the beginning of paragraphs
+
+Allowed values for the two keys are: 0 or greater.
+
+See INITIAL_TAB and SUBSEQUENT_TAB in L<Text::LineFold>.
 
 (default: undef)
 
