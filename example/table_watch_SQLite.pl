@@ -5,7 +5,7 @@ use 5.10.1;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.051
+# Version 1.052
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -50,7 +50,7 @@ my $info = {
     home                => $home,
     config_file         => catfile( $config_dir, 'tw_config.json' ),
     db_cache_file       => catfile( $config_dir, 'tw_cache_db_search.json' ),
-    lyt_stmt            => { layout => 1, order => 0, justify => 2, undef => '<<', lf => { st => 4 }, clear_screen => 1  },
+    lyt_stmt            => { layout => 1, order => 0, justify => 2, undef => '<<', lf => [0,4], clear_screen => 1  },
     lyt_1               => { layout => 1, order => 0, justify => 2, undef => '<<' },
     lyt_0               => { layout => 0 },
     lyt_3_cs            => { layout => 3, clear_screen => 1, undef => '  BACK' },
@@ -525,7 +525,7 @@ sub union_tables {
         # Choose
         my $union_table = choose(
             [ undef, map( "+ $_", @$used_tables ), @tables_unused, $info->{_info}, $enough_tables ],
-            { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}} }
+            { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}} }
         );
         return if ! defined $union_table;
         if ( $union_table eq $info->{_info} ) {
@@ -561,7 +561,7 @@ sub union_tables {
             unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
             my $col = choose(
                 $choices,
-                { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_1}}, clear_screen => 1 }
+                { prompt => $prompt, lf => [0,4], %{$info->{lyt_1}}, clear_screen => 1 }
             );
             if ( ! defined $col ) {
                 if ( defined $cols->{$union_table} ) {
@@ -721,7 +721,7 @@ sub join_tables {
         # Choose
         $master = choose(
             [ undef, @tables, $info->{_info} ],
-            { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}} }
+            { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}} }
         );
         return if ! defined $master;
         if ( $master eq $info->{_info} ) {
@@ -759,7 +759,7 @@ sub join_tables {
                 # Choose
                 $slave = choose(
                     [ undef, @avail_tables, $info->{_info}, $enough_slaves ],
-                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
+                    { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
                 );
                 if ( ! defined $slave ) {
                     if ( @used_tables == 1 ) {
@@ -812,7 +812,7 @@ sub join_tables {
                 # Choose
                 my $pk_col = choose(
                     [ undef, map( "- $_", sort keys %avail_pk_cols ), $info->{_continue} ],
-                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
+                    { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
                 );
                 if ( ! defined $pk_col ) {
                     @pks          = @old_pks;
@@ -843,7 +843,7 @@ sub join_tables {
                 # Choose
                 my $fk_col = choose(
                     [ undef, map{ "- $_" } sort keys %avail_fk_cols ],
-                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
+                    { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}}, undef => $info->{_reset} }
                 );
                 if ( ! defined $fk_col ) {
                     @pks          = @old_pks;
@@ -987,7 +987,7 @@ sub read_table {
         # Choose
         my $custom = choose(
             [ $customize{hidden}, undef, @customize{@keys} ],
-            { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, default => 1, undef => $info->{back} }
+            { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}}, default => 1, undef => $info->{back} }
         );
         if ( ! defined $custom ) {
             last CUSTOMIZE;
@@ -1555,7 +1555,7 @@ sub read_table {
                 my $choices = [ undef, @cols, $info->{_confirm} ];
                 my $idx = choose(
                     $choices,
-                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}}, index => 1 }
+                    { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}}, index => 1 }
                 );
                 my $print_col;
                 $print_col = $choices->[$idx] if defined $idx;
@@ -1600,7 +1600,7 @@ sub read_table {
                 $choices = [ undef, map( "  $_", @functions ) ];
                 my $function = choose(
                     $choices,
-                    { prompt => $prompt, lf => { st => 4 }, %{$info->{lyt_3_cs}} }
+                    { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}} }
                 );
                 if ( ! defined $function ) {
                     next HIDDEN;
@@ -2831,7 +2831,7 @@ sub choose_list {
         # Choose
         my $filter_type = choose(
             [ undef, map( "- $_", @$available ), $info->{_confirm} ],
-            { prompt => $prompt, lf => { st => $length_key }, %{$info->{lyt_3_cs}} }
+            { prompt => $prompt, lf => [0,$length_key], %{$info->{lyt_3_cs}} }
         );
         return if ! defined $filter_type;
         if ( $filter_type eq $info->{_confirm} ) {
@@ -3341,3 +3341,4 @@ sub no_entry_for_db_type {
 
 
 __DATA__
+

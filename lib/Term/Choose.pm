@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.051';
+our $VERSION = '1.052';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -354,7 +354,7 @@ sub _validate_option {
         justify         => [ 0,       2 ],
         keep            => [ 1,  $limit ],
         layout          => [ 0,       3 ],
-        lf              => 'HASH',
+        lf              => 'ARRAY',
         ll              => [ 1,  $limit ],
         limit           => [ 1,  $limit ],
         mouse           => [ 0,       4 ],
@@ -364,7 +364,6 @@ sub _validate_option {
         page            => [ 0,       1 ],
         prompt          => '',
         screen_width    => [ 1,  $limit ],
-        st              => [ 0,  $limit ],
         undef           => '',
     };
     my $warn = 0;
@@ -372,27 +371,24 @@ sub _validate_option {
         if ( ! exists $validate->{$key} ) {
             carp "choose: \"$key\" is not a valid option";
             delete $config->{$key};
-            $warn++;
+            $warn++;        st              => [ 0,  $limit ],
         }
         elsif ( $validate->{$key} ) {
             next if ! defined $config->{$key};
             if ( $key eq 'lf' ) {
                 my $warn_str;
-                if ( ref( $config->{$key} ) ne 'HASH' ) {
-                    $warn_str = "choose: the value for the option \"$key\" is not a HASH reference.";
+                if ( ref( $config->{$key} ) ne 'ARRAY' ) {
+                    $warn_str = "choose: the value for the option \"$key\" is not a ARRAY reference.";
+                }
+                elsif ( @{$config->{$key}} != 2 ) {
+                    $warn_str = "choose: the value for the option \"$key\" is not a reference to an array with 2 elements.";
                 }
                 else {
-                    for my $k ( keys %{$config->{$key}} ) {
-                        if ( $k =~ /^(?:it|st)\z/ ) {
-                            if ( defined $config->{$key}{$k} && $config->{$key}{$k} !~ m/^[0-9]+\z/ ) {
-                                my $sep = $warn_str ? "\n" : "";
-                                $warn_str .= "choose: option \"$key\": ";
-                                $warn_str .= "'$config->{$key}{$k}' is not a valid value for the key '$k'.$sep";
-                            }
-                        }
-                        else {
+                    for my $i ( 0 .. $#{$config->{$key}} ) {
+                        if ( defined $config->{$key}[$i] && $config->{$key}[$i] !~ m/^[0-9]+\z/ ) {
                             my $sep = $warn_str ? "\n" : "";
-                            $warn_str .= "choose: option \"$key\": '$k' is not a valid key.$sep";
+                            $warn_str .= "choose: option \"$key\": ";
+                            $warn_str .= "'$config->{$key}[$i]' is not a valid value.$sep";
                         }
                     }
                 }
@@ -404,8 +400,8 @@ sub _validate_option {
                 }
             }
             elsif (   $config->{$key} !~ m/^[0-9]+\z/
-                || $config->{$key} < $validate->{$key}[MIN]
-                || $config->{$key} > $validate->{$key}[MAX]
+                   || $config->{$key} < $validate->{$key}[MIN]
+                   || $config->{$key} > $validate->{$key}[MAX]
             ) {
                 carp "choose: \"$config->{$key}\" is not a valid value for the option \"$key\"."
                     . " Falling back to the default value.";
@@ -430,8 +426,10 @@ sub _set_layout {
     my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
 
     # ### #####
-    if ( defined $config->{st} && ! exists $config->{lf}{st} ) {
-        $config->{lf}{st} = $config->{st};
+    if ( ref( $config->{lf} ) eq 'HASH' ) {
+        my $tmp0 = $config->{lf}{it};
+        my $tmp1 = $config->{lf}{st};
+        $config->{lf} = [ $tmp0 // 0, $tmp1 // 0 ];
     }
     # ### #####
 
@@ -455,7 +453,6 @@ sub _set_layout {
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
     #$config->{screen_width}    //= undef;
-    #$config->{st}              //= undef;
     $config->{undef}            //= '<undef>';
     return $config;
 }
@@ -527,7 +524,7 @@ sub _prepare_promptline {
             Urgent => 'FORCE'
         );
         if ( defined $arg->{lf} ) {
-            $arg->{prompt_copy} = $line_fold->fold( ' ' x $arg->{lf}{it} // 0, ' ' x $arg->{lf}{st} // 0, $arg->{prompt} );
+            $arg->{prompt_copy} = $line_fold->fold( ' ' x $arg->{lf}[0] // 0, ' ' x $arg->{lf}[1] // 0, $arg->{prompt} );
         }
         else {
             $arg->{prompt_copy} = $line_fold->fold( $arg->{prompt}, 'PLAIN' );
@@ -1278,7 +1275,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.051
+Version 1.052
 
 =cut
 
@@ -1624,33 +1621,21 @@ Sets the string displayed on the screen instead an empty string.
 
 default: '<empty>'
 
-=head4 st DEPRECATED
+=head4 lf CHANGED
 
 This option is experimental!
 
-This option is deprecated and will be removed with the next release. Use I<lf> instead.
-
-Subsequent Tab: If I<prompt> lines are folded setting I<st> inserts I<st> spaces at beginning of all broken lines apart from the beginning of paragraphs.
-
-See SUBSEQUENT_TAB in L<Text::LineFold>.
-
-Allowed values: 0 or greater
-
-(default: undef)
-
-=head4 lf
-
-This option is experimental!
+CHANGED: I<lf> expects now an array reference instead of a hash reference.
 
 If I<prompt> lines are folded the option I<lf> allowes to insert spaces at beginning of the folded lines.
 
-The option I<lf> expects a hash reference as its value. The two valid keys for the hash reference are
+The option I<lf> expects a reference to an array with two elements;
 
-- I<it> (INITIAL_TAB): the number of spaces inserted at beginning of paragraphs
+- first element (INITIAL_TAB): the number of spaces inserted at beginning of paragraphs
 
-- I<st> (SUBSEQUENT_TAB): the number of spaces inserted at the beginning of all broken lines apart from the beginning of paragraphs
+- second element (SUBSEQUENT_TAB): the number of spaces inserted at the beginning of all broken lines apart from the beginning of paragraphs
 
-Allowed values for the two keys are: 0 or greater.
+Allowed values for the two elements are: 0 or greater.
 
 See INITIAL_TAB and SUBSEQUENT_TAB in L<Text::LineFold>.
 
