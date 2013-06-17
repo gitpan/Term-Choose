@@ -1,11 +1,11 @@
 #!/usr/bin/env perl
-use warnings FATAL => qw(all);
+use warnings;
 use strict;
 use 5.10.1;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.052
+# Version 1.053
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -1188,7 +1188,7 @@ sub read_table {
                     last WHERE;
                 }
                 if ( $count > 0 ) {
-                    my $promt = print_select_statement( $info, $sql, $table, 'Choose:' );
+                    my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                     # Choose
                     my $choices = [ $AND, $OR ];
                     unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -2159,9 +2159,6 @@ sub options {
             [ undef, $info->{_help}, @choices, $info->{_confirm} ],
             { %{$info->{lyt_3_cs}}, undef => $info->{_exit} }
         );
-        my %lyt_nr = ( %{$info->{lyt_1}}, justify => 1 );
-        my %lyt_hzt = %{$info->{lyt_1}};
-        my ( $true, $false ) = ( 'YES', 'NO' );
         if ( ! defined $option ) {
             exit();
         }
@@ -2173,166 +2170,62 @@ sub options {
             choose( [ ' Close with ENTER ' ], { prompt => '', %{$info->{lyt_0}} } );
         }
         elsif ( $option eq $opt->{"print"}{'tab_width'}[chs] ) {
-            # Choose
-            my $current_value = $opt->{print}{tab_width}[v];
-            my $choice = choose(
-                [ undef, 0 .. 99 ],
-                { prompt => 'Tab width [' . $current_value . ']:', %lyt_nr }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{print}{tab_width}[v] = $choice;
-            $change++;
+            my $max = 99;
+            $change += opt_number( $opt->{print}{tab_width}[v], 'Tab width', $max );
         }
         elsif ( $option eq $opt->{"print"}{'min_col_width'}[chs] ) {
-            # Choose
-            my $current_value = $opt->{print}{min_col_width}[v];
-            my $choice = choose(
-                [ undef, 0 .. 99 ],
-                { prompt => 'Minimum Column width [' . $current_value . ']:', %lyt_nr }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{print}{min_col_width}[v] = $choice;
-            $change++;
+            my $max = 99;
+            $change += opt_number( $opt->{print}{min_col_width}[v], 'Minimum Column width', $max );
         }
         elsif ( $option eq $opt->{"print"}{'undef'}[chs] ) {
-            # Readline
-            my $current_value = $opt->{print}{undef}[v];
-            my $choice = local_readline( $info,
-                { prompt => 'Print replacement for undefined table vales ["' . $current_value . '"]: ' }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{print}{undef}[v] = $choice;
-            $change++;
+            $change += opt_readline( $info, $opt->{print}{undef}[v], 'Print replacement for undefined table vales' );
         }
         elsif ( $option eq $opt->{"print"}{'limit'}[chs] ) {
-            my $current_value = $opt->{print}{limit}[v];
-            $current_value =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
-            # Choose_a_number
-            my $choice = choose_a_number( $info, $opt, 7, '"Max rows"', $current_value );
-            next OPTION if ! defined $choice;
-            $opt->{print}{limit}[v] = $choice;
-            $change++;
+            my $digits = 7;
+            $change += opt_number_range( $info, $opt, $opt->{print}{limit}[v], '"Max rows"', $digits );
         }
         elsif ( $option eq $opt->{"print"}{'progress_bar'}[chs] ) {
-            my $current_value = $opt->{print}{progress_bar}[v];
-            $current_value =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
-            # Choose_a_number
-            my $choice = choose_a_number( $info, $opt, 7, '"Threshold ProgressBar"', $current_value );
-            next OPTION if ! defined $choice;
-            $opt->{print}{progress_bar}[v] = $choice;
-            $change++;
+            my $digits = 7;
+            $change += opt_number_range( $info, $opt, $opt->{print}{progress_bar}[v], '"Threshold ProgressBar"', $digits );
         }
         elsif ( $option eq $opt->{"print"}{'fast_width'}[chs] ) {
-            # Choose
-            my ( $gcstring, $mbswidth ) = ( 'GCString', 'mbswidth' );
-            my $current_value = $opt->{print}{fast_width}[v] ? $mbswidth : $gcstring;
-            my $choice = choose(
-                [ undef, $gcstring, $mbswidth ],
-                { prompt => 'String width function [' . $current_value . ']:', %lyt_hzt }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{print}{fast_width}[v] = $choice eq $mbswidth ? 1 : 0;
-            $change++;
+            my $two_val =  [ 'mbswidth', 'GCString' ];
+            $change += opt_two_choices( $opt->{print}{fast_width}[v], 'String width function', $two_val );
         }
         elsif ( $option eq $opt->{"sql"}{'lock_stmt'}[chs] ) {
-            # Choose
-            my ( $lk0, $lk1 ) = ( 'Lk0', 'Lk1' );
-            my $current_value = $opt->{sql}{lock_stmt}[v] ? $lk1 : $lk0;
-            my $choice = choose(
-                [ undef, $lk0, $lk1 ],
-                { prompt => 'Keep statement [' . $current_value . ']:', %lyt_hzt }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{sql}{lock_stmt}[v] = $choice eq $lk1 ? 1 : 0;
-            $change++;
+            my $two_val = [ 'Lk1', 'Lk0' ];
+            $change += opt_two_choices( $opt->{sql}{lock_stmt}[v], 'Keep statement', $two_val  );
         }
         elsif ( $option eq $opt->{"sql"}{'system_info'}[chs] ) {
-            # Choose
-            my $current_value = $opt->{sql}{system_info}[v] ? 'YES' : 'NO';
-            my $choice = choose(
-                [ undef, $true, $false ],
-                { prompt => 'Enable Metadata [' . $current_value . ']:', %lyt_hzt }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{sql}{system_info}[v] = $choice eq $true ? 1 : 0;
-            $change++;
+            my $two_val = [ 'YES', 'NO' ];
+            $change += opt_two_choices( $opt->{sql}{system_info}[v], 'Enable Metadata', $two_val );
         }
         elsif ( $option eq $opt->{"sql"}{'regexp_case'}[chs] ) {
-            # Choose
-            my $current_value = $opt->{sql}{regexp_case}[v] ? 'YES' : 'NO';
-            my $choice = choose(
-                [ undef, $true, $false ],
-                { prompt => 'REGEXP case sensitiv [' . $current_value . ']:', %lyt_hzt }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{sql}{regexp_case}[v] = $choice eq $true ? 1 : 0;
-            $change++;
+            my $two_val = [ 'YES', 'NO' ];
+            $change += opt_two_choices( $opt->{sql}{regexp_case}[v], 'REGEXP case sensitiv', $two_val );
         }
         elsif ( $option eq $opt->{"dbs"}{'db_login'}[chs] ) {
-            # Choose
-            my $current_value = $opt->{dbs}{db_login}[v] ? 'YES' : 'NO';
-            my $choice = choose(
-                [ undef, $true, $false ],
-                { prompt => 'Ask for every new DB connection [' . $current_value . ']:', %lyt_hzt }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{dbs}{db_login}[v] = $choice eq $true ? 1 : 0;
-            $change++;
+            my $two_val = [ 'YES', 'NO' ];
+            $change += opt_two_choices( $opt->{dbs}{db_login}[v], 'Ask for every new DB connection', $two_val );
         }
         elsif ( $option eq $opt->{"dbs"}{'db_defaults'}[chs] ) {
             my $ret = database_setting( $info, $opt );
             $change++ if $ret;
         }
         elsif ( $option eq $opt->{"menu"}{'thsd_sep'}[chs] ) {
-            my ( $comma, $full_stop, $underscore, $space, $none ) = ( 'comma', 'full stop', 'underscore', 'space', 'none' );
-            my %sep_h = (
-                $comma      => ',',
-                $full_stop  => '.',
-                $underscore => '_',
-                $space      => ' ',
-                $none       => '',
-            );
-            # Choose
-            my $current_value = $opt->{menu}{thsd_sep}[v];
-            my $choice = choose(
-                [ undef, $comma, $full_stop, $underscore, $space, $none ],
-                { prompt => 'Thousands separator [' . $current_value . ']:', %lyt_hzt }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{menu}{thsd_sep}[v] = $sep_h{$choice};
-            $change++;
+            my $list = [ "','", "'.'", "'_'", "' '", "''" ];
+            $change += opt_choose_from_list( $opt->{menu}{thsd_sep}[v], 'Thousands separator', $list );
+            $opt->{menu}{thsd_sep}[v] =~ s/^'|'\z//g;
         }
         elsif ( $option eq $opt->{"menu"}{'sssc_mode'}[chs] ) {
-            my ( $simple, $compat ) = ( 'simple', 'compat' );
-            # Choose
-            my $current_value = $opt->{menu}{sssc_mode}[v] ? $compat : $simple;
-            my $choice = choose(
-                [ undef, $simple, $compat ],
-                { prompt => 'Sssc mode [' . $current_value . ']:', %lyt_hzt }
-            );
-            next OPTION if ! defined $choice;
-            $opt->{menu}{sssc_mode}[v] = $choice eq $compat ? 1 : 0;
-            $change++;
+            my $two_val = [ 'compat', 'simple' ];
+            $change += opt_two_choices( $opt->{menu}{sssc_mode}[v], 'Sssc mode', $two_val );
         }
         elsif ( $option eq $opt->{"menu"}{'operators'}[chs] ) {
-            my $current   = $opt->{menu}{operators}[v];
-            my $available = $info->{avilable_operators};
-            # Choose_list
-            my $list = choose_list( $info, $current, $available );
-            next OPTION if ! defined $list;
-            next OPTION if ! @$list;
-            $opt->{menu}{operators}[v] = $list;
-            $change++;
+            $change += opt_choose_a_list( $info, $opt->{menu}{operators}[v], $info->{avilable_operators} );
         }
         elsif ( $option eq $opt->{"menu"}{'database_types'}[chs] ) {
-            my $current   = $opt->{menu}{database_types}[v];
-            my $available = $info->{avilable_db_types};
-            # Choose_list
-            my $list = choose_list( $info, $current, $available );
-            next OPTION if ! defined $list;
-            next OPTION if ! @$list;
-            $opt->{menu}{database_types}[v] = $list;
-            $change++;
+            $change += opt_choose_a_list( $info, $opt->{menu}{database_types}[v], $info->{avilable_db_types} );
         }
         elsif ( $option eq $opt->{"menu"}{'expand'}[chs] ) {
             my $count;
@@ -2379,6 +2272,79 @@ sub options {
     return $opt;
 }
 
+sub opt_two_choices {
+    my ( $current, $prompt, $two_val ) = @_;
+    my ( $yes, $no ) = @$two_val;
+    $current = $current ? $yes : $no;
+    # Choose
+    my $choice = choose(
+        [ undef, $yes, $no ],
+        { prompt => $prompt . ' [' . $current . ']:', %{$info->{lyt_1}} }
+    );
+    return 0 if ! defined $choice;
+    $_[0] = $choice eq $yes ? 1 : 0;
+    return 1;
+}
+
+sub opt_choose_from_list {
+    my ( $current, $prompt, $list ) = @_;
+    # Choose
+    my $choice = choose(
+        [ undef, @$list ],
+        { prompt => $prompt . ' [' . $current . ']:', %{$info->{lyt_1}} }
+    );
+    return 0 if ! defined $choice;
+    $_[0] = $choice;
+    return 1;
+}
+
+sub opt_choose_a_list {
+    my $info = shift;
+    my ( $current, $available ) = @_;
+    # Choose_list
+    my $list = choose_list( $info, $current, $available );
+    return 0 if ! defined $list;
+    return 0 if ! @$list;
+    $_[0] = $list;
+    return 1;
+}
+
+sub opt_number {
+    my ( $current, $prompt, $max ) = @_;
+    # Choose
+    my $choice = choose(
+        [ undef, 0 .. $max ],
+        { prompt => $prompt . ' [' . $current . ']:', %{$info->{lyt_1}}, justify => 1 }
+    );
+    return 0 if ! defined $choice;
+    $_[0] = $choice;
+    return 1;
+}
+
+sub opt_number_range {
+    my $info = shift;
+    my $opt  = shift;
+    my ( $current, $prompt, $digits ) = @_;
+    $current =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
+    # Choose_a_number
+    my $choice = choose_a_number( $info, $opt, $digits, $prompt, $current );
+    return 0 if ! defined $choice;
+    $_[0] = $choice;
+    return 1;
+}
+
+sub opt_readline {
+    my $info = shift;
+    my ( $current, $prompt ) = @_;
+    # Readline
+    my $choice = local_readline( $info,
+        { prompt => $prompt . ' ["' . $current . '"]: ' }
+    );
+    return 0 if ! defined $choice;
+    $_[0] = $choice;
+    return 1;
+}
+
 
 sub database_setting {
     my ( $info, $opt, $db ) = @_;
@@ -2412,8 +2378,6 @@ sub database_setting {
     my $section = defined $db ? $db_type . '_' . $db  : $db_type;
     my $change = 0;
     my $new = {};
-    my %lyt_hzt = %{$info->{lyt_1}};
-    my ( $true, $false ) = ( 'YES', 'NO' );
 
     DB_OPTION: while ( 1 ) {
         # Choose
@@ -2434,193 +2398,111 @@ sub database_setting {
             }
             return $change;
         }
-
         if ( $db_type eq 'sqlite' ) {
             if ( $option eq $opt->{'sqlite'}{unicode}[chs] ) {
-                # Choose
                 my $key = 'unicode';
-                my $unicode = current_value( $opt, $key, $db_type, $db );
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'Unicode [' . ( $unicode ? 'YES' : 'NO' ) . ']:', %lyt_hzt }
-                );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice eq $true ? 1 : 0;
-                $change++;
+                my $prompt = 'Unicode';
+                $change += db_opt_yes_no( $opt, $new, $section, $key, $db_type, $db, $prompt );
             }
             elsif ( $option eq $opt->{'sqlite'}{see_if_its_a_number}[chs] ) {
-                # Choose
                 my $key = 'see_if_its_a_number';
-                my $see_if_its_a_number = current_value( $opt, $key, $db_type, $db );
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'See if its a number [' . ( $see_if_its_a_number ? 'YES' : 'NO' ) . ']:', %lyt_hzt }
-                );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice eq $true ? 1 : 0;
-                $change++;
+                my $prompt = 'See if its a number';
+                $change += db_opt_yes_no( $opt, $new, $section, $key, $db_type, $db, $prompt );
             }
             elsif ( $option eq $opt->{'sqlite'}{busy_timeout}[chs] ) {
                 my $key = 'busy_timeout';
-                my $busy_timeout = current_value( $opt, $key, $db_type, $db );
-                $busy_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
-                # Choose_a_number
-                my $choice = choose_a_number( $info, $opt, 6, '"Busy timeout"', $busy_timeout );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice;
-                $change++;
+                my $digits = 6;
+                my $prompt = '"Busy timeout (ms)"';
+                $change += db_opt_number_range( $info, $opt, $new, $section, $key, $db_type, $db, $digits, $prompt );
             }
             elsif ( $option eq $opt->{'sqlite'}{cache_size}[chs] ) {
                 my $key = 'cache_size';
-                my $cache_size = current_value( $opt, $key, $db_type, $db );
-                $cache_size =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
-                # Choose_a_number
-                my $choice = choose_a_number( $info, $opt, 8, '"Cache size (kb)"', $cache_size );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice;
-                $change++;
+                my $digits = 4;
+                my $prompt = '"Cache size (kb)"';
+                $change += db_opt_number_range( $info, $opt, $new, $section, $key, $db_type, $db, $digits, $prompt  );
             }
             elsif ( $option eq $opt->{'sqlite'}{binary_filter}[chs] ) {
                 my $key = 'binary_filter';
-                my $binary_filter = current_value( $opt, $key, $db_type, $db );
-                # Choose
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'Enable Binary Filter [' . ( $binary_filter ? 'YES' : 'NO' ) . ']:', %lyt_hzt }
-                );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice eq $true ? 1 : 0;
-                $change++;
+                my $prompt = 'Enable Binary Filter';
+                $change += db_opt_yes_no( $opt, $new, $section, $key, $db_type, $db, $prompt );
             }
             else { die "$option: no such value in the hash \%opt"; }
         }
         elsif ( $db_type eq 'mysql' ) {
             if ( $option eq $opt->{'mysql'}{enable_utf8}[chs] ) {
-                # Choose
                 my $key = 'enable_utf8';
-                my $utf8 = current_value( $opt, $key, $db_type, $db );
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'Enable utf8 [' . ( $utf8 ? 'YES' : 'NO' ) . ']:', %lyt_hzt }
-                );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice eq $true ? 1 : 0;
-                $change++;
+                my $prompt = ' Enable utf8';
+                $change += db_opt_yes_no( $opt, $new, $section, $key, $db_type, $db, $prompt );
             }
             elsif ( $option eq $opt->{'mysql'}{bind_type_guessing}[chs] ) {
-                # Choose
                 my $key = 'bind_type_guessing';
-                my $bind_type_guessing = current_value( $opt, $key, $db_type, $db );
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'Bind type guessing [' . ( $bind_type_guessing ? 'YES' : 'NO' ) . ']:', %lyt_hzt }
-                );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice eq $true ? 1 : 0;
-                $change++;
+                my $prompt = 'Bind type guessing';
+                $change += db_opt_yes_no( $opt, $new, $section, $key, $db_type, $db, $prompt );
             }
             elsif ( $option eq $opt->{'mysql'}{ChopBlanks}[chs] ) {
-                # Choose
                 my $key = 'ChopBlanks';
-                my $chop_blanks = current_value( $opt, $key, $db_type, $db );
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'Chop blanks off [' . ( $chop_blanks ? 'YES' : 'NO' ) . ']:', %lyt_hzt }
-                );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice eq $true ? 1 : 0;
-                $change++;
+                my $prompt = 'Chop blanks off';
+                $change += db_opt_yes_no( $opt, $new, $section, $key, $db_type, $db, $prompt );
             }
             elsif ( $option eq $opt->{'mysql'}{connect_timeout}[chs] ) {
                 my $key = 'connect_timeout';
-                my $connect_timeout = current_value( $opt, $key, $db_type, $db );
-                $connect_timeout =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
-                # Choose_a_number
-                my $choice = choose_a_number( $info, $opt, 4, '"Busy timeout"', $connect_timeout );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice;
-                $change++;
+                my $digits = 4;
+                my $prompt = '"Busy timeout"';
+                $change += db_opt_number_range( $info, $opt, $new, $section, $key, $db_type, $db, $digits, $prompt );
             }
             elsif ( $option eq $opt->{'mysql'}{binary_filter}[chs] ) {
                 my $key = 'binary_filter';
-                my $binary_filter = current_value( $opt, $key, $db_type, $db );
-                # Choose
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'Enable Binary Filter [' . ( $binary_filter ? 'YES' : 'NO' ) . ']:', %lyt_hzt }
-                );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice eq $true ? 1 : 0;
-                $change++;
+                my $prompt = 'Enable Binary Filter';
+                $change += db_opt_yes_no( $opt, $new, $section, $key, $db_type, $db, $prompt );
             }
             else { die "$option: no such value in the hash \%opt"; }
         }
         elsif ( $db_type eq 'postgres' ) {
             if ( $option eq $opt->{'postgres'}{pg_enable_utf8}[chs] ) {
-                # Choose
                 my $key = 'pg_enable_utf8';
-                my $utf8 = current_value( $opt, $key, $db_type, $db );
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'Enable utf8 [' . ( $utf8 ? 'YES' : 'NO' ) . ']:', %lyt_hzt }
-                );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice eq $true ? 1 : 0;
-                $change++;
+                my $prompt = 'Enable utf8';
+                $change += db_opt_yes_no( $opt, $new, $section, $key, $db_type, $db, $prompt );
             }
             elsif ( $option eq $opt->{'postgres'}{binary_filter}[chs] ) {
                 my $key = 'binary_filter';
-                my $binary_filter = current_value( $opt, $key, $db_type, $db );
-                # Choose
-                my $choice = choose(
-                    [ undef, $true, $false ],
-                    { prompt => 'Enable Binary Filter [' . ( $binary_filter ? 'YES' : 'NO' ) . ']:', %lyt_hzt }
-                );
-                if ( ! defined $choice ) {
-                    delete $new->{$section}{$key};
-                    next DB_OPTION;
-                }
-                $new->{$section}{$key} = $choice eq $true ? 1 : 0;
-                $change++;
+                my $prompt = 'Enable Binary Filter';
+                $change += db_opt_yes_no( $opt, $new, $section, $key, $db_type, $db, $prompt );
             }
             else { die "$option: no such value in the hash \%opt"; }
         }
     }
 }
 
+sub db_opt_number_range {
+    my ( $info, $opt, $new, $section, $key, $db_type, $db, $digits, $prompt ) = @_;
+    my $current = current_value( $opt, $key, $db_type, $db );
+    $current =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
+    # Choose_a_number
+    my $choice = choose_a_number( $info, $opt, $digits, $prompt, $current );
+    if ( ! defined $choice ) {
+        delete $new->{$section}{$key};
+        return 0;
+    }
+    $new->{$section}{$key} = $choice;
+    return 1;
+}
+
+sub db_opt_yes_no {
+    my ( $opt, $new, $section, $key, $db_type, $db, $prompt ) = @_;
+    my ( $yes, $no ) = ( 'YES', 'NO' );
+    my $current = current_value( $opt, $key, $db_type, $db );
+    # Choose
+    my $choice = choose(
+        [ undef, $yes, $no ],
+        { prompt => $prompt . ' [' . ( $current ? 'YES' : 'NO' ) . ']:', %{$info->{lyt_1}} }
+    );
+    if ( ! defined $choice ) {
+        delete $new->{$section}{$key};
+        return 0;
+    }
+    $new->{$section}{$key} = $choice eq $yes ? 1 : 0;
+    return 1;
+}
 
 sub current_value {
     my ( $opt, $key, $db_type, $db ) = @_;
@@ -2830,7 +2712,7 @@ sub choose_list {
         $prompt   .= 'Choose:';
         # Choose
         my $filter_type = choose(
-            [ undef, map( "- $_", @$available ), $info->{_confirm} ],
+            [ undef, map( "- $_", @$available ), $info->{_continue} ],
             { prompt => $prompt, lf => [0,$length_key], %{$info->{lyt_3_cs}} }
         );
         return if ! defined $filter_type;
@@ -3341,4 +3223,21 @@ sub no_entry_for_db_type {
 
 
 __DATA__
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

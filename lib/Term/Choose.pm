@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.052';
+our $VERSION = '1.053';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -371,7 +371,7 @@ sub _validate_option {
         if ( ! exists $validate->{$key} ) {
             carp "choose: \"$key\" is not a valid option";
             delete $config->{$key};
-            $warn++;        st              => [ 0,  $limit ],
+            $warn++;
         }
         elsif ( $validate->{$key} ) {
             next if ! defined $config->{$key};
@@ -508,8 +508,8 @@ sub _prepare_page_number {
 
 sub _prepare_promptline {
     my ( $arg ) = @_;
-    $arg->{prompt} =~ s/[^\N{LINE FEED}\P{Space}]/ /g;
-    $arg->{prompt} =~ s/[^\N{LINE FEED}\p{Print}]/\x{fffd}/g;
+    $arg->{prompt} =~ s/[^\n\P{Space}]/ /g;
+    $arg->{prompt} =~ s/[^\n\p{Print}]/\x{fffd}/g;
     utf8::upgrade( $arg->{prompt} );
     my $gcs_prompt = Unicode::GCString->new( $arg->{prompt} );
     if ( $arg->{prompt} !~ /\n/ && $gcs_prompt->columns() <= $arg->{avail_width} ) {
@@ -1275,7 +1275,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.052
+Version 1.053
 
 =cut
 

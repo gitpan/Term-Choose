@@ -4,7 +4,7 @@
       "Matthäus Kiem <cuer2s@gmail.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.4005, CPAN::Meta::Converter version 2.120921",
+   "generated_by" : "Module::Build version 0.4005, CPAN::Meta::Converter version 2.131560",
    "license" : [
       "perl_5"
    ],
@@ -37,7 +37,7 @@
    "provides" : {
       "Term::Choose" : {
          "file" : "lib/Term/Choose.pm",
-         "version" : "1.052"
+         "version" : "1.053"
       }
    },
    "release_status" : "stable",
@@ -46,5 +46,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "1.052"
+   "version" : "1.053"
 }
