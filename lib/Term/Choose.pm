@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.053';
+our $VERSION = '1.054';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -424,15 +424,6 @@ sub _validate_option {
 sub _set_layout {
     my ( $wantarray, $config ) = @_;
     my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
-
-    # ### #####
-    if ( ref( $config->{lf} ) eq 'HASH' ) {
-        my $tmp0 = $config->{lf}{it};
-        my $tmp1 = $config->{lf}{st};
-        $config->{lf} = [ $tmp0 // 0, $tmp1 // 0 ];
-    }
-    # ### #####
-
     $config = _validate_option( $config // {} );
     $config->{beep}             //= 0;
     $config->{clear_screen}     //= 0;
@@ -1275,7 +1266,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.053
+Version 1.054
 
 =cut
 
@@ -1621,13 +1612,9 @@ Sets the string displayed on the screen instead an empty string.
 
 default: '<empty>'
 
-=head4 lf CHANGED
+=head4 lf
 
-This option is experimental!
-
-CHANGED: I<lf> expects now an array reference instead of a hash reference.
-
-If I<prompt> lines are folded the option I<lf> allowes to insert spaces at beginning of the folded lines.
+If I<prompt> lines are folded the option I<lf> allows to insert spaces at beginning of the folded lines.
 
 The option I<lf> expects a reference to an array with two elements;
 
@@ -1643,11 +1630,9 @@ See INITIAL_TAB and SUBSEQUENT_TAB in L<Text::LineFold>.
 
 =head4 ll
 
-This option is experimental!
-
 If all elements have the same length and this length is known before calling I<choose> it can be passed with this option.
 
-If I<ll> (two lowercase L) is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
+If I<ll> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
 
 I<length> refers here to the number of print columns the element will use on the terminal.
 
@@ -1655,7 +1640,7 @@ A way to determine the number of print columns is the use of I<columns> from L<U
 
 The length of undefined elements and elements with an empty string depends on the value of the option I<undef> resp. on the value of the option I<empty>.
 
-If the option I<ll> is set the elements must be upgraded with utf8::upgrade or with an equivalent tool and not contain any non-printing character (\P{Print}).
+If the option I<ll> is set the elements must be upgraded with utf8::upgrade or with an equivalent tool and not contain any non-printing character.
 
 The upgrade with utf8::upgrade is needed because a limitation of L<Unicode::GCString> (L<Bug #84661|https://rt.cpan.org/Public/Bug/Display.html?id=84661>).
 

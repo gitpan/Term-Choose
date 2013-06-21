@@ -1,6 +1,7 @@
 use 5.010000;
 use strict;
 use warnings;
+no if $] >= 5.018, warnings => "experimental::smartmatch";
 use Test::More;
 
 unless ( $ENV{RELEASE_TESTING} ) {

@@ -1,11 +1,11 @@
 #!/usr/bin/env perl
 use warnings;
 use strict;
-use 5.10.1;
+use 5.10.0;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.053
+# Version 1.054
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -169,7 +169,7 @@ my $opt = {
           choose_db     => [ 0,                  '- Choose Database' ],
           choose_schema => [ 0,                  '- Choose Schema' ],
           choose_table  => [ 0,                  '- Choose Table' ],
-          print_table   => [ 1,                  '- Print  Table' ],
+          table_expand  => [ 1,                  '- Print  Table' ],
     },
     dbs => {
         db_login       => [ 0,       '- DB login' ],
@@ -201,13 +201,13 @@ $info->{print}{keys}     = [ qw( tab_width min_col_width undef limit progress_ba
 $info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case ) ];
 $info->{dbs}{keys}       = [ qw( db_login db_defaults ) ];
 $info->{menu}{keys}      = [ qw( thsd_sep database_types operators sssc_mode expand choose_db
-                                 choose_schema choose_table print_table) ];
+                                 choose_schema choose_table table_expand) ];
 $info->{db_sections}     = [ qw( sqlite mysql postgres ) ];
 $info->{sqlite}{keys}    = [ qw( reset_cache unicode see_if_its_a_number busy_timeout cache_size binary_filter ) ];
 $info->{mysql}{keys}     = [ qw( enable_utf8 connect_timeout bind_type_guessing ChopBlanks binary_filter ) ];
 $info->{postgres}{keys}  = [ qw( pg_enable_utf8 binary_filter ) ];
 
-$info->{sub_expand}{menu} = [ qw( choose_db choose_schema choose_table print_table ) ];
+$info->{sub_expand}{menu} = [ qw( choose_db choose_schema choose_table table_expand ) ];
 $info->{cmdline_only}{sqlite} = [ qw( reset_cache ) ];
 
 #for my $section ( @{$info->{option_sections}}, @{$info->{db_sections}} ) {
@@ -2058,7 +2058,7 @@ sub func_print_tbl {
     $progress->update( $total ) if $total >= $next_update && $items > $start; #
     say 'Computing: ...' if $items > $start * 3;                              #
     my $len = sum( @$width_columns, $opt->{print}{tab_width}[v] * $#{$width_columns} );
-    if ( $opt->{print}{print_table}[v] ) {
+    if ( $opt->{menu}{table_expand}[v] ) {
         my $length_key = 0;
         for my $width ( @$cols_head_width ) {
             $length_key = $width if $width > $length_key;
@@ -2712,7 +2712,7 @@ sub choose_list {
         $prompt   .= 'Choose:';
         # Choose
         my $filter_type = choose(
-            [ undef, map( "- $_", @$available ), $info->{_continue} ],
+            [ undef, map( "- $_", @$available ), $info->{_confirm} ],
             { prompt => $prompt, lf => [0,$length_key], %{$info->{lyt_3_cs}} }
         );
         return if ! defined $filter_type;
