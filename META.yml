@@ -16,7 +16,7 @@ name: Term-Choose
 provides:
   Term::Choose:
     file: lib/Term/Choose.pm
-    version: 1.054
+    version: 1.055
 requires:
   Carp: 0
   Term::ReadKey: 2.30
@@ -25,4 +25,4 @@ requires:
   perl: 5.010000
 resources:
   license: http://dev.perl.org/licenses/
-version: 1.054
+version: 1.055

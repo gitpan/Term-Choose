@@ -5,7 +5,7 @@ use 5.10.0;
 use open qw(:std :utf8);
 
 #use Data::Dumper;
-# Version 1.054
+# Version 1.055
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -367,7 +367,7 @@ DB_TYPES: while ( 1 ) {
                 );
                 $schema = $choices->[$idx_sch] if defined $idx_sch;
                 next DATABASES if ! defined $schema;
-                if ( $opt->{print}{choose_schema}[v] ) {
+                if ( $opt->{menu}{choose_schema}[v] ) {
                     if ( $old_idx_sch == $idx_sch ) {
                         $old_idx_sch = 0;
                         next SCHEMA;
@@ -415,7 +415,7 @@ DB_TYPES: while ( 1 ) {
                     next SCHEMA if defined $data->{$db}{schemas} && @{$data->{$db}{schemas}} > 1;
                     next DATABASES;
                 }
-                if ( $opt->{print}{choose_table}[v] ) {
+                if ( $opt->{menu}{choose_table}[v] ) {
                     if ( $old_idx_tbl == $idx_tbl ) {
                         $old_idx_tbl = 0;
                         next TABLES;

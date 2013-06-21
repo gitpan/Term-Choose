@@ -1,6 +1,9 @@
 Revision history for Term::Choose
 
 
+1.055   2013-06-21
+        - Example: bug fix.
+        
 1.054   2013-06-21
         - Removed "experimental" from option "lf" and from option "ll".
         - Updated documentation.
