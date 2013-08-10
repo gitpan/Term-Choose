@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.056';
+our $VERSION = '1.057';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -1266,7 +1266,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.056
+Version 1.057
 
 =cut
 

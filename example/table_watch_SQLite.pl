@@ -4,7 +4,7 @@ use strict;
 use 5.10.0;
 use open qw(:std :utf8);
 
-# Version 1.056
+# Version 1.057
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -1466,13 +1466,12 @@ sub read_table {
             $sql->{quote}{limit_stmt} = " LIMIT";
             $sql->{print}{limit_stmt} = " LIMIT";
             my $digits = 7;
-            my ( $only_limit, $offset_and_limit, $auto ) = ( 'LIMIT', 'OFFSET-LIMIT', 'Auto' );
+            my ( $only_limit, $offset_and_limit ) = ( 'LIMIT', 'OFFSET-LIMIT' );
 
             LIMIT: while ( 1 ) {
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, $only_limit, $offset_and_limit ];
-                push    @$choices, $auto  if $info->{set_limit};
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $choice = choose(
                     $choices,
@@ -1498,23 +1497,20 @@ sub read_table {
                     }
                     last LIMIT;
                 }
-                #print_select_statement( $info, $sql, $table );
+                $sql->{quote}{limit_args} = [];
+                $sql->{quote}{limit_stmt} = " LIMIT";
+                $sql->{print}{limit_stmt} = " LIMIT";
                 # Choose_a_number
                 my $limit = choose_a_number( $info, $opt, $digits, '"LIMIT"' );
-                if ( ! defined $limit ) {
-                    $sql->{quote}{limit_args} = [];
-                    $sql->{quote}{limit_stmt} = " LIMIT";
-                    $sql->{print}{limit_stmt} = " LIMIT";
-                    next LIMIT;
-                }
+                next LIMIT if ! defined $limit;
                 push @{$sql->{quote}{limit_args}}, $limit;
                 $sql->{quote}{limit_stmt} .= ' ' . '?';
                 $sql->{print}{limit_stmt} .= ' ' . insert_sep( $limit, $opt->{menu}{thsd_sep}[v] );
                 if ( $choice eq $offset_and_limit ) {
-                    #print_select_statement( $info, $sql, $table );
                     # Choose_a_number
                     my $offset = choose_a_number( $info, $opt, $digits, '"OFFSET"' );
                     if ( ! defined $offset ) {
+                        $sql->{quote}{limit_args} = [];
                         $sql->{quote}{limit_stmt} = " LIMIT";
                         $sql->{print}{limit_stmt} = " LIMIT";
                         next LIMIT;
