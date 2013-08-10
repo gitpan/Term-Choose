@@ -1,10 +1,10 @@
 {
-   "abstract" : "Choose items from a list.",
+   "abstract" : "unknown",
    "author" : [
-      "Matth√§us Kiem <cuer2s@gmail.com>"
+      "Matth‰us Kiem <cuer2s@gmail.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.4005, CPAN::Meta::Converter version 2.131560",
+   "generated_by" : "ExtUtils::MakeMaker version 6.72, CPAN::Meta::Converter version 2.132140",
    "license" : [
       "perl_5"
    ],
@@ -13,6 +13,12 @@
       "version" : "2"
    },
    "name" : "Term-Choose",
+   "no_index" : {
+      "directory" : [
+         "t",
+         "inc"
+      ]
+   },
    "prereqs" : {
       "build" : {
          "requires" : {
@@ -21,7 +27,7 @@
       },
       "configure" : {
          "requires" : {
-            "Module::Build" : "0"
+            "ExtUtils::MakeMaker" : "0"
          }
       },
       "runtime" : {
@@ -34,17 +40,6 @@
          }
       }
    },
-   "provides" : {
-      "Term::Choose" : {
-         "file" : "lib/Term/Choose.pm",
-         "version" : "1.055"
-      }
-   },
    "release_status" : "stable",
-   "resources" : {
-      "license" : [
-         "http://dev.perl.org/licenses/"
-      ]
-   },
-   "version" : "1.055"
+   "version" : "1.056"
 }

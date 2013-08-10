@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.055';
+our $VERSION = '1.056';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -781,7 +781,7 @@ sub choose {
                 $arg->{cursor}[COL]--;
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] + 1 );
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
-                # remove backup_col if col has been changed deliberately
+                # since col has been changed deliberately:
                 $arg->{backup_col} = undef if defined $arg->{backup_col};
             }
         }
@@ -1258,7 +1258,7 @@ __END__
 
 =pod
 
-=encoding utf8
+=encoding UTF-8
 
 =head1 NAME
 
@@ -1266,7 +1266,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.055
+Version 1.056
 
 =cut
 

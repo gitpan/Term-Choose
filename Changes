@@ -1,9 +1,12 @@
 Revision history for Term::Choose
 
 
+1.056   2013-08-10
+        - Example: update and bug fix.
+
 1.055   2013-06-21
         - Example: bug fix.
-        
+
 1.054   2013-06-21
         - Removed "experimental" from option "lf" and from option "ll".
         - Updated documentation.
@@ -12,7 +15,7 @@ Revision history for Term::Choose
 1.053   2013-06-17
         - Fixed bug: replaced "\N{LINE FEED}" with "\n" (in "_prepare_promptline").
           Before Perl v5.16 an occurrence of \N{CHARNAME} doesn't load "charnames" module automatically.
-        
+
 1.052   2013-06-14
         - Modified experimental option "lf".
         - Update documentation.

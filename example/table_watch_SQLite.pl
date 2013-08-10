@@ -4,8 +4,7 @@ use strict;
 use 5.10.0;
 use open qw(:std :utf8);
 
-#use Data::Dumper;
-# Version 1.055
+# Version 1.056
 
 use Encode qw(encode_utf8 decode_utf8);
 use File::Basename;
@@ -37,23 +36,24 @@ use constant {
 
 my $home = File::HomeDir->my_home();
 my $config_dir = '.table_watch_conf';
+
 if ( $home ) {
     $config_dir = catdir( $home, $config_dir );
+    mkdir $config_dir or die $! if ! -d $config_dir;
 }
 else {
     say "Could not find the home directory!";
     exit;
 }
-mkdir $config_dir or die $! if ! -d $config_dir;
 
 my $info = {
     home                => $home,
     config_file         => catfile( $config_dir, 'tw_config.json' ),
     db_cache_file       => catfile( $config_dir, 'tw_cache_db_search.json' ),
-    lyt_stmt            => { layout => 1, order => 0, justify => 2, undef => '<<', lf => [0,4], clear_screen => 1  },
-    lyt_1               => { layout => 1, order => 0, justify => 2, undef => '<<' },
-    lyt_0               => { layout => 0 },
-    lyt_3_cs            => { layout => 3, clear_screen => 1, undef => '  BACK' },
+    lyt_stmt            => { layout => 1, order => 0, justify => 2, clear_screen => 1, undef => '<<', lf => [0,4]  },
+    lyt_1               => { layout => 1, order => 0, justify => 2, clear_screen => 0, undef => '<<' },
+    lyt_stop            => { layout => 0, order => 1, justify => 0, clear_screen => 0 },
+    lyt_3_cs            => { layout => 3, order => 1, justify => 0, clear_screen => 1, undef => '  BACK' },
     line_fold           => { Charset=> 'utf-8', OutputCharset => '_UNICODE_', Urgent => 'FORCE' },
     back                => 'BACK',
     confirm             => 'CONFIRM',
@@ -107,7 +107,7 @@ Options:
     Tabwidth    : Set the number of spaces between columns.
     Colwidth    : Set the width the columns should have at least when printed.
     Undef       : Set the string that will be shown on the screen if a table value is undefined.
-    Rows        : Set the maximum number of table rows available at once.
+    Rows        : Set the maximum number of fetched table rows. Can be overwritten by setting "LIMIT".
     ProgressBar : Set the progress bar threshold. The threshold refers to the list size.
     Length      : Choose the function which should investigate the string length on output.
                       "mbswidth" or "gcstring"
@@ -120,6 +120,7 @@ Options:
                      To reset a sql "sub-statement" (e.g WHERE) in the "simple" mode re-enter into
                      the "sub-statement" and choose '- OK -' or use the "q" key.
     Expand      : Set the behavior of different menus.
+    Mouse mode  : Set the mouse mode (see Term::Choose option "mouse").
 
     Lock        : Set the default value: Lk0 or Lk1.
                       Lk0: Reset the SQL-statement after each "PrintTable".
@@ -148,12 +149,12 @@ my $default_operators = [ "REGEXP", " = ", " != ", " < ", " > ", "IS NULL", "IS 
 
 my $opt = {
     print => {
-        tab_width       => [ 2,      '- Tabwidth' ],
-        min_col_width   => [ 30,     '- Colwidth' ],
-        undef           => [ '',     '- Undef' ],
-        limit           => [ 80_000, '- Rows' ],
-        progress_bar    => [ 20_000, '- ProgressBar' ],
-        fast_width      => [ 0,      '- Length' ]
+        tab_width       => [ 2,       '- Tabwidth' ],
+        min_col_width   => [ 30,      '- Colwidth' ],
+        undef           => [ '',      '- Undef' ],
+        limit           => [ 100_000, '- Rows' ],
+        progress_bar    => [ 20_000,  '- ProgressBar' ],
+        fast_width      => [ 0,       '- Length' ]
     },
     sql => {
         lock_stmt      => [ 0, '- Lock' ],
@@ -170,6 +171,7 @@ my $opt = {
           choose_schema => [ 0,                  '- Choose Schema' ],
           choose_table  => [ 0,                  '- Choose Table' ],
           table_expand  => [ 1,                  '- Print  Table' ],
+        mouse           => [ 0,                  '- Mouse mode' ],
     },
     dbs => {
         db_login       => [ 0,       '- DB login' ],
@@ -201,7 +203,7 @@ $info->{print}{keys}     = [ qw( tab_width min_col_width undef limit progress_ba
 $info->{sql}{keys}       = [ qw( lock_stmt system_info regexp_case ) ];
 $info->{dbs}{keys}       = [ qw( db_login db_defaults ) ];
 $info->{menu}{keys}      = [ qw( thsd_sep database_types operators sssc_mode expand choose_db
-                                 choose_schema choose_table table_expand) ];
+                                 choose_schema choose_table table_expand mouse ) ];
 $info->{db_sections}     = [ qw( sqlite mysql postgres ) ];
 $info->{sqlite}{keys}    = [ qw( reset_cache unicode see_if_its_a_number busy_timeout cache_size binary_filter ) ];
 $info->{mysql}{keys}     = [ qw( enable_utf8 connect_timeout bind_type_guessing ChopBlanks binary_filter ) ];
@@ -210,19 +212,12 @@ $info->{postgres}{keys}  = [ qw( pg_enable_utf8 binary_filter ) ];
 $info->{sub_expand}{menu} = [ qw( choose_db choose_schema choose_table table_expand ) ];
 $info->{cmdline_only}{sqlite} = [ qw( reset_cache ) ];
 
-#for my $section ( @{$info->{option_sections}}, @{$info->{db_sections}} ) {
-#    if ( join( ' ', sort keys %{$opt->{$section}} ) ne join( ' ', sort @{$info->{$section}{keys}} ) ) {
-#        say join( ' ', sort keys %{$opt->{$section}} );
-#        say join( ' ', sort      @{$info->{$section}{keys}} );
-#        die;
-#    }
-#}
 
 if ( ! eval {
     $opt = read_config_file( $opt, $info->{config_file} );
     my $help;
     GetOptions (
-        'h|?|help'   => \$help,
+        'h|?|help' => \$help,
         's|search' => \$opt->{sqlite}{reset_cache}[v],
     );
     $opt = options( $info, $opt ) if $help;
@@ -230,6 +225,10 @@ if ( ! eval {
 ) {
     say 'Configfile/Options:';
     print_error_message( $@ );
+}
+
+for my $lyt ( qw( lyt_stmt lyt_1 lyt_stop lyt_3_cs ) ) {
+    $info->{$lyt}{mouse} = $opt->{menu}{mouse}[v];
 }
 
 $info->{ok} = '<OK>' if $opt->{menu}{sssc_mode}[v];
@@ -488,12 +487,15 @@ DB_TYPES: while ( 1 ) {
                             push @$pr_columns, $col;
                         }
                     }
+                    my $sth = $dbh->prepare( "SELECT COUNT(*) FROM ( " . $select_from_stmt . " LIMIT ? ) AS limit_part" );
+                    $sth->execute( $opt->{print}{limit}[v] );
+                    my ( $rows ) = $sth->fetchrow_array;
+                    $info->{set_limit} = $rows == $opt->{print}{limit}[v] ? 1 : 0;
 
-                    MAIN_LOOP: while ( 1 ) {
-                        my ( $all_arrayref, $pr_columns ) = read_table( $info, $opt, $sql, $dbh, $table,
-                                                                        $select_from_stmt, $qt_columns, $pr_columns );
-                        last MAIN_LOOP if ! defined $all_arrayref;
-                        split_and_print_table( $info, $opt, $dbh, $db, $all_arrayref, $pr_columns );
+                    PRINT_TABLE: while ( 1 ) {
+                        my ( $all_arrayref ) = read_table( $info, $opt, $sql, $dbh, $table, $select_from_stmt, $qt_columns, $pr_columns );
+                        last PRINT_TABLE if ! defined $all_arrayref;
+                        func_print_tbl( $info, $opt, $db, $all_arrayref );
                     }
 
                     1 }
@@ -981,6 +983,11 @@ sub read_table {
     if ( $info->{lock} == 0 ) {
         reset_stmts( $sql, $qt_columns );
     }
+    my $auto_limit = '';
+    if ( $info->{set_limit} && ! $sql->{print}{limit_stmt} ) {
+        $auto_limit = " LIMIT " . insert_sep( $opt->{print}{limit}[v], $opt->{menu}{thsd_sep}[v] );
+        $sql->{print}{limit_stmt} = $auto_limit;
+    }
 
     CUSTOMIZE: while ( 1 ) {
         my $prompt = print_select_statement( $info, $sql, $table );
@@ -1458,15 +1465,14 @@ sub read_table {
             $sql->{quote}{limit_args} = [];
             $sql->{quote}{limit_stmt} = " LIMIT";
             $sql->{print}{limit_stmt} = " LIMIT";
-            ( my $from_stmt = $select_from_stmt ) =~ s/^SELECT\s.*?(\sFROM\s.*)\z/$1/;
-            my ( $rows ) = $dbh->selectrow_array( "SELECT COUNT(*)" . $from_stmt, {} );
-            my $digits = length $rows;
-            my ( $only_limit, $offset_and_limit ) = ( 'LIMIT', 'OFFSET-LIMIT' );
+            my $digits = 7;
+            my ( $only_limit, $offset_and_limit, $auto ) = ( 'LIMIT', 'OFFSET-LIMIT', 'Auto' );
 
             LIMIT: while ( 1 ) {
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
                 my $choices = [ $info->{ok}, $only_limit, $offset_and_limit ];
+                push    @$choices, $auto  if $info->{set_limit};
                 unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
                 my $choice = choose(
                     $choices,
@@ -1481,31 +1487,18 @@ sub read_table {
                     }
                     else {
                         $sql->{quote}{limit_stmt} = '';
-                        $sql->{print}{limit_stmt} = '';
+                        $sql->{print}{limit_stmt} = $auto_limit;
                         last LIMIT;
                     }
                 }
                 if ( $choice eq $info->{ok} ) {
                     if ( ! @{$sql->{quote}{limit_args}} ) {
                         $sql->{quote}{limit_stmt} = '';
-                        $sql->{print}{limit_stmt} = '';
+                        $sql->{print}{limit_stmt} = $auto_limit;
                     }
                     last LIMIT;
                 }
-                if ( $choice eq $offset_and_limit ) {
-                    print_select_statement( $info, $sql, $table );
-                    # Choose_a_number
-                    my $offset = choose_a_number( $info, $opt, $digits, '"OFFSET"' );
-                    if ( ! defined $offset ) {
-                        $sql->{quote}{limit_stmt} = " LIMIT";
-                        $sql->{print}{limit_stmt} = " LIMIT";
-                        next LIMIT;
-                    }
-                    push @{$sql->{quote}{limit_args}}, $offset;
-                    $sql->{quote}{limit_stmt} .= ' ' . '?'     . ',';
-                    $sql->{print}{limit_stmt} .= ' ' . $offset . ',';
-                }
-                print_select_statement( $info, $sql, $table );
+                #print_select_statement( $info, $sql, $table );
                 # Choose_a_number
                 my $limit = choose_a_number( $info, $opt, $digits, '"LIMIT"' );
                 if ( ! defined $limit ) {
@@ -1516,7 +1509,20 @@ sub read_table {
                 }
                 push @{$sql->{quote}{limit_args}}, $limit;
                 $sql->{quote}{limit_stmt} .= ' ' . '?';
-                $sql->{print}{limit_stmt} .= ' ' . $limit;
+                $sql->{print}{limit_stmt} .= ' ' . insert_sep( $limit, $opt->{menu}{thsd_sep}[v] );
+                if ( $choice eq $offset_and_limit ) {
+                    #print_select_statement( $info, $sql, $table );
+                    # Choose_a_number
+                    my $offset = choose_a_number( $info, $opt, $digits, '"OFFSET"' );
+                    if ( ! defined $offset ) {
+                        $sql->{quote}{limit_stmt} = " LIMIT";
+                        $sql->{print}{limit_stmt} = " LIMIT";
+                        next LIMIT;
+                    }
+                    push @{$sql->{quote}{limit_args}}, $offset;
+                    $sql->{quote}{limit_stmt} .= " OFFSET " . '?';
+                    $sql->{print}{limit_stmt} .= " OFFSET " . insert_sep( $offset, $opt->{menu}{thsd_sep}[v] );
+                }
             }
         }
         elsif ( $custom eq $customize{'hidden'} ) {
@@ -1643,6 +1649,10 @@ sub read_table {
             $select .= $sql->{quote}{order_by_stmt};
             $select .= $sql->{quote}{limit_stmt};
             my @arguments = ( @{$sql->{quote}{where_args}}, @{$sql->{quote}{having_args}}, @{$sql->{quote}{limit_args}} );
+            if ( ! $sql->{quote}{limit_stmt} && $info->{set_limit} ) {
+                $select .= " LIMIT ?";
+                push @arguments, $opt->{print}{limit}[v];
+            }
             # $dbh->{LongReadLen} = (GetTerminalSize)[0] * 4;
             # $dbh->{LongTruncOk} = 1;
             my $work_around = 0; # https://rt.cpan.org/Public/Bug/Display.html?id=62458
@@ -1650,6 +1660,7 @@ sub read_table {
                 $dbh->{mysql_bind_type_guessing} = 0;
                 $work_around = 1;
             }
+            say 'Computing: ...';
             my $sth = $dbh->prepare( $select );
             $sth->execute( @arguments );
             if ( $work_around ) {
@@ -1852,50 +1863,6 @@ sub set_operator_sql {
 }
 
 
-
-sub split_and_print_table {
-    my ( $info, $opt, $dbh, $db, $all_arrayref ) = @_;
-    my $limit = $opt->{print}{limit}[v];
-    my $begin = 0;
-    my $end = $limit - 1;
-    my @choices;
-    my $rows = @$all_arrayref;
-    if ( $rows > $limit ) {
-        my $lr = length $rows;
-        push @choices, sprintf "  %${lr}d - %${lr}d  ", $begin, $end;
-        $rows -= $limit;
-        while ( $rows > 0 ) {
-            $begin += $limit;
-            $end   += $rows > $limit ? $limit : $rows;
-            push @choices, sprintf "  %${lr}d - %${lr}d  ", $begin, $end;
-            $rows -= $limit;
-        }
-    }
-    my $start;
-    my $stop;
-
-    PRINT: while ( 1 ) {
-        if ( @choices ) {
-            # Choose
-            my $choice = choose(
-                [ undef, @choices ],
-                { %{$info->{lyt_3_cs}} }
-            );
-            last PRINT if ! defined $choice;
-            $start = ( split /\s*-\s*/, $choice )[0];
-            $start =~ s/^\s+//;
-            $stop = $start + $limit - 1;
-            $stop = $#$all_arrayref if $stop > $#$all_arrayref;
-            func_print_tbl( $info, $opt, $db, [ @{$all_arrayref}[ $start .. $stop ] ] );
-        }
-        else {
-            func_print_tbl( $info, $opt, $db, $all_arrayref );
-            last PRINT;
-        }
-    }
-}
-
-
 sub calc_widths {
     my ( $info, $opt, $db, $a_ref, $terminal_width ) = @_;
     my ( $cols_head_width, $width_columns, $not_a_number );
@@ -1973,8 +1940,8 @@ sub recalc_widths {
         $percent += 1;
         if ( $percent >= 100 ) {
             say 'Terminal window is not wide enough to print this table.';
-            choose( [ 'Press ENTER to show the column names' ], { prompt => '', %{$info->{lyt_0}} } );
-            choose( $a_ref->[0], { prompt => 'Column names (close with ENTER):', %{$info->{lyt_0}} } );
+            choose( [ 'Press ENTER to show the column names' ], { prompt => '', %{$info->{lyt_stop}} } );
+            choose( $a_ref->[0], { prompt => 'Column names (close with ENTER):', %{$info->{lyt_stop}} } );
             return;
         }
         my $count = 0;
@@ -2058,6 +2025,8 @@ sub func_print_tbl {
     $progress->update( $total ) if $total >= $next_update && $items > $start; #
     say 'Computing: ...' if $items > $start * 3;                              #
     my $len = sum( @$width_columns, $opt->{print}{tab_width}[v] * $#{$width_columns} );
+    my $limit = $opt->{print}{limit}[v] >= 100_000 ? $opt->{print}{limit}[v] + 1 : 100_000;
+
     if ( $opt->{menu}{table_expand}[v] ) {
         my $length_key = 0;
         for my $width ( @$cols_head_width ) {
@@ -2082,10 +2051,11 @@ sub func_print_tbl {
                 func_print_tbl( $info, $opt, $db, $a_ref );
                 return;
             }
+
             my $idx_row = choose(
                 \@list,
                 { prompt => '', %{$info->{lyt_3_cs}}, index => 1, default => $idx_old,
-                  limit => $opt->{print}{limit}[v] + 1, ll => $len }
+                  limit => $limit, ll => $len }
             );
             return if ! defined $idx_row;
             return if $idx_row == 0;
@@ -2125,7 +2095,7 @@ sub func_print_tbl {
     else {
         choose(
             \@list,
-            { prompt => '', %{$info->{lyt_3_cs}}, limit => $opt->{print}{limit}[v] + 1, ll => $len }
+            { prompt => '', %{$info->{lyt_3_cs}}, limit => $limit, ll => $len }
         );
         return;
     }
@@ -2167,7 +2137,7 @@ sub options {
         }
         elsif ( $option eq $info->{_help} ) {
             help();
-            choose( [ ' Close with ENTER ' ], { prompt => '', %{$info->{lyt_0}} } );
+            choose( [ ' Close with ENTER ' ], { prompt => '', %{$info->{lyt_stop}} } );
         }
         elsif ( $option eq $opt->{"print"}{'tab_width'}[chs] ) {
             my $max = 99;
@@ -2226,6 +2196,10 @@ sub options {
         }
         elsif ( $option eq $opt->{"menu"}{'database_types'}[chs] ) {
             $change += opt_choose_a_list( $info, $opt->{menu}{database_types}[v], $info->{avilable_db_types} );
+        }
+        elsif ( $option eq $opt->{"menu"}{'mouse'}[chs] ) {
+            my $max = 4;
+            $change += opt_number( $opt->{menu}{mouse}[v], 'Mouse mode', $max );
         }
         elsif ( $option eq $opt->{"menu"}{'expand'}[chs] ) {
             my $count;
@@ -2325,7 +2299,7 @@ sub opt_number_range {
     my $info = shift;
     my $opt  = shift;
     my ( $current, $prompt, $digits ) = @_;
-    $current =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
+    $current = insert_sep( $current, $opt->{menu}{thsd_sep}[v] );
     # Choose_a_number
     my $choice = choose_a_number( $info, $opt, $digits, $prompt, $current );
     return 0 if ! defined $choice;
@@ -2476,7 +2450,7 @@ sub database_setting {
 sub db_opt_number_range {
     my ( $info, $opt, $new, $section, $key, $db_type, $db, $digits, $prompt ) = @_;
     my $current = current_value( $opt, $key, $db_type, $db );
-    $current =~ s/(\d)(?=(?:\d{3})+\b)/$1$opt->{menu}{thsd_sep}[v]/g;
+    $current = insert_sep( $current, $opt->{menu}{thsd_sep}[v] );
     # Choose_a_number
     my $choice = choose_a_number( $info, $opt, $digits, $prompt, $current );
     if ( ! defined $choice ) {
@@ -2515,7 +2489,7 @@ sub print_error_message {
     my ( $message ) = @_;
     utf8::decode( $message );
     print $message;
-    choose( [ 'Press ENTER to continue' ], { prompt => '', %{$info->{lyt_0}} } );
+    choose( [ 'Press ENTER to continue' ], { prompt => '', %{$info->{lyt_stop}} } );
 }
 
 
@@ -2630,7 +2604,7 @@ sub choose_a_number {
     my @choices_range = ();
     for my $di ( 0 .. $digits - 1 ) {
         my $begin = 1 . '0' x $di;
-        $begin =~ s/(\d)(?=(?:\d{3})+\b)/$1$sep/g;
+        $begin = insert_sep( $begin, $sep );
         ( my $end = $begin ) =~ s/^1/9/;
         unshift @choices_range, sprintf " %*s%s%*s", $longest, $begin, $tab, $longest, $end;
     }
@@ -2642,7 +2616,7 @@ sub choose_a_number {
             @choices_range = ();
         for my $di ( 0 .. $digits - 1 ) {
             my $begin = 1 . '0' x $di;
-            $begin =~ s/(\d)(?=(?:\d{3})+\b)/$1$sep/g;
+            $begin = insert_sep( $begin, $sep );
             unshift @choices_range, sprintf "%*s", $longest, $begin;
         }
         $confirm = $info->{confirm};
@@ -2689,12 +2663,21 @@ sub choose_a_number {
         }
         $result = sum( @numbers{keys %numbers} );
         $result = '--' if $result == 0;
-        $result =~ s/(\d)(?=(?:\d{3})+\b)/$1$sep/g;
+        $result = insert_sep( $result, $sep );
     }
     $result =~ s/\Q$sep\E//g if $sep ne '';
     $result = undef if $result eq '--';
     return $result;
 }
+
+
+sub insert_sep {
+    my ( $number, $separator ) = @_;
+    return $number if ! $separator;
+    $number =~ s/(\d)(?=(?:\d{3})+\b)/$1$separator/g;
+    return $number;
+}
+
 
 
 sub choose_list {
@@ -3223,21 +3206,4 @@ sub no_entry_for_db_type {
 
 
 __DATA__
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
