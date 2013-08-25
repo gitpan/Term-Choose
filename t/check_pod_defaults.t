@@ -22,7 +22,7 @@ my %option_default;
 
 open $fh, '<', $file or die $!;
 while ( my $line = readline $fh ) {
-    if ( $line =~ /\Asub _set_layout {/ .. $line =~ /\A\s+return\s\$config;/ ) {
+    if ( $line =~ /\Asub _set_defaults {/ .. $line =~ /\A\s+return\s\$config;/ ) {
         if ( $line =~ m|\A\s+#?\s*\$config->{(\w+)}\s+//=\s(.*);| ) {
             my $op = $1;
             next if $op eq 'prompt';

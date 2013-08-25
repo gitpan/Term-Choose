@@ -7,7 +7,7 @@ unless ( $ENV{RELEASE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 else {
-    plan tests => 4;
+    plan tests => 5;
 }
     
 
@@ -18,6 +18,7 @@ my $v = $Term::Choose::VERSION;
 my $v_pod = -1;
 my $v_changes = -1;
 my $v_example = -1;
+my $v_pod_example = -1;
 my $release_date = -1;
 
 
@@ -35,6 +36,11 @@ open my $fh2, '<', 'example/table_watch_SQLite.pl' or die $!;
 while ( my $line = readline $fh2 ) {
     if ( $line =~ m/\A#\sVersion\s(\d\.\d\d\d)/m ) {
         $v_example = $1;
+    }
+    if ( $line =~ /\A=pod/ .. $line =~ /\A=cut/ ) {
+        if ( $line =~ m/\A\s*Version\s+(\S+)/m ) {
+            $v_pod_example = $1;
+        }
     }
 }
 close $fh2;
@@ -54,9 +60,10 @@ close $fh_ch;
 
 my $today = strftime "%Y-%m-%d", localtime();
 
-is( $v,    $v_pod,    'Version in POD Term::Choose OK' );
-is( $v,    $v_changes, 'Version in "Changes" OK' );
-is( $v,    $v_example, 'Version in "example/table_watch_SQLite.pl" OK' );
+is( $v,    $v_pod,         'Version in POD Term::Choose OK' );
+is( $v,    $v_changes,     'Version in "Changes" OK' );
+is( $v,    $v_example,     'Version in "example/table_watch_SQLite.pl" OK' );
+is( $v,    $v_pod_example, 'Version in POD "example/table_watch_SQLite.pl" OK' );
 is( $release_date, $today, 'Release date in Changes is date from today' );
 
 

@@ -10,7 +10,7 @@ WriteMakefile(
     PL_FILES       => {},
     MIN_PERL_VERSION => '5.010000',
     LICENSE        => 'perl',
-    AUTHOR         => 'Matthäus Kiem <cuer2s@gmail.com>',
+    AUTHOR         => 'Matthaeus Kiem <cuer2s@gmail.com>',
     NAME           => 'Term::Choose',
     VERSION_FROM   => 'lib/Term/Choose.pm',
     EXE_FILES      => [],

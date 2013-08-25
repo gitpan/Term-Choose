@@ -1,7 +1,7 @@
 {
    "abstract" : "unknown",
    "author" : [
-      "Matthäus Kiem <cuer2s@gmail.com>"
+      "Matthaeus Kiem <cuer2s@gmail.com>"
    ],
    "dynamic_config" : 1,
    "generated_by" : "ExtUtils::MakeMaker version 6.72, CPAN::Meta::Converter version 2.132140",
@@ -41,5 +41,5 @@
       }
    },
    "release_status" : "stable",
-   "version" : "1.057"
+   "version" : "1.058"
 }

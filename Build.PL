@@ -9,7 +9,7 @@ use Module::Build;
 my $builder = Module::Build->new(
     module_name         => 'Term::Choose',
     license             => 'perl',
-    dist_author         => 'Matthäus Kiem <cuer2s@gmail.com>',
+    dist_author         => 'Matthaeus Kiem <cuer2s@gmail.com>',
     dist_version_from   => 'lib/Term/Choose.pm',
     configure_requires => {
         'Module::Build' => 0,

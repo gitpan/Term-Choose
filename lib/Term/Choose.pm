@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.057';
+our $VERSION = '1.058';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -25,8 +25,8 @@ use constant {
 
 use constant {
     UP                              => "\e[A",
-    DOWN                            => "\n",
     RIGHT                           => "\e[C",
+    NL                              => "\n",
     CR                              => "\r",
     GET_CURSOR_POSITION             => "\e[6n",
 
@@ -54,7 +54,7 @@ use constant {
 };
 
 use constant {
-    NEXT_getch      => -1,
+    NEXT_read_key      => -1,
 
     CONTROL_SPACE   => 0x00,
     CONTROL_A       => 0x01,
@@ -91,22 +91,13 @@ use constant {
 };
 
 
-sub _getch {
+sub _read_key {
     my ( $arg ) = @_;
     my $c1 = ReadKey 0;
     return if ! defined $c1;
     if ( $c1 eq "\e" ) {
         my $c2 = ReadKey 0.10;
         if ( ! defined $c2 ) { return KEY_ESC; } # unused
-        elsif ( $c2 eq 'A' ) { return KEY_UP; }
-        elsif ( $c2 eq 'B' ) { return KEY_DOWN; }
-        elsif ( $c2 eq 'C' ) { return KEY_RIGHT; }
-        elsif ( $c2 eq 'D' ) { return KEY_LEFT; }
-        elsif ( $c2 eq 'F' ) { return KEY_END; }
-        elsif ( $c2 eq 'H' ) { return KEY_HOME; }
-        elsif ( $c2 eq 'Z' ) { return KEY_BTAB; }
-        elsif ( $c2 eq '5' ) { return KEY_PAGE_UP; }
-        elsif ( $c2 eq '6' ) { return KEY_PAGE_DOWN; }
         elsif ( $c2 eq '[' ) {
             my $c3 = ReadKey 0;
                if ( $c3 eq 'A' ) { return KEY_UP; }
@@ -124,7 +115,7 @@ sub _getch {
                     elsif ( $c3 eq '5' ) { return KEY_PAGE_UP; }
                     elsif ( $c3 eq '6' ) { return KEY_PAGE_DOWN; }
                     else {
-                        return NEXT_getch;
+                        return NEXT_read_key;
                     }
                 }
                 elsif ( $c4 =~ /^[;0-9]$/ ) { # response to "\e[6n"
@@ -134,7 +125,7 @@ sub _getch {
                         $abs_curs_y .= $ry;
                         $ry = ReadKey 0;
                     }
-                    return NEXT_getch if $ry ne ';';
+                    return NEXT_read_key if $ry ne ';';
                     my $abs_curs_x = '';
                     my $rx = ReadKey 0;
                     while ( $rx =~ m/^[0-9]$/ ) {
@@ -145,16 +136,12 @@ sub _getch {
                         $arg->{abs_cursor_y} = $abs_curs_y;
                         $arg->{abs_cursor_x} = $abs_curs_x; # unused
                     }
-                    return NEXT_getch;
+                    return NEXT_read_key;
                 }
                 else {
-                    return NEXT_getch;
+                    return NEXT_read_key;
                 }
             }
-            elsif ( $c3 eq '2' ) { return KEY_INSERT; } # unused
-            elsif ( $c3 eq '3' ) { return KEY_DELETE; } # unused
-            elsif ( $c3 eq '5' ) { return KEY_PAGE_UP; }
-            elsif ( $c3 eq '6' ) { return KEY_PAGE_DOWN; }
             # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
             elsif ( $c3 eq 'M' && $arg->{mouse} ) {
                 my $event_type = ord( ReadKey 0 ) - 32;
@@ -168,29 +155,29 @@ sub _getch {
                 while ( ( $m1 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
                     $event_type .= $m1;
                 }
-                return NEXT_getch if $m1 ne ';';
+                return NEXT_read_key if $m1 ne ';';
                 my $x = '';
                 my $m2;
                 while ( ( $m2 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
                     $x .= $m2;
                 }
-                return NEXT_getch if $m2 ne ';';
+                return NEXT_read_key if $m2 ne ';';
                 my $y = '';
                 my $m3;
                 while ( ( $m3 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
                     $y .= $m3;
                 }
-                return NEXT_getch if $m3 !~ /^[mM]$/;
+                return NEXT_read_key if $m3 !~ /^[mM]$/;
                 my $button_released = $m3 eq 'm' ? 1 : 0;
-                return NEXT_getch if $button_released;
+                return NEXT_read_key if $button_released;
                 return _handle_mouse( $arg, $event_type, $x, $y );
             }
             else {
-                return NEXT_getch;
+                return NEXT_read_key;
             }
         }
         else {
-            return NEXT_getch;
+            return NEXT_read_key;
         }
     }
     else {
@@ -341,8 +328,58 @@ sub _copy_orig_list {
 }
 
 
-sub _validate_option {
-    my ( $config ) = @_;
+sub _validate_arguments {
+    my ( $orig_list_ref, $config ) = @_;
+    croak "choose: called without arguments. 'choose' expects 1 or 2 arguments." if @_ < 1;
+    croak "choose: called with " . scalar @_ . " arguments. 'choose' expects 1 or 2 arguments." if @_ > 2;
+    croak "choose: The first argument is not defined. "
+        . "The first argument has to be an ARRAY reference." if ! defined $orig_list_ref;
+    croak "choose: The first argument is not a reference. "
+        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) eq '';
+    croak "choose: The first argument is not an ARRAY reference. "
+        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) ne 'ARRAY';
+    if ( defined $config ) {
+        croak "choose: The second argument is not a reference. "
+            . "The (optional) second argument has to be a HASH reference." if ref( $config ) eq '';
+        croak "choose: The second argument is not a HASH reference. "
+            . "The (optional) second argument has to be a HASH reference." if ref( $config ) ne 'HASH';
+    }
+    if ( ! @$orig_list_ref ) {
+        carp "choose: The first argument refers to an empty list!";
+    }
+    return $orig_list_ref, $config // {};
+}
+
+
+sub _set_defaults {
+    my ( $config, $wantarray ) = @_;
+    my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
+    $config->{beep}             //= 0;
+    $config->{clear_screen}     //= 0;
+    #$config->{default}         //= undef;
+    $config->{empty}            //= '<empty>';
+    $config->{hide_cursor}      //= 1;
+    $config->{index}            //= 0;
+    $config->{justify}          //= 0;
+    $config->{keep}             //= 5;
+    $config->{layout}           //= 1;
+    #$config->{lf}              //= undef;
+    #$config->{ll}              //= undef;
+    $config->{limit}            //= 100_000;
+    $config->{mouse}            //= 0;
+    $config->{order}            //= 1;
+    $config->{pad}              //= 2;
+    $config->{pad_one_row}      //= $config->{pad};
+    $config->{page}             //= 1;
+    $config->{prompt}           //= $prompt;
+    #$config->{screen_width}    //= undef;
+    $config->{undef}            //= '<undef>';
+    return $config;
+}
+
+
+sub _validate_options {
+    my ( $config, $wantarray, $list_length ) = @_;
     my $limit = 1_000_000_000;
     my $validate = {    #   min      max
         beep            => [ 0,       1 ],
@@ -413,38 +450,19 @@ sub _validate_option {
         #     nothing to do;
         # }
     }
+    $config = _set_defaults( $config, $wantarray );
+    if ( $list_length > $config->{limit} ) {
+        carp "choose: The list has $list_length items. Option \"limit\" is set to $config->{limit}. "
+           . "The first $config->{limit} itmes are used by choose.";
+        $config->{list_to_long} = 1;
+        print "Press a key to continue";
+        $warn++;
+    }
     if ( $warn ) {
         print "Press a key to continue";
         my $dummy = <STDIN>;
     }
-    return $config;
-}
-
-
-sub _set_layout {
-    my ( $wantarray, $config ) = @_;
-    my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
-    $config = _validate_option( $config // {} );
-    $config->{beep}             //= 0;
-    $config->{clear_screen}     //= 0;
-    #$config->{default}         //= undef;
-    $config->{empty}            //= '<empty>';
-    $config->{hide_cursor}      //= 1;
-    $config->{index}            //= 0;
-    $config->{justify}          //= 0;
-    $config->{keep}             //= 5;
-    $config->{layout}           //= 1;
-    #$config->{lf}              //= undef;
-    #$config->{ll}              //= undef;
-    $config->{limit}            //= 100_000;
-    $config->{mouse}            //= 0;
-    $config->{order}            //= 1;
-    $config->{pad}              //= 2;
-    $config->{pad_one_row}      //= $config->{pad};
-    $config->{page}             //= 1;
-    $config->{prompt}           //= $prompt;
-    #$config->{screen_width}    //= undef;
-    $config->{undef}            //= '<undef>';
+    $config->{wantarray} = $wantarray;
     return $config;
 }
 
@@ -527,10 +545,6 @@ sub _prepare_promptline {
 
 sub _write_first_screen {
     my ( $arg ) = @_;
-#    if ( $arg->{clear_screen} ) {
-#        print CLEAR_SCREEN;
-#        print GO_TO_TOP_LEFT;
-#    }
     ( $arg->{avail_width}, $arg->{avail_height} ) = GetTerminalSize( $arg->{handle_out} );
     if ( $arg->{screen_width} && $arg->{avail_width} > $arg->{screen_width} ) {
         $arg->{avail_width} = $arg->{screen_width};
@@ -580,44 +594,16 @@ sub _write_first_screen {
 
 
 sub choose {
-    my ( $orig_list_ref, $config ) = @_;
+    my ( $orig_list_ref, $config ) = _validate_arguments( @_ );
+    return if ! @$orig_list_ref;
     local $\ = undef;
     local $, = undef;
-    croak "choose: called without arguments. 'choose' expects 1 or 2 arguments." if @_ < 1;
-    croak "choose: called with " . scalar @_ . " arguments. 'choose' expects 1 or 2 arguments." if @_ > 2;
-    croak "choose: The first argument is not defined. "
-        . "The first argument has to be an ARRAY reference." if ! defined $orig_list_ref;
-    croak "choose: The first argument is not a reference. "
-        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) eq '';
-    croak "choose: The first argument is not an ARRAY reference. "
-        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) ne 'ARRAY';
-    if ( defined $config ) {
-        croak "choose: The second argument is not a reference. "
-            . "The (optional) second argument has to be a HASH reference." if ref( $config ) eq '';
-        croak "choose: The second argument is not a HASH reference. "
-            . "The (optional) second argument has to be a HASH reference." if ref( $config ) ne 'HASH';
-    }
-    if ( ! @$orig_list_ref ) {
-        carp "choose: The first argument refers to an empty list!";
-        return;
-    }
-    my $wantarray;
-    $wantarray = wantarray ? 1 : 0 if defined wantarray;
-    my $arg = _set_layout( $wantarray, $config );
-    if ( @$orig_list_ref > $arg->{limit} ) {
-        my $list_length = scalar @$orig_list_ref;
-        carp "choose: The list has $list_length items. Option \"limit\" is set to $arg->{limit}. "
-           . "The first $arg->{limit} itmes are used by choose.";
-        $arg->{list_to_long} = 1;
-        print "Press a key to continue";
-        my $dummy = <STDIN>;
-    }
+    my $arg = _validate_options( $config, wantarray, scalar @$orig_list_ref );
     $arg->{orig_list}  = $orig_list_ref;
     $arg->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
     $arg->{list}       = _copy_orig_list( $arg );
     _length_longest( $arg );
     $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
-    $arg->{wantarray} = $wantarray;
     local $SIG{'INT'} = sub {
         my $signame = shift;
         exit( 1 );
@@ -632,13 +618,13 @@ sub choose {
     _write_first_screen( $arg );
 
     while ( 1 ) {
-        my $c = _getch( $arg );
-        if ( ! defined $c ) {
+        my $key = _read_key( $arg );
+        if ( ! defined $key ) {
             $arg->{EOT} = 1;
             return;
         }
-        next if $c == NEXT_getch;
-        next if $c == KEY_Tilde;
+        next if $key == NEXT_read_key;
+        next if $key == KEY_Tilde;
         if ( $arg->{size_changed} ) {
             $arg->{list} = _copy_orig_list( $arg );
             print CR, UP x ( $arg->{screen_row} + $arg->{nr_prompt_lines} );
@@ -661,7 +647,7 @@ sub choose {
         # On the other hand the index of the last row of the new list would be $#{$arg->{rc2idx}}
         # or the index of the last column in the first row would be $#{$arg->{rc2idx}[0]}.
 
-        if ( $c == KEY_j || $c == KEY_DOWN ) {
+        if ( $key == KEY_j || $key == KEY_DOWN ) {
             if ( $#{$arg->{rc2idx}} == 0 || ! ( $arg->{rc2idx}[$arg->{cursor}[ROW]+1]
                                              && $arg->{rc2idx}[$arg->{cursor}[ROW]+1][$arg->{cursor}[COL]] )
             ) {
@@ -682,7 +668,7 @@ sub choose {
                 }
             }
         }
-        elsif ( $c == KEY_k || $c == KEY_UP ) {
+        elsif ( $key == KEY_k || $key == KEY_UP ) {
             if ( $arg->{cursor}[ROW] == 0 ) {
                 _beep( $arg );
             }
@@ -705,7 +691,7 @@ sub choose {
                 }
             }
         }
-        elsif ( $c == KEY_TAB || $c == CONTROL_I ) {
+        elsif ( $key == KEY_TAB || $key == CONTROL_I ) {
             if (    $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
                  && $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
             ) {
@@ -735,7 +721,7 @@ sub choose {
                 }
             }
         }
-        elsif ( $c == KEY_BSPACE || $c == CONTROL_H || $c == KEY_BTAB ) {
+        elsif ( $key == KEY_BSPACE || $key == CONTROL_H || $key == KEY_BTAB ) {
             if ( $arg->{cursor}[COL] == 0 && $arg->{cursor}[ROW] == 0 ) {
                 _beep( $arg );
             }
@@ -763,7 +749,7 @@ sub choose {
                 }
             }
         }
-        elsif ( $c == KEY_l || $c == KEY_RIGHT ) {
+        elsif ( $key == KEY_l || $key == KEY_RIGHT ) {
             if ( $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]} ) {
                 _beep( $arg );
             }
@@ -773,7 +759,7 @@ sub choose {
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
             }
         }
-        elsif ( $c == KEY_h || $c == KEY_LEFT ) {
+        elsif ( $key == KEY_h || $key == KEY_LEFT ) {
             if ( $arg->{cursor}[COL] == 0 ) {
                 _beep( $arg );
             }
@@ -785,7 +771,7 @@ sub choose {
                 $arg->{backup_col} = undef if defined $arg->{backup_col};
             }
         }
-        elsif ( $c == CONTROL_B || $c == KEY_PAGE_UP ) {
+        elsif ( $key == CONTROL_B || $key == KEY_PAGE_UP ) {
             if ( $arg->{p_begin} <= 0 ) {
                 _beep( $arg );
             }
@@ -801,7 +787,7 @@ sub choose {
                 _wr_screen( $arg );
             }
         }
-        elsif ( $c == CONTROL_F || $c == KEY_PAGE_DOWN ) {
+        elsif ( $key == CONTROL_F || $key == KEY_PAGE_DOWN ) {
             if ( $arg->{p_end} >= $#{$arg->{rc2idx}} ) {
                 _beep( $arg );
             }
@@ -821,7 +807,7 @@ sub choose {
                 _wr_screen( $arg );
             }
         }
-        elsif ( $c == CONTROL_A || $c == KEY_HOME ) {
+        elsif ( $key == CONTROL_A || $key == KEY_HOME ) {
             if ( $arg->{cursor}[COL] == 0 && $arg->{cursor}[ROW] == 0 ) {
                 _beep( $arg );
             }
@@ -835,7 +821,7 @@ sub choose {
                 _wr_screen( $arg );
             }
         }
-        elsif ( $c == CONTROL_E || $c == KEY_END ) {
+        elsif ( $key == CONTROL_E || $key == KEY_END ) {
             if ( $arg->{order} == 1 && $arg->{rest} ) {
                 if (    $arg->{cursor}[ROW] == $#{$arg->{rc2idx}} - 1
                      && $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
@@ -874,7 +860,7 @@ sub choose {
                 }
             }
         }
-        elsif ( $c == CONTROL_SPACE ) {
+        elsif ( $key == CONTROL_SPACE ) {
             if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
                 for my $i ( 0 .. $#{$arg->{rc2idx}} ) {
                     for my $j ( 0 .. $#{$arg->{rc2idx}[$i]} ) {
@@ -884,14 +870,14 @@ sub choose {
                 _wr_screen( $arg );
             }
         }
-        elsif ( $c == KEY_q || $c == CONTROL_D ) {
+        elsif ( $key == KEY_q || $key == CONTROL_D ) {
             return;
         }
-        elsif ( $c == CONTROL_C ) {
+        elsif ( $key == CONTROL_C ) {
             $arg->{cC} = 1;
             exit( 1 );
         }
-        elsif ( $c == KEY_ENTER ) {
+        elsif ( $key == KEY_ENTER ) {
             my @chosen;
             return if ! defined $arg->{wantarray};
             if ( $arg->{wantarray} ) {
@@ -922,7 +908,7 @@ sub choose {
                 return $arg->{index} ? $i : $arg->{orig_list}[$i];
             }
         }
-        elsif ( $c == KEY_SPACE ) {
+        elsif ( $key == KEY_SPACE ) {
             if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
                 if ( ! $arg->{marked}[$arg->{cursor}[ROW]][$arg->{cursor}[COL]] ) {
                     $arg->{marked}[$arg->{cursor}[ROW]][$arg->{cursor}[COL]] = 1;
@@ -951,7 +937,7 @@ sub _goto {
     my ( $arg, $newrow, $newcol ) = @_;
     print CR, RIGHT x $newcol;
     if ( $newrow > $arg->{screen_row} ) {
-        print DOWN x ( $newrow - $arg->{screen_row} );
+        print NL x ( $newrow - $arg->{screen_row} );
         $arg->{screen_row} += ( $newrow - $arg->{screen_row} );
     }
     elsif ( $newrow < $arg->{screen_row} ) {
@@ -1157,7 +1143,7 @@ sub _unicode_sprintf {
 sub _handle_mouse {
     my ( $arg, $event_type, $abs_mouse_x, $abs_mouse_y ) = @_;
     my $button_drag = ( $event_type & 0x20 ) >> 5;
-    return NEXT_getch if $button_drag;
+    return NEXT_read_key if $button_drag;
     my $button_number;
     my $low_2_bits = $event_type & 0x03;
     if ( $low_2_bits == 3 ) {
@@ -1178,7 +1164,7 @@ sub _handle_mouse {
         return KEY_PAGE_DOWN;
     }
     my $pos_top_row = $arg->{abs_cursor_y} - $arg->{cursor_row};
-    return NEXT_getch if $abs_mouse_y < $pos_top_row;
+    return NEXT_read_key if $abs_mouse_y < $pos_top_row;
     my $mouse_row = $abs_mouse_y - $pos_top_row;
     my $mouse_col = $abs_mouse_x;
     my( $found_row, $found_col );
@@ -1187,7 +1173,7 @@ sub _handle_mouse {
         my $row = 0;
         if ( $row == $mouse_row ) {
             my $end_last_col = 0;
-            for my $col ( 0 .. $#{$arg->{rc2idx}[$row]} ) {
+            COL: for my $col ( 0 .. $#{$arg->{rc2idx}[$row]} ) {
                 my $gcs_element = Unicode::GCString->new( $arg->{list}[$arg->{rc2idx}[$row][$col]] );
                 my $end_this_col = $end_last_col + $gcs_element->columns() + $arg->{pad_one_row};
                 if ( $col == 0 ) {
@@ -1207,10 +1193,10 @@ sub _handle_mouse {
         }
     }
     else {
-        for my $row ( 0 .. $#{$arg->{rc2idx}} ) {
+        ROW: for my $row ( 0 .. $#{$arg->{rc2idx}} ) {
             if ( $row == $mouse_row ) {
                 my $end_last_col = 0;
-                for my $col ( 0 .. $#{$arg->{rc2idx}[$row]} ) {
+                COL: for my $col ( 0 .. $#{$arg->{rc2idx}[$row]} ) {
                     my $end_this_col = $end_last_col + $arg->{col_width};
                     if ( $col == 0 ) {
                         $end_this_col -= int( $arg->{pad} / 2 );
@@ -1222,14 +1208,14 @@ sub _handle_mouse {
                         $found = 1;
                         $found_row = $row + $arg->{row_on_top};
                         $found_col = $col;
-                        last;
+                        last ROW;
                     }
                     $end_last_col = $end_this_col;
                 }
             }
         }
     }
-    return NEXT_getch if ! $found;
+    return NEXT_read_key if ! $found;
     my $return_char = '';
     if ( $button_number == 1 ) {
         $return_char = KEY_ENTER;
@@ -1238,7 +1224,7 @@ sub _handle_mouse {
         $return_char = KEY_SPACE;
     }
     else {
-        return NEXT_getch;
+        return NEXT_read_key;
     }
     if ( $found_row != $arg->{cursor}[ROW] || $found_col != $arg->{cursor}[COL] ) {
         my $tmp = $arg->{cursor};
@@ -1266,7 +1252,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.057
+Version 1.058
 
 =cut
 
@@ -1572,9 +1558,9 @@ If a mouse mode is enabled layers for STDIN are changed. Then before leaving I<c
 
 =head4 keep
 
-I<keep> prevents that prompt lines eat up all the terminal height.
+I<keep> prevents that all the terminal rows are used by the prompt lines.
 
-Setting I<keep> ensures that at least I<keep> rows are available for printing list rows.
+Setting I<keep> ensures that at least I<keep> terminal rows are available for printing list rows.
 
 If the terminal height is less than I<keep> I<keep> is set to the terminal height.
 

@@ -34,7 +34,7 @@ my $c = 0;
 my $pad_before_pad_one_row = 0;
 open my $fh2, '<', $file or die $!;
 while ( my $line = readline $fh2 ) {
-    if ( $line =~ /\Asub _set_layout/ .. $line =~ /\A\}/ ) {
+    if ( $line =~ /\Asub _set_defaults/ .. $line =~ /\A\}/ ) {
         $c++ if $line =~ /\A\s*\$\Qconfig->{pad}\E/;
         if ( $line =~ /\A\s*\$\Qconfig->{pad_one_row}\E/ ) {
             $pad_before_pad_one_row = 1 if $c;

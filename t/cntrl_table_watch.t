@@ -7,7 +7,7 @@ unless ( $ENV{RELEASE_TESTING} ) {
     plan( skip_all => "Author tests not required for installation" );
 }
 else {
-    plan tests => 3;
+    plan tests => 2;
     
 }
 
@@ -25,17 +25,17 @@ is( $test_env, 0, 'OK - test environment in $file disabled.' );
 
 
 
-my $data = 0;
-open my $fh2, '<', $file or die $!;
-my $whole_file = do { 
-    local $/ = undef; 
-    <$fh2> 
-};
-close $fh2;
-if ( $whole_file !~ /__DATA__\s*\z/ ) {
-    $data = 1;
-}
-is( $data, 0, 'OK - __DATA__ section in $file is clean' );
+#my $data = 0;
+#open my $fh2, '<', $file or die $!;
+#my $whole_file = do { 
+#    local $/ = undef; 
+#    <$fh2> 
+#};
+#close $fh2;
+#if ( $whole_file !~ /__DATA__\s*\z/ ) {
+#    $data = 1;
+#}
+#is( $data, 0, 'OK - __DATA__ section in $file is clean' );
 
 
 
