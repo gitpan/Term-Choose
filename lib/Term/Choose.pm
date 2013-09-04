@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.058';
+our $VERSION = '1.059';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -26,7 +26,9 @@ use constant {
 use constant {
     UP                              => "\e[A",
     RIGHT                           => "\e[C",
+    LEFT                            => "\e[D",
     NL                              => "\n",
+    LF                              => "\n",
     CR                              => "\r",
     GET_CURSOR_POSITION             => "\e[6n",
 
@@ -328,29 +330,6 @@ sub _copy_orig_list {
 }
 
 
-sub _validate_arguments {
-    my ( $orig_list_ref, $config ) = @_;
-    croak "choose: called without arguments. 'choose' expects 1 or 2 arguments." if @_ < 1;
-    croak "choose: called with " . scalar @_ . " arguments. 'choose' expects 1 or 2 arguments." if @_ > 2;
-    croak "choose: The first argument is not defined. "
-        . "The first argument has to be an ARRAY reference." if ! defined $orig_list_ref;
-    croak "choose: The first argument is not a reference. "
-        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) eq '';
-    croak "choose: The first argument is not an ARRAY reference. "
-        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) ne 'ARRAY';
-    if ( defined $config ) {
-        croak "choose: The second argument is not a reference. "
-            . "The (optional) second argument has to be a HASH reference." if ref( $config ) eq '';
-        croak "choose: The second argument is not a HASH reference. "
-            . "The (optional) second argument has to be a HASH reference." if ref( $config ) ne 'HASH';
-    }
-    if ( ! @$orig_list_ref ) {
-        carp "choose: The first argument refers to an empty list!";
-    }
-    return $orig_list_ref, $config // {};
-}
-
-
 sub _set_defaults {
     my ( $config, $wantarray ) = @_;
     my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
@@ -594,11 +573,28 @@ sub _write_first_screen {
 
 
 sub choose {
-    my ( $orig_list_ref, $config ) = _validate_arguments( @_ );
-    return if ! @$orig_list_ref;
+    my ( $orig_list_ref, $config ) = @_;
+    croak "choose: called without arguments. 'choose' expects 1 or 2 arguments." if @_ < 1;
+    croak "choose: called with " . scalar @_ . " arguments. 'choose' expects 1 or 2 arguments." if @_ > 2;
+    croak "choose: The first argument is not defined. "
+        . "The first argument has to be an ARRAY reference." if ! defined $orig_list_ref;
+    croak "choose: The first argument is not a reference. "
+        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) eq '';
+    croak "choose: The first argument is not an ARRAY reference. "
+        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) ne 'ARRAY';
+    if ( defined $config ) {
+        croak "choose: The second argument is not a reference. "
+            . "The (optional) second argument has to be a HASH reference." if ref( $config ) eq '';
+        croak "choose: The second argument is not a HASH reference. "
+            . "The (optional) second argument has to be a HASH reference." if ref( $config ) ne 'HASH';
+    }
+    if ( ! @$orig_list_ref ) {
+        carp "choose: The first argument refers to an empty list!";
+        return;
+    }
     local $\ = undef;
     local $, = undef;
-    my $arg = _validate_options( $config, wantarray, scalar @$orig_list_ref );
+    my $arg = _validate_options( $config // {}, wantarray, scalar @$orig_list_ref );
     $arg->{orig_list}  = $orig_list_ref;
     $arg->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
     $arg->{list}       = _copy_orig_list( $arg );
@@ -623,8 +619,8 @@ sub choose {
             $arg->{EOT} = 1;
             return;
         }
-        next if $key == NEXT_read_key;
-        next if $key == KEY_Tilde;
+        #next if $key == NEXT_read_key;
+        #next if $key == KEY_Tilde;
         if ( $arg->{size_changed} ) {
             $arg->{list} = _copy_orig_list( $arg );
             print CR, UP x ( $arg->{screen_row} + $arg->{nr_prompt_lines} );
@@ -633,6 +629,8 @@ sub choose {
             $arg->{size_changed} = 0;
             next;
         }
+        next if $key == NEXT_read_key;
+        next if $key == KEY_Tilde;
         # $arg->{rc2idx} holds the new list (AoA) formated in "_size_and_layout" appropirate to the choosen layout.
         # $arg->{rc2idx} does not hold the values dircetly but the respective list indexes from the original list.
         # If the original list would be ( 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' ) and the new formated list should be
@@ -648,8 +646,8 @@ sub choose {
         # or the index of the last column in the first row would be $#{$arg->{rc2idx}[0]}.
 
         if ( $key == KEY_j || $key == KEY_DOWN ) {
-            if ( $#{$arg->{rc2idx}} == 0 || ! ( $arg->{rc2idx}[$arg->{cursor}[ROW]+1]
-                                             && $arg->{rc2idx}[$arg->{cursor}[ROW]+1][$arg->{cursor}[COL]] )
+            if ( $#{$arg->{rc2idx}} == 0 || ! (    $arg->{rc2idx}[$arg->{cursor}[ROW]+1]
+                                                && $arg->{rc2idx}[$arg->{cursor}[ROW]+1][$arg->{cursor}[COL]] )
             ) {
                 _beep( $arg );
             }
@@ -923,7 +921,6 @@ sub choose {
             _beep( $arg );
         }
     }
-    die "choose: shouldn't reach here ...\n";
 }
 
 
@@ -937,7 +934,7 @@ sub _goto {
     my ( $arg, $newrow, $newcol ) = @_;
     print CR, RIGHT x $newcol;
     if ( $newrow > $arg->{screen_row} ) {
-        print NL x ( $newrow - $arg->{screen_row} );
+        print LF x ( $newrow - $arg->{screen_row} );
         $arg->{screen_row} += ( $newrow - $arg->{screen_row} );
     }
     elsif ( $newrow < $arg->{screen_row} ) {
@@ -1252,7 +1249,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.058
+Version 1.059
 
 =cut
 
@@ -1277,6 +1274,8 @@ Version 1.058
 Choose from a list of items.
 
 Based on the I<choose> function from the L<Term::Clui> module - for more details see L</MOTIVATION>.
+
+For OS 'MSWin32' see L<Term::Choose::Win32>.
 
 =head1 EXPORT
 
@@ -1804,4 +1803,3 @@ Copyright 2012-2013 Matthäus Kiem.
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 =cut
-

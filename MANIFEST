@@ -4,16 +4,17 @@ example/table_watch_SQLite.pl
 ignore.txt
 lib/Term/Choose.pm
 Makefile.PL
-MANIFEST			This list of files
+MANIFEST            This list of files
 META.json
 META.yml
 README
 t/00-load.t
-t/check_pod_defaults.t
-t/cmp_buildpl_makepl.t
-t/cntr_choose.t
-t/cntrl_table_watch.t
-t/manifest.t
-t/pod-coverage.t
-t/pod.t
-t/version.t
+xt/check_pod_defaults.t
+xt/cmp_buildpl_makepl.t
+xt/cntr_choose.t
+xt/cntrl_table_watch.t
+xt/manifest.t
+xt/pod-coverage.t
+xt/pod.t
+xt/version.t
+xt/whitespaces.t

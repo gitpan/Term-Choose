@@ -4,27 +4,27 @@ use strict;
 use 5.10.0;
 use open qw(:std :utf8);
 
-# Version 1.058
+# Version 1.059
 
-use Encode qw(encode_utf8 decode_utf8);
-use File::Basename;
+use Encode                 qw(encode_utf8 decode_utf8);
+use File::Basename         qw(basename);
 use File::Find;
-use File::Spec::Functions qw(catfile catdir rel2abs);
-use Getopt::Long qw(GetOptions);
-use List::Util qw(sum);
-use Pod::Usage;
-use Scalar::Util qw(looks_like_number);
+use File::Spec::Functions  qw(catfile catdir rel2abs);
+use Getopt::Long           qw(GetOptions);
+use List::Util             qw(sum);
+use Pod::Usage             qw(pod2usage);
+use Scalar::Util           qw(looks_like_number);
 
 use DBI;
 use JSON::XS;
-use File::HomeDir qw(my_home);
-use List::MoreUtils qw(any none first_index pairwise);
-use Term::Choose qw(choose);
+use File::HomeDir          qw(my_home);
+use List::MoreUtils        qw(any none first_index pairwise);
+use Term::Choose           qw(choose);
 use Term::ProgressBar;
-use Term::ReadKey qw(GetTerminalSize ReadKey ReadMode);
+use Term::ReadKey          qw(GetTerminalSize ReadKey ReadMode);
 END { ReadMode 0 }
 use Text::LineFold;
-use Text::CharWidth qw(mbswidth);
+use Text::CharWidth        qw(mbswidth);
 use Unicode::GCString;
 
 use constant {
@@ -2190,7 +2190,8 @@ sub options {
                     $choices,
                     { prompt => 'Choose:', %{$info->{lyt_3_cs}}, index => 1 }
                 );
-                my $choice = $choices->[$idx] if defined $idx;
+                next OPTION if ! defined $idx;
+                my $choice = $choices->[$idx];
                 next OPTION if ! defined $choice;
                 if ( $choice eq $info->{_confirm} ) {
                     if ( $count ) {
@@ -2626,7 +2627,7 @@ sub choose_a_number {
         $result = sum( @numbers{keys %numbers} );
         if ( $result == 0 ) {
             $result = '--';
-            $result = 0 if defined $numbers{0} && $numbers{0} == 0;
+            $result = 0 if defined $numbers{0} && $numbers{0} == 0; #
         }
         $result = insert_sep( $result, $sep );
     }
@@ -3173,19 +3174,19 @@ sub no_entry_for_db_type {
 __END__
 
 =pod
- 
+
 =encoding UTF-8
- 
+
 =head1 NAME
- 
+
 table_watch_SQLite.pl - Read SQLite/MySQL/PostgreSQL databases.
- 
+
 =head1 VERSION
- 
-Version 1.058
- 
+
+Version 1.059
+
 =cut
- 
+
 =head1 SYNOPSIS
 
 =head2 SQLite/MySQL/PostgreSQL:
@@ -3200,7 +3201,7 @@ table_watch_SQLite.pl -h|--help
 
 table_watch_SQLite.pl [-s|--search] [directories to be searched]
 
-    If no directories are passed the home directory is searched for SQLite databases. 
+    If no directories are passed the home directory is searched for SQLite databases.
 
     -s|--search    new search of SQLite databases (don't use cached data).
 
@@ -3211,13 +3212,13 @@ Search and read SQLite/MySQL/PostgreSQL databases.
 table_watch_SQLite.pl expects an "UTF-8" environment
 
 "q" key goes back ("Ctrl-D" instead of "q" if prompted for a string).
- 
+
 =head1 Options
- 
+
 =head2 Help
 
 Show this Info.
- 
+
 =head2 Tabwidth
 
 Set the number of spaces between columns.
@@ -3284,7 +3285,7 @@ If enabled system tables/schemas/databases are appended to the respective list.
 
 =head2 Regexp case
 
-If enabled REGEXP will match case sensitive. 
+If enabled REGEXP will match case sensitive.
 
 With MySQL the sensitive match is achieved be enabling the BINARY operator.
 
@@ -3307,6 +3308,3 @@ Database defaults can be overwritten for each Database with the "Database settin
 If enabled username and password are asked for each new DB connection.
 
 If not enabled username and password are asked once and used for all connections.
-
-
-

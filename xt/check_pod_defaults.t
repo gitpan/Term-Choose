@@ -4,14 +4,12 @@ use warnings;
 no if $] >= 5.018, warnings => "experimental::smartmatch";
 use Test::More;
 
-unless ( $ENV{RELEASE_TESTING} ) {
-    plan( skip_all => "Author tests not required for installation" );
-}
 
 my @long = ( qw( pad pad_one_row empty undef ll default limit screen_width lf keep ) );
 my @simple = ( qw( justify layout order clear_screen page mouse beep hide_cursor index ) ); # prompt
 my @all = ( @long, @simple );
 my @deprecated = ( qw(st) );
+
 
 plan tests => 2 + scalar @all;
 
@@ -33,7 +31,7 @@ while ( my $line = readline $fh ) {
 }
 close $fh;
 
-   
+
 my %pod_default;
 my %pod;
 
@@ -69,7 +67,7 @@ for my $key ( @long ) {
                 $pod_default{$key} = $1;
                 last;
             }
-        }   
+        }
     }
     else {
         for my $line ( @{$pod{$key}} ) {
@@ -80,13 +78,12 @@ for my $key ( @long ) {
         }
     }
 }
- 
- 
- 
+
+
 is( scalar @all, scalar keys %option_default, 'scalar @all == scalar keys %option_default' );
 is( scalar keys %pod_default, scalar keys %option_default, 'scalar keys %pod_default == scalar keys %option_default' );
- 
- 
+
+
 for my $key ( sort keys %option_default ) {
     next if $key ~~ @deprecated;
     if ( $key eq 'pad_one_row' ) {
@@ -100,5 +97,3 @@ for my $key ( sort keys %option_default ) {
         is( $option_default{$key}, $pod_default{$key}, "option $key: default value in pod matches default value in code" );
     }
 }
-
-

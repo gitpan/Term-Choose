@@ -1,6 +1,11 @@
 Revision history for Term::Choose
 
 
+1.059   2013-09-04
+        - Code refactoring.
+        - Updated documentation.
+        - Bugfix example.
+
 1.058   2013-08-25
         - Code refactoring.
         - Imporved documentation.
@@ -220,10 +225,10 @@ Revision history for Term::Choose
 1.020   2013-01-02
         - Added option "index".
         - Updated documentation.
-        - Updated example. 
+        - Updated example.
 
 1.019   2012-12-26
-        - The "layout" "1" starts more broadly now (if more than one row). 
+        - The "layout" "1" starts more broadly now (if more than one row).
         - Options: replaced "right_justify" with "justify" (with new value "centered").
         - Options: replaced "vertical" with "order".
         - Updated documentation.
@@ -241,7 +246,7 @@ Revision history for Term::Choose
         - Code cleanup.
         - Build.PL/Makefile.PL: "die 'No support for OS' if $^O eq 'MSWin32';".
         - Example: updated and reduced dependencies.
-        
+
 1.016   2012-11-11
         - Code refactoring (clear_screen).
         - Removed "Choose/GC.pm".
@@ -254,7 +259,7 @@ Revision history for Term::Choose
         - Code cleanup.
         - Improved documentation.
         - Example: update and bug fixes.
-        
+
 1.014   2012-10-10
         - Code cleanup.
         - Updated example.
@@ -263,13 +268,13 @@ Revision history for Term::Choose
         - Unicode::GCString: moved from "eval" to "utf8::upgrade".
         - Improved documentation.
         - Updated example.
-        
+
 1.012   2012-10-04
         - Term::Choose with Unicode support and Term::Choose::GC removed.
         - Changed "eval" bracketing.
         - Example: removed "delete" option.
         - Example: fixed bugs.
-        
+
 1.011   2012-10-02
         - Removed/replaced "smartmatch" operators.
         - Improved documentation.
@@ -314,7 +319,7 @@ Revision history for Term::Choose
         - "_size_and_layout" back to the old position after "_print_promptline".
         - Code refactoring.
         - Improved documentation.
-        
+
 1.003   2012-08-28
         - Check for existing SIGWINCH handler.
         - Code refactoring.
@@ -322,12 +327,12 @@ Revision history for Term::Choose
         - Updated example.
         - Improved documentation.
 
-1.002  	2012-08-23
+1.002   2012-08-23
         - Updated Example.
         - Code refactoring.
         - Improved documentation.
 
-1.001  	2012-08-12
+1.001   2012-08-12
         - $VERSION: switched from dotted-integers to decimal numbers ("0.7.16" -> "1.001").
         - Changed the maximal allowed value for the option "length_longest" from 999_999_999 to 999.
         - Updated documentation.
@@ -347,7 +352,7 @@ Revision history for Term::Choose
         - Code refactoring.
 
 0.7.13  2012-08-05
-        - Removed option "length_longest". 
+        - Removed option "length_longest".
 
 0.7.12  2012-08-05
         - Code refactoring - "_size_and_layout": don't copy the list but use indexes.
@@ -379,7 +384,7 @@ Revision history for Term::Choose
 0.7.7   2012-07-24
         - Fixed bug in _unicode_cut.
         - Improved documentation.
-        
+
 0.7.6   2012-07-23
         - Added Term::Choose::GC.
         - Code refactoring.
@@ -408,4 +413,3 @@ Revision history for Term::Choose
 
 0.7.1   2012-07-13
         - First release on cpan.
-        

@@ -1,7 +1,6 @@
 use 5.010000;
 use warnings;
 use strict;
-use utf8;
 die "No support for OS" if $^O eq 'MSWin32';
 use Module::Build;
 
@@ -29,6 +28,3 @@ my $builder = Module::Build->new(
 );
 
 $builder->create_build_script();
-
-
-
