@@ -4,7 +4,7 @@ use strict;
 use 5.10.0;
 use open qw(:std :utf8);
 
-# Version 1.059
+# Version 1.060
 
 use Encode                 qw(encode_utf8 decode_utf8);
 use File::Basename         qw(basename);
@@ -2625,10 +2625,6 @@ sub choose_a_number {
             $numbers{$count_zeros} = $number;
         }
         $result = sum( @numbers{keys %numbers} );
-        if ( $result == 0 ) {
-            $result = '--';
-            $result = 0 if defined $numbers{0} && $numbers{0} == 0; #
-        }
         $result = insert_sep( $result, $sep );
     }
 }
@@ -2636,6 +2632,7 @@ sub choose_a_number {
 
 sub insert_sep {
     my ( $number, $separator ) = @_;
+    return if ! defined $number;
     return $number if ! $separator;
     $number =~ s/(\d)(?=(?:\d{3})+\b)/$1$separator/g;
     return $number;
@@ -3183,7 +3180,7 @@ table_watch_SQLite.pl - Read SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 1.059
+Version 1.060
 
 =cut
 

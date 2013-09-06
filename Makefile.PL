@@ -1,7 +1,6 @@
 use 5.010000;
 use warnings;
 use strict;
-die "No support for OS" if $^O eq 'MSWin32';
 use ExtUtils::MakeMaker;
 
 

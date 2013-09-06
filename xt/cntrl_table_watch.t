@@ -4,7 +4,6 @@ use warnings;
 use Test::More tests => 2;
 
 
-
 my $file = 'example/table_watch_SQLite.pl';
 
 

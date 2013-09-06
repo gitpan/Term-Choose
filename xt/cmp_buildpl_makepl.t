@@ -13,7 +13,7 @@ while ( my $line = readline $fh_build ) {
     $build{one}   = $line if $. == 1 and $line =~ /\Ause/;
     $build{two}   = $line if $. == 2 and $line eq 'use warnings';
     $build{three} = $line if $. == 3 and $line eq 'use strict;';
-    $build{four}  = $line if $. == 5 and $line eq q{die "No support for OS" if $^O eq 'MSWin32';};
+    #$build{four}  = $line if $. == 5 and $line eq q{die "No support for OS" if $^O eq 'MSWin32';};
     $build{module_name}       = $1 if $line =~ /\A\s*module_name\s*=>\s*'([^']+)'/;
     $build{license}           = $1 if $line =~ /\A\s*license\s*=>\s*'([^']+)'/;
     $build{dist_author}       = $1 if $line =~ /\A\s*dist_author\s*=>\s*'([^']+)'/;
@@ -38,7 +38,7 @@ while ( my $line = readline $fh_make ) {
     $make{one}   = $line if $. == 1 and $line =~ /\Ause/;
     $make{two}   = $line if $. == 2 and $line eq 'use warnings';
     $make{three} = $line if $. == 3 and $line eq 'use strict;';
-    $make{four}  = $line if $. == 5 and $line eq q{die "No support for OS" if $^O eq 'MSWin32';};
+    #$make{four}  = $line if $. == 5 and $line eq q{die "No support for OS" if $^O eq 'MSWin32';};
     $make{module_name}       = $1 if $line =~ /\A\s*NAME\s*=>\s*'([^']+)'/;
     $make{license}           = $1 if $line =~ /\A\s*LICENSE\s*=>\s*'([^']+)'/;
     $make{dist_author}       = $1 if $line =~ /\A\s*AUTHOR\s*=>\s*'([^']+)'/;
@@ -64,6 +64,7 @@ for my $key ( keys %make ) {
 
 
 plan tests => scalar keys %keys;
+
 
 
 for my $key ( sort keys %keys ) {

@@ -1,6 +1,10 @@
 Revision history for Term::Choose
 
 
+1.060   2013-09-06
+        - Allow installation on Win32 - Term::Choose::Win32 now depends on Term::Choose.
+        - Bugfix example.
+
 1.059   2013-09-04
         - Code refactoring.
         - Updated documentation.

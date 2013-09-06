@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.059';
+our $VERSION = '1.060';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -26,8 +26,6 @@ use constant {
 use constant {
     UP                              => "\e[A",
     RIGHT                           => "\e[C",
-    LEFT                            => "\e[D",
-    NL                              => "\n",
     LF                              => "\n",
     CR                              => "\r",
     GET_CURSOR_POSITION             => "\e[6n",
@@ -619,8 +617,6 @@ sub choose {
             $arg->{EOT} = 1;
             return;
         }
-        #next if $key == NEXT_read_key;
-        #next if $key == KEY_Tilde;
         if ( $arg->{size_changed} ) {
             $arg->{list} = _copy_orig_list( $arg );
             print CR, UP x ( $arg->{screen_row} + $arg->{nr_prompt_lines} );
@@ -631,6 +627,7 @@ sub choose {
         }
         next if $key == NEXT_read_key;
         next if $key == KEY_Tilde;
+
         # $arg->{rc2idx} holds the new list (AoA) formated in "_size_and_layout" appropirate to the choosen layout.
         # $arg->{rc2idx} does not hold the values dircetly but the respective list indexes from the original list.
         # If the original list would be ( 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' ) and the new formated list should be
@@ -1249,7 +1246,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.059
+Version 1.060
 
 =cut
 
@@ -1547,7 +1544,7 @@ Allowed values:  0 or greater
 
 1 - mouse mode 1003 enabled
 
-2 - mouse mode 1003 enabled; maxcols/maxrows limited to 223 (mouse mode 1003 doesn't work above 223)
+2 - mouse mode 1003 enabled; the output width is limited to 223 print-columns and the height to 223 rows (mouse mode 1003 doesn't work above 223)
 
 3 - extended mouse mode (1005) - uses utf8
 
