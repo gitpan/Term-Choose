@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.060';
+our $VERSION = '1.061';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -343,13 +343,14 @@ sub _set_defaults {
     #$config->{lf}              //= undef;
     #$config->{ll}              //= undef;
     $config->{limit}            //= 100_000;
+    #$config->{max_height}      //= undef;
+    #$config->{max_width}       //= undef;
     $config->{mouse}            //= 0;
     $config->{order}            //= 1;
     $config->{pad}              //= 2;
     $config->{pad_one_row}      //= $config->{pad};
     $config->{page}             //= 1;
     $config->{prompt}           //= $prompt;
-    #$config->{screen_width}    //= undef;
     $config->{undef}            //= '<undef>';
     return $config;
 }
@@ -371,15 +372,22 @@ sub _validate_options {
         lf              => 'ARRAY',
         ll              => [ 1,  $limit ],
         limit           => [ 1,  $limit ],
+        max_height      => [ 1,  $limit ],
+        max_width       => [ 1,  $limit ],
         mouse           => [ 0,       4 ],
         order           => [ 0,       1 ],
         pad             => [ 0,  $limit ],
         pad_one_row     => [ 0,  $limit ],
         page            => [ 0,       1 ],
         prompt          => '',
-        screen_width    => [ 1,  $limit ],
+        screen_width    => [ 1,  $limit ], # DEPRECATED
         undef           => '',
     };
+    # ###
+    if ( defined $config->{screen_width} && ! defined $config->{max_width} ) {
+        $config->{max_width} = $config->{screen_width};
+    }
+    # ###
     my $warn = 0;
     for my $key ( keys %$config ) {
         if ( ! exists $validate->{$key} ) {
@@ -523,8 +531,8 @@ sub _prepare_promptline {
 sub _write_first_screen {
     my ( $arg ) = @_;
     ( $arg->{avail_width}, $arg->{avail_height} ) = GetTerminalSize( $arg->{handle_out} );
-    if ( $arg->{screen_width} && $arg->{avail_width} > $arg->{screen_width} ) {
-        $arg->{avail_width} = $arg->{screen_width};
+    if ( $arg->{max_width} && $arg->{avail_width} > $arg->{max_width} ) {
+        $arg->{avail_width} = $arg->{max_width};
     }
     if ( $arg->{mouse} == 2 ) {
         $arg->{avail_width}  = MAX_COL_MOUSE_1003 if $arg->{avail_width}  > MAX_COL_MOUSE_1003;
@@ -544,6 +552,7 @@ sub _write_first_screen {
         $arg->{avail_height} = $height >= $arg->{keep} ? $arg->{keep} : $height;
         $arg->{avail_height} = 1 if $arg->{avail_height} < 1;
     }
+    $arg->{avail_height} = $arg->{max_height} if $arg->{max_height} && $arg->{max_height} < $arg->{avail_height};
     _size_and_layout( $arg );
     _prepare_page_number( $arg ) if $arg->{page};
     $arg->{avail_height_idx} = $arg->{avail_height} - 1;
@@ -1246,7 +1255,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.060
+Version 1.061
 
 =cut
 
@@ -1468,11 +1477,31 @@ From broad to narrow: 0 > 1 > 2 > 3
 
 =back
 
-=head4 screen_width
+=head4 max_height
 
-If defined, sets the screen width to I<screen_width> if the screen width is greater than I<screen_width>.
+If defined sets the maximal number of rows used for printing list items.
 
-Screen width refers here to the number of print columns.
+If the available height is less than I<max_height> I<max_height> is set to the available height.
+
+Height in this context means print rows.
+
+I<max_height> overwrites I<keep> if I<max_height> is set and less than I<keep>.
+
+Allowed values: 1 or greater
+
+(default: undef)
+
+=head4 screen_width DEPRECATED
+
+Use I<max_width> instead - I<screen_width> is now called I<max_width>.
+
+The deprecated name I<screen_width> will be removed in a future release.
+
+=head4 max_width
+
+If defined, sets the output width to I<max_width> if the terminal width is greater than I<max_width>.
+
+Width refers here to the number of print columns.
 
 Allowed values: 1 or greater
 
@@ -1516,7 +1545,7 @@ Allowed values:  0 or greater
 
 =head4 default
 
-With the option I<default> can be selected an element, which will be highlighted as the default instead of the first element.
+With the option I<default> it can be selected an element, which will be highlighted as the default instead of the first element.
 
 I<default> expects a zero indexed value, so e.g. to highlight the third element the value would be I<2>.
 

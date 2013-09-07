@@ -5,10 +5,10 @@ no if $] >= 5.018, warnings => "experimental::smartmatch";
 use Test::More;
 
 
-my @long = ( qw( pad pad_one_row empty undef ll default limit screen_width lf keep ) );
+my @long = ( qw( pad pad_one_row empty undef ll default limit max_height max_width lf keep ) );
 my @simple = ( qw( justify layout order clear_screen page mouse beep hide_cursor index ) ); # prompt
 my @all = ( @long, @simple );
-my @deprecated = ( qw(st) );
+my @deprecated = ( qw(screen_width) );
 
 
 plan tests => 2 + scalar @all;
@@ -47,7 +47,7 @@ for my $key ( @all ) {
     }
     close $fh;
 }
-
+ 
 for my $key ( @simple ) {
     next if $key ~~ @deprecated;
     my $opt;
