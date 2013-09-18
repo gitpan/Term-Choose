@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.061';
+our $VERSION = '1.062';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -54,7 +54,7 @@ use constant {
 };
 
 use constant {
-    NEXT_read_key      => -1,
+    NEXT_get_key      => -1,
 
     CONTROL_SPACE   => 0x00,
     CONTROL_A       => 0x01,
@@ -91,7 +91,7 @@ use constant {
 };
 
 
-sub _read_key {
+sub _get_key {
     my ( $arg ) = @_;
     my $c1 = ReadKey 0;
     return if ! defined $c1;
@@ -115,7 +115,7 @@ sub _read_key {
                     elsif ( $c3 eq '5' ) { return KEY_PAGE_UP; }
                     elsif ( $c3 eq '6' ) { return KEY_PAGE_DOWN; }
                     else {
-                        return NEXT_read_key;
+                        return NEXT_get_key;
                     }
                 }
                 elsif ( $c4 =~ /^[;0-9]$/ ) { # response to "\e[6n"
@@ -125,7 +125,7 @@ sub _read_key {
                         $abs_curs_y .= $ry;
                         $ry = ReadKey 0;
                     }
-                    return NEXT_read_key if $ry ne ';';
+                    return NEXT_get_key if $ry ne ';';
                     my $abs_curs_x = '';
                     my $rx = ReadKey 0;
                     while ( $rx =~ m/^[0-9]$/ ) {
@@ -136,10 +136,10 @@ sub _read_key {
                         $arg->{abs_cursor_y} = $abs_curs_y;
                         $arg->{abs_cursor_x} = $abs_curs_x; # unused
                     }
-                    return NEXT_read_key;
+                    return NEXT_get_key;
                 }
                 else {
-                    return NEXT_read_key;
+                    return NEXT_get_key;
                 }
             }
             # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
@@ -155,29 +155,29 @@ sub _read_key {
                 while ( ( $m1 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
                     $event_type .= $m1;
                 }
-                return NEXT_read_key if $m1 ne ';';
+                return NEXT_get_key if $m1 ne ';';
                 my $x = '';
                 my $m2;
                 while ( ( $m2 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
                     $x .= $m2;
                 }
-                return NEXT_read_key if $m2 ne ';';
+                return NEXT_get_key if $m2 ne ';';
                 my $y = '';
                 my $m3;
                 while ( ( $m3 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
                     $y .= $m3;
                 }
-                return NEXT_read_key if $m3 !~ /^[mM]$/;
+                return NEXT_get_key if $m3 !~ /^[mM]$/;
                 my $button_released = $m3 eq 'm' ? 1 : 0;
-                return NEXT_read_key if $button_released;
+                return NEXT_get_key if $button_released;
                 return _handle_mouse( $arg, $event_type, $x, $y );
             }
             else {
-                return NEXT_read_key;
+                return NEXT_get_key;
             }
         }
         else {
-            return NEXT_read_key;
+            return NEXT_get_key;
         }
     }
     else {
@@ -621,7 +621,7 @@ sub choose {
     _write_first_screen( $arg );
 
     while ( 1 ) {
-        my $key = _read_key( $arg );
+        my $key = _get_key( $arg );
         if ( ! defined $key ) {
             $arg->{EOT} = 1;
             return;
@@ -634,7 +634,7 @@ sub choose {
             $arg->{size_changed} = 0;
             next;
         }
-        next if $key == NEXT_read_key;
+        next if $key == NEXT_get_key;
         next if $key == KEY_Tilde;
 
         # $arg->{rc2idx} holds the new list (AoA) formated in "_size_and_layout" appropirate to the choosen layout.
@@ -1146,7 +1146,7 @@ sub _unicode_sprintf {
 sub _handle_mouse {
     my ( $arg, $event_type, $abs_mouse_x, $abs_mouse_y ) = @_;
     my $button_drag = ( $event_type & 0x20 ) >> 5;
-    return NEXT_read_key if $button_drag;
+    return NEXT_get_key if $button_drag;
     my $button_number;
     my $low_2_bits = $event_type & 0x03;
     if ( $low_2_bits == 3 ) {
@@ -1167,7 +1167,7 @@ sub _handle_mouse {
         return KEY_PAGE_DOWN;
     }
     my $pos_top_row = $arg->{abs_cursor_y} - $arg->{cursor_row};
-    return NEXT_read_key if $abs_mouse_y < $pos_top_row;
+    return NEXT_get_key if $abs_mouse_y < $pos_top_row;
     my $mouse_row = $abs_mouse_y - $pos_top_row;
     my $mouse_col = $abs_mouse_x;
     my( $found_row, $found_col );
@@ -1218,7 +1218,7 @@ sub _handle_mouse {
             }
         }
     }
-    return NEXT_read_key if ! $found;
+    return NEXT_get_key if ! $found;
     my $return_char = '';
     if ( $button_number == 1 ) {
         $return_char = KEY_ENTER;
@@ -1227,7 +1227,7 @@ sub _handle_mouse {
         $return_char = KEY_SPACE;
     }
     else {
-        return NEXT_read_key;
+        return NEXT_get_key;
     }
     if ( $found_row != $arg->{cursor}[ROW] || $found_col != $arg->{cursor}[COL] ) {
         my $tmp = $arg->{cursor};
@@ -1255,7 +1255,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.061
+Version 1.062
 
 =cut
 
@@ -1742,7 +1742,6 @@ The Terminal needs to understand the following ANSI escape sequences:
     "\e[4m"     Underline
 
     "\e[7m"     Inverse
-
 
 If the option "hide_cursor" is enabled:
 

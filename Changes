@@ -1,6 +1,9 @@
 Revision history for Term::Choose
 
 
+1.062   2013-09-18
+        - Code refactoring.
+
 1.061   2013-09-07
         - Added option "max_height".
         - Renamed option "screen_width" to "max_width".
