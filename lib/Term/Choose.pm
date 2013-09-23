@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.062';
+our $VERSION = '1.063';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -678,10 +678,13 @@ sub choose {
             }
             else {
                 $arg->{cursor}[ROW]--;
-                if ( defined $arg->{backup_col} ) {
-                    $arg->{cursor}[COL] = $arg->{backup_col};
-                    $arg->{backup_col} = undef;
+                if ( defined $arg->{backup_row} ) {
+                    $arg->{backup_row} = undef;
                 }
+                #if ( defined $arg->{backup_col} ) {
+                #    $arg->{cursor}[COL] = $arg->{backup_col};
+                #    $arg->{backup_col} = undef;
+                #}
                 if ( $arg->{cursor}[ROW] >= $arg->{p_begin} ) {
                     _wr_cell( $arg, $arg->{cursor}[ROW] + 1, $arg->{cursor}[COL] );
                     _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
@@ -730,6 +733,9 @@ sub choose {
                 _beep( $arg );
             }
             else {
+                #if ( defined $arg->{backup_col} ) {
+                #    $arg->{backup_col} = undef;
+                #}
                 if ( $arg->{cursor}[COL] > 0 ) {
                     $arg->{cursor}[COL]--;
                     _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] + 1 );
@@ -737,6 +743,9 @@ sub choose {
                 }
                 else {
                     $arg->{cursor}[ROW]--;
+                    if ( defined $arg->{backup_row} ) {
+                        $arg->{backup_row} = undef;
+                    }
                     if ( $arg->{cursor}[ROW] >= $arg->{p_begin} ) {
                         $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
                         _wr_cell( $arg, $arg->{cursor}[ROW] + 1, 0 );
@@ -769,10 +778,11 @@ sub choose {
             }
             else {
                 $arg->{cursor}[COL]--;
+                #if ( defined $arg->{backup_col} ) {
+                #    $arg->{backup_col} = undef;
+                #}
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] + 1 );
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
-                # since col has been changed deliberately:
-                $arg->{backup_col} = undef if defined $arg->{backup_col};
             }
         }
         elsif ( $key == CONTROL_B || $key == KEY_PAGE_UP ) {
@@ -781,11 +791,15 @@ sub choose {
             }
             else {
                 $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) - 1 );
-                $arg->{cursor}[ROW] = $arg->{row_on_top};
-                if ( defined $arg->{backup_col} ) {
-                    $arg->{cursor}[COL] = $arg->{backup_col};
-                    $arg->{backup_col} = undef;
+                $arg->{cursor}[ROW] -= $arg->{avail_height};
+                if ( defined $arg->{backup_row} ) {
+                    $arg->{cursor}[ROW] = $arg->{backup_row};
+                    $arg->{backup_row}  = undef;
                 }
+                #if ( defined $arg->{backup_col} ) {
+                #    $arg->{cursor}[COL] = $arg->{backup_col};
+                #    $arg->{backup_col} = undef;
+                #}
                 $arg->{p_begin} = $arg->{row_on_top};
                 $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
                 _wr_screen( $arg );
@@ -797,12 +811,21 @@ sub choose {
             }
             else {
                 $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) + 1 );
-                $arg->{cursor}[ROW] = $arg->{row_on_top};
+                $arg->{cursor}[ROW] += $arg->{avail_height};
+                if ( $arg->{cursor}[ROW] > $#{$arg->{rc2idx}} ) {
+                    $arg->{backup_row}  = $arg->{cursor}[ROW] - $arg->{avail_height};
+                    if ( $#{$arg->{rc2idx}} == $arg->{row_on_top} || $arg->{cursor}[COL] <= $arg->{rest} - 1 ) {
+                        $arg->{cursor}[ROW] = $#{$arg->{rc2idx}};
+                    }
+                    else {
+                        $arg->{cursor}[ROW] = $#{$arg->{rc2idx}} - 1;
+                    }
+                }
                 if (    $arg->{rest}
                      && $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
                      && $arg->{cursor}[COL] > $arg->{rest} - 1
                 ) {
-                    $arg->{backup_col} = $arg->{cursor}[COL];
+                #    $arg->{backup_col} = $arg->{cursor}[COL];
                     $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
                 }
                 $arg->{p_begin} = $arg->{row_on_top};
@@ -896,7 +919,7 @@ sub choose {
                     }
                 }
                 else {
-                        for my $row ( 0 .. $#{$arg->{rc2idx}} ) {
+                    for my $row ( 0 .. $#{$arg->{rc2idx}} ) {
                         for my $col ( 0 .. $#{$arg->{rc2idx}[$row]} ) {
                             if ( $arg->{marked}[$row][$col] || $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL] ) {
                                 my $i = $arg->{rc2idx}[$row][$col];
@@ -1255,7 +1278,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.062
+Version 1.063
 
 =cut
 
