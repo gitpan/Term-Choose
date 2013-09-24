@@ -2,7 +2,6 @@ use warnings;
 use strict;
 use 5.10.0;
 use File::Find;
-use Module::CoreList;
 use Test::More;
 use Perl::PrereqScanner;
 

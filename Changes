@@ -1,6 +1,9 @@
 Revision history for Term::Choose
 
 
+1.064   2013-09-24
+        - Update/bugfix in: keep relative position when moving page-wise.
+
 1.063   2013-09-23
         - Keep the relative row position when moving page-wise.
 

@@ -3,7 +3,6 @@ use strict;
 use 5.10.0;
 use Perl::MinimumVersion;
 use Perl::Version;
-use File::Spec::Functions qw(catdir catfile);
 use File::Find;
 use Test::More tests => 2;
 

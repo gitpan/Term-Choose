@@ -4,7 +4,7 @@ use strict;
 use 5.10.0;
 use open qw(:std :utf8);
 
-# Version 1.063
+# Version 1.064
 
 use Encode                 qw(encode_utf8 decode_utf8);
 use File::Basename         qw(basename);
@@ -3180,7 +3180,7 @@ table_watch_SQLite.pl - Read SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 1.063
+Version 1.064
 
 =cut
 
