@@ -21,7 +21,7 @@ my $builder = Module::Build->new(
         'Exporter'          => 0,
         'Term::ReadKey'     => '2.30',
         'Text::LineFold'    => '2012.04',
-        'Unicode::GCString' => '2012.10',
+        'Unicode::GCString' => '2013.10',
     },
     add_to_cleanup      => [ 'Term-Choose-*' ],
     #create_makefile_pl => 'traditional',

@@ -25,7 +25,7 @@ close $fh_m or die $!;
 
 
 my @files;
-for my $dir ( 'lib', 'bin', 't' ) {
+for my $dir ( 'lib', 't' ) {
     find( {
         wanted => sub {
             my $file = $File::Find::name;

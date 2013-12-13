@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.0;
 use strict;
 
-our $VERSION = '1.064';
+our $VERSION = '1.065';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -12,6 +12,7 @@ use Term::ReadKey qw(GetTerminalSize ReadKey);
 use Text::LineFold;
 use Unicode::GCString;
 
+no warnings 'utf8';
 #use warnings FATAL => qw(all);
 #use Log::Log4perl qw(get_logger);
 #my $log = get_logger( 'Term::Choose' );
@@ -307,9 +308,8 @@ sub _copy_orig_list {
                     $copy = $arg->{undef} if ! defined $copy;
                     $copy = $arg->{empty} if $copy eq '';
                 }
-                utf8::upgrade( $copy );
                 $copy =~ s/\p{Space}/ /g;  # replace, but don't squash sequences of spaces
-                $copy =~ s/\P{Print}/\x{fffd}/g;  # (�)
+                $copy =~ s/\p{C}//g;
                 $copy;
             } @{$arg->{orig_list}}[ 0 .. $arg->{limit} - 1 ] ];
         }
@@ -319,9 +319,8 @@ sub _copy_orig_list {
                 $copy = $arg->{undef} if ! defined $copy;
                 $copy = $arg->{empty} if $copy eq '';
             }
-            utf8::upgrade( $copy );
             $copy =~ s/\p{Space}/ /g;
-            $copy =~ s/\P{Print}/\x{fffd}/g;
+            $copy =~ s/\p{C}//g;
             $copy;
         } @{$arg->{orig_list}} ];
     }
@@ -380,14 +379,8 @@ sub _validate_options {
         pad_one_row     => [ 0,  $limit ],
         page            => [ 0,       1 ],
         prompt          => '',
-        screen_width    => [ 1,  $limit ], # DEPRECATED
         undef           => '',
     };
-    # ###
-    if ( defined $config->{screen_width} && ! defined $config->{max_width} ) {
-        $config->{max_width} = $config->{screen_width};
-    }
-    # ###
     my $warn = 0;
     for my $key ( keys %$config ) {
         if ( ! exists $validate->{$key} ) {
@@ -503,8 +496,7 @@ sub _prepare_page_number {
 sub _prepare_promptline {
     my ( $arg ) = @_;
     $arg->{prompt} =~ s/[^\n\P{Space}]/ /g;
-    $arg->{prompt} =~ s/[^\n\p{Print}]/\x{fffd}/g;
-    utf8::upgrade( $arg->{prompt} );
+    $arg->{prompt} =~ s/[^\n\P{C}]//g;
     my $gcs_prompt = Unicode::GCString->new( $arg->{prompt} );
     if ( $arg->{prompt} !~ /\n/ && $gcs_prompt->columns() <= $arg->{avail_width} ) {
         $arg->{nr_prompt_lines} = 1;
@@ -678,13 +670,6 @@ sub choose {
             }
             else {
                 $arg->{cursor}[ROW]--;
-                if ( defined $arg->{backup_row} ) {
-                    $arg->{backup_row} = undef;
-                }
-                if ( defined $arg->{backup_col} ) {
-                    $arg->{cursor}[COL] = $arg->{backup_col};
-                    $arg->{backup_col}  = undef;
-                }
                 if ( $arg->{cursor}[ROW] >= $arg->{p_begin} ) {
                     _wr_cell( $arg, $arg->{cursor}[ROW] + 1, $arg->{cursor}[COL] );
                     _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
@@ -733,9 +718,6 @@ sub choose {
                 _beep( $arg );
             }
             else {
-                if ( defined $arg->{backup_col} ) {
-                    $arg->{backup_col} = undef;
-                }
                 if ( $arg->{cursor}[COL] > 0 ) {
                     $arg->{cursor}[COL]--;
                     _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] + 1 );
@@ -743,9 +725,6 @@ sub choose {
                 }
                 else {
                     $arg->{cursor}[ROW]--;
-                    if ( defined $arg->{backup_row} ) {
-                        $arg->{backup_row} = undef;
-                    }
                     if ( $arg->{cursor}[ROW] >= $arg->{p_begin} ) {
                         $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
                         _wr_cell( $arg, $arg->{cursor}[ROW] + 1, 0 );
@@ -778,9 +757,6 @@ sub choose {
             }
             else {
                 $arg->{cursor}[COL]--;
-                if ( defined $arg->{backup_col} ) {
-                    $arg->{backup_col} = undef;
-                }
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] + 1 );
                 _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
             }
@@ -792,14 +768,6 @@ sub choose {
             else {
                 $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) - 1 );
                 $arg->{cursor}[ROW] -= $arg->{avail_height};
-                if ( defined $arg->{backup_row} ) {
-                    $arg->{cursor}[ROW] = $arg->{backup_row};
-                    $arg->{backup_row}  = undef;
-                }
-                if ( defined $arg->{backup_col} ) {
-                    $arg->{cursor}[COL] = $arg->{backup_col};
-                    $arg->{backup_col}  = undef;
-                }
                 $arg->{p_begin} = $arg->{row_on_top};
                 $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
                 _wr_screen( $arg );
@@ -815,16 +783,13 @@ sub choose {
                 if ( $arg->{cursor}[ROW] >= $#{$arg->{rc2idx}} ) {
                     if ( $#{$arg->{rc2idx}} == $arg->{row_on_top} || ! $arg->{rest} || $arg->{cursor}[COL] <= $arg->{rest} - 1 ) {
                         if ( $arg->{cursor}[ROW] != $#{$arg->{rc2idx}} ) {
-                            $arg->{backup_row}  = $arg->{cursor}[ROW] - $arg->{avail_height};
                             $arg->{cursor}[ROW] = $#{$arg->{rc2idx}};
                         }
                         if ( $arg->{rest} && $arg->{cursor}[COL] > $arg->{rest} - 1 ) {
-                            $arg->{backup_col}  = $arg->{cursor}[COL];
                             $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
                         }
                     }
                     else {
-                        $arg->{backup_row}  = $arg->{cursor}[ROW] - $arg->{avail_height};
                         $arg->{cursor}[ROW] = $#{$arg->{rc2idx}} - 1;
                     }
                 }
@@ -1278,7 +1243,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.064
+Version 1.065
 
 =cut
 
@@ -1324,7 +1289,7 @@ Nothing by default.
 
 I<choose> expects as a first argument an array reference. The array the reference refers to holds the list items available for selection (in void context no selection can be made).
 
-The array the reference - passed with the first argument - refers to is called in the documentation simply array or list resp. elements (of the array).
+The array the reference - passed with the first argument - refers to is called in the documentation simply array or list respectively elements (of the array).
 
 Options can be passed with a hash reference as a second (optional) argument.
 
@@ -1407,9 +1372,9 @@ white-spaces in elements are replaced with simple spaces.
 
 =item *
 
-non printable characters are replaced with the I<replacement character> (U+FFFD).
+characters which match the Unicode character property I<Other> are removed.
 
-    $element =~ s/\P{Print}/\x{fffd}/g;
+    $element =~ s/\p{C}//g;
 
 =item *
 
@@ -1514,12 +1479,6 @@ Allowed values: 1 or greater
 
 (default: undef)
 
-=head4 screen_width DEPRECATED
-
-Use I<max_width> instead - I<screen_width> is now called I<max_width>.
-
-The deprecated name I<screen_width> will be removed in a future release.
-
 =head4 max_width
 
 If defined, sets the output width to I<max_width> if the terminal width is greater than I<max_width>.
@@ -1582,7 +1541,7 @@ Allowed values:  0 or greater
 
 0 - off (default)
 
-1 - return the index of the chosen element instead of the chosen element resp. the indices of the chosen elements instead of the chosen elements.
+1 - return the index of the chosen element instead of the chosen element respectively the indices of the chosen elements instead of the chosen elements.
 
 =head4 page
 
@@ -1664,7 +1623,7 @@ See INITIAL_TAB and SUBSEQUENT_TAB in L<Text::LineFold>.
 
 =head4 ll
 
-If all elements have the same length and this length is known before calling I<choose> it can be passed with this option.
+If all elements have the same length and this length is known before calling I<choose> the length can be passed with this option.
 
 If I<ll> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
 
@@ -1672,11 +1631,9 @@ I<length> refers here to the number of print columns the element will use on the
 
 A way to determine the number of print columns is the use of I<columns> from L<Unicode::GCString>.
 
-The length of undefined elements and elements with an empty string depends on the value of the option I<undef> resp. on the value of the option I<empty>.
+The length of undefined elements and elements with an empty string depends on the value of the option I<undef> respectively on the value of the option I<empty>.
 
-If the option I<ll> is set the elements must be upgraded with utf8::upgrade or with an equivalent tool and not contain any non-printing character.
-
-The upgrade with utf8::upgrade is needed because a limitation of L<Unicode::GCString> (L<Bug #84661|https://rt.cpan.org/Public/Bug/Display.html?id=84661>).
+If the option I<ll> is set the elements must not contain any non-printing character.
 
 If I<ll> is set to a value less than the length of the elements the output will break.
 
@@ -1696,7 +1653,7 @@ Allowed values: 1 or greater
 
 =item * If the first argument is not a array reference I<choose> dies.
 
-=item * If the array referred by the first argument is empty I<choose> returns  I<undef> resp. an empty list and issues a warning.
+=item * If the array referred by the first argument is empty I<choose> returns  I<undef> respectively an empty list and issues a warning.
 
 =item * If the array referred by the first argument has more than I<limit> elements (default 100_000) I<choose> warns and uses the first I<limit> array elements.
 
@@ -1706,7 +1663,7 @@ Allowed values: 1 or greater
 
 =item * If an option value is not valid  I<choose> warns an falls back to the default value.
 
-=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> I<choose> warns with "EOT: $!" and returns I<undef> resp. an empty list.
+=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> I<choose> warns with "EOT: $!" and returns I<undef> respectively an empty list.
 
 =back
 
@@ -1806,7 +1763,7 @@ L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then 
 
 As mentioned above I<choose> from L<Term::Clui> does not order the elements in columns if there is more than one row on the screen while L<Term::Choose> arranges the elements in such situations in columns.
 
-Another difference is how lists which don't fit on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (resp. the begin) of the screen - to the next (resp. previous) page.
+Another difference is how lists which don't fit on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (respectively the begin) of the screen - to the next (respectively previous) page.
 
 Strings with characters where I<length(>characterI<)>* is not equal to the number of print columns of the respective character might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with such kind of Unicode strings it uses the method I<columns> from L<Unicode::GCString> to determine the string length.
 

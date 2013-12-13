@@ -17,6 +17,7 @@ xt/perl_minimum_version.t
 xt/pod-coverage.t
 xt/pod.t
 xt/prereqs.t
+xt/spelling.t
 xt/version1.t
 xt/version2.t
 xt/whitespaces.t

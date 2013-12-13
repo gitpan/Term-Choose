@@ -4,7 +4,7 @@
       "Matthaeus Kiem <cuer2s@gmail.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.76, CPAN::Meta::Converter version 2.132510",
+   "generated_by" : "ExtUtils::MakeMaker version 6.84, CPAN::Meta::Converter version 2.133380",
    "license" : [
       "perl_5"
    ],
@@ -36,11 +36,11 @@
             "Exporter" : "0",
             "Term::ReadKey" : "2.30",
             "Text::LineFold" : "2012.04",
-            "Unicode::GCString" : "2012.10",
+            "Unicode::GCString" : "2013.10",
             "perl" : "5.010000"
          }
       }
    },
    "release_status" : "stable",
-   "version" : "1.064"
+   "version" : "1.065"
 }
