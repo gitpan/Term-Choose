@@ -1,6 +1,10 @@
 Revision history for Term::Choose
 
 
+1.066   2013-12-18
+        - Update documentation
+        - Example: bugfix and update.
+
 1.065   2013-12-13
         - Removed the deprecated option name "screen_width".
         - Modified behavior "relative position".
