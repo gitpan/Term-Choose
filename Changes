@@ -1,8 +1,12 @@
 Revision history for Term::Choose
 
 
+1.067   2013-12-23
+        - Bugfix documentation.
+        - Update example.
+
 1.066   2013-12-18
-        - Update documentation
+        - Update documentation.
         - Example: bugfix and update.
 
 1.065   2013-12-13

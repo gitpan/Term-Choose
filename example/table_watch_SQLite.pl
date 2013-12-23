@@ -5,7 +5,7 @@ use 5.10.0;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-# Version 1.066
+# Version 1.067
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
@@ -77,6 +77,8 @@ my $info = {
                              # "LIKE col%", "NOT LIKE col%", "LIKE %col", "NOT LIKE %col",
                              " = col", " != col", " <> col", " < col", " > col", " >= col", " <= col" ],
     avilable_db_types   => [ 'sqlite', 'mysql', 'postgres' ],
+    hidd_func_pr        => { Epoch_to_Date => 'DATE', Truncate => 'TRUNC', Epoch_to_DateTime => 'DATETIME' },
+    keys_hidd_func_pr   => [ qw( Epoch_to_Date Truncate Epoch_to_DateTime ) ],
 };
 
 my $default_db_types  = [ 'sqlite', 'mysql', 'postgres' ];
@@ -410,7 +412,7 @@ DB_TYPES: while ( 1 ) {
                     my $qt_columns = {};
                     my $pr_columns = [];
                     my $sql;
-                    $sql->{stmt_keys} = [ qw( distinct_stmt where_stmt group_by_stmt having_stmt order_by_stmt limit_stmt ) ];
+                    $sql->{strg_keys} = [ qw( distinct_stmt where_stmt group_by_stmt having_stmt order_by_stmt limit_stmt ) ];
                     $sql->{list_keys} = [ qw( chosen_cols aggr_cols where_args group_by_cols having_args limit_args hidd ) ];
                     reset_stmts( $sql, $qt_columns );
 
@@ -868,22 +870,18 @@ sub print_join_statement {
 
 sub print_select_statement {
     my ( $info, $sql, $table, $prompt ) = @_;
-    my $cols_sql = '';
-    if ( ! $info->{select_type} || $info->{select_type} eq 'chosen_cols' ) {
-        if ( @{$sql->{print}{chosen_cols}} ) {
-            $cols_sql = ' ' . join( ', ', @{$sql->{print}{chosen_cols}} );
-        }
+    my $cols_sql;
+    if ( ! $sql->{select_type} ) {
+        $cols_sql = ' *';
+    }
+    elsif ( $sql->{select_type} eq 'chosen_cols' ) {
+        $cols_sql = ' ' . join( ', ', @{$sql->{print}{chosen_cols}} );
     }
     else {
-        if ( @{$sql->{print}{group_by_cols}} ) {
-            $cols_sql = ' ' . join( ', ', @{$sql->{print}{group_by_cols}} );
-        }
-        if ( @{$sql->{print}{aggr_cols}} ) {
-            $cols_sql .= ',' if $cols_sql;
-            $cols_sql .= ' ' . join( ', ', @{$sql->{print}{aggr_cols}} );
-        }
+        $cols_sql = ' ' . join( ', ', @{$sql->{print}{group_by_cols}},
+                                      @{$sql->{print}{aggr_cols}} );
     }
-    $cols_sql = ' *' if ! $cols_sql;
+    $cols_sql = ' *' if $cols_sql eq ' ';
     my $str = "SELECT";
     $str .= $sql->{print}{distinct_stmt} if $sql->{print}{distinct_stmt};
     $str .= $cols_sql . "\n";
@@ -901,13 +899,11 @@ sub print_select_statement {
 
 sub reset_stmts {
     my ( $sql, $qt_columns ) = @_;
-    #delete @{$qt_columns}{@{$sql->{print}{aggr_cols}//[]}};
-    #delete @{$qt_columns}{@{$sql->{print}{hidd}//[]}};
-    @{$sql->{print}}{ @{$sql->{stmt_keys}} } = ( '' ) x  @{$sql->{stmt_keys}};
-    @{$sql->{quote}}{ @{$sql->{stmt_keys}} } = ( '' ) x  @{$sql->{stmt_keys}};
+    delete $sql->{select_type};
+    @{$sql->{print}}{ @{$sql->{strg_keys}} } = ( '' ) x  @{$sql->{strg_keys}};
+    @{$sql->{quote}}{ @{$sql->{strg_keys}} } = ( '' ) x  @{$sql->{strg_keys}};
     @{$sql->{print}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
     @{$sql->{quote}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
-    delete $sql->{quote}{hidd};
     delete $sql->{backup};
 }
 
@@ -941,6 +937,7 @@ sub read_table {
     }
 
     CUSTOMIZE: while ( 1 ) {
+        my $backup_sql = clone( $sql );
         my $prompt = print_select_statement( $info, $sql, $table );
         # Choose
         my $custom = choose(
@@ -962,11 +959,10 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'columns'} ) {
-            my @cols = @$pr_columns;
+            my @cols = ( @$pr_columns );
             $sql->{quote}{chosen_cols} = [];
             $sql->{print}{chosen_cols} = [];
-            my $backup_s_type = $info->{select_type};
-            $info->{select_type} = 'chosen_cols';
+            $sql->{select_type} = 'chosen_cols';
 
             COLUMNS: while ( 1 ) {
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
@@ -984,26 +980,21 @@ sub read_table {
                         next COLUMNS;
                     }
                     else {
-                        $info->{select_type} = $backup_s_type;
-                        $sql->{quote}{chosen_cols} = [];
-                        $sql->{print}{chosen_cols} = [];
+                        $sql = clone( $backup_sql );
                         last COLUMNS;
                     }
                 }
                 if ( $print_col eq $info->{ok} ) {
-                    delete $sql->{backup}{print}{chosen_cols};
-                    #delete @{$qt_columns}{@{$sql->{print}{hidd}}};
-                    $sql->{print}{hidd} = [];
-                    #delete @{$qt_columns}{@{$sql->{print}{aggr_cols}}};
-                    $sql->{quote}{aggr_cols} = [];
-                    $sql->{print}{aggr_cols} = [];
-                    $sql->{quote}{group_by_stmt} = '';
-                    $sql->{print}{group_by_stmt} = '';
-                    $sql->{quote}{group_by_cols} = [];
-                    $sql->{print}{group_by_cols} = [];
-                    $sql->{quote}{having_args} = [];
-                    $sql->{quote}{having_stmt} = '';
-                    $sql->{print}{having_stmt} = '';
+                    if ( ! @{$sql->{quote}{chosen_cols}} ) {
+                        delete $sql->{select_type};
+                    }
+                    delete $sql->{backup};
+                    my @list_keys = ( qw( aggr_cols group_by_cols having_args hidd ) );
+                    my @strg_keys = ( qw( group_by_stmt having_stmt ) );
+                    for my $key ( qw( quote print ) ) {
+                        @{$sql->{$key}}{@list_keys} = map { [] } @list_keys;
+                        @{$sql->{$key}}{@strg_keys} = ( '' )   x @strg_keys;
+                    }
                     last COLUMNS;
                 }
                 push @{$sql->{quote}{chosen_cols}}, $qt_columns->{$print_col};
@@ -1030,8 +1021,7 @@ sub read_table {
                         next DISTINCT;
                     }
                     else {
-                        $sql->{quote}{distinct_stmt} = '';
-                        $sql->{print}{distinct_stmt} = '';
+                        $sql = clone( $backup_sql );
                         last DISTINCT;
                     }
                 }
@@ -1044,11 +1034,9 @@ sub read_table {
         }
         elsif( $custom eq $customize{'aggregate'} ) {
             my @cols = ( @$pr_columns );
-            #delete @{$qt_columns}{@{$sql->{print}{aggr_cols}}};
             $sql->{quote}{aggr_cols} = [];
             $sql->{print}{aggr_cols} = [];
-            my $backup_s_type = $info->{select_type};
-            $info->{select_type} = 'aggr_cols';
+            $sql->{select_type} = 'aggr_cols';
 
             AGGREGATE: while ( 1 ) {
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
@@ -1061,24 +1049,19 @@ sub read_table {
                 );
                 if ( ! defined $aggr ) {
                     if ( @{$sql->{quote}{aggr_cols}} ) {
-                        #delete @{$qt_columns}{@{$sql->{print}{aggr_cols}}};
                         $sql->{quote}{aggr_cols} = [];
                         $sql->{print}{aggr_cols} = [];
                         next AGGREGATE;
                     }
                     else {
-                        $info->{select_type} = $backup_s_type;
-                        #delete @{$qt_columns}{@{$sql->{print}{aggr_cols}}};
-                        $sql->{quote}{aggr_cols} = [];
-                        $sql->{print}{aggr_cols} = [];
+                        $sql = clone( $backup_sql );
                         last AGGREGATE;
                     }
                 }
                 if ( $aggr eq $info->{ok} ) {
                     $sql->{quote}{chosen_cols} = [];
                     $sql->{print}{chosen_cols} = [];
-                    delete $sql->{backup}{print}{aggr_cols};
-                    #delete @{$qt_columns}{@{$sql->{print}{hidd}}};
+                    delete $sql->{backup};
                     $sql->{print}{hidd} = [];
                     last AGGREGATE;
                 }
@@ -1101,7 +1084,6 @@ sub read_table {
                             { prompt => $prompt, %lyt_stmt }
                         );
                         if ( ! defined $all_or_distinct ) {
-                            #delete @{$qt_columns}{@{$sql->{print}{aggr_cols}}};
                             $sql->{quote}{aggr_cols} = [];
                             $sql->{print}{aggr_cols} = [];
                             next AGGREGATE;
@@ -1120,7 +1102,6 @@ sub read_table {
                         { prompt => $prompt, %lyt_stmt }
                     );
                     if ( ! defined $print_col ) {
-                        #delete @{$qt_columns}{@{$sql->{print}{aggr_cols}}};
                         $sql->{quote}{aggr_cols} = [];
                         $sql->{print}{aggr_cols} = [];
                         next AGGREGATE;
@@ -1129,8 +1110,9 @@ sub read_table {
                     $sql->{print}{aggr_cols}[$i] .= $print_col . ')';
                     $sql->{quote}{aggr_cols}[$i] .= $quote_col . ')';
                 }
+                $sql->{print}{aggr_cols}[$i] = unambiguous_key( $sql->{print}{aggr_cols}[$i], $pr_columns );
                 my $print_aggr = $sql->{print}{aggr_cols}[$i];
-                my $quote_aggr = $sql->{print}{aggr_cols}[$i];
+                my $quote_aggr = $sql->{quote}{aggr_cols}[$i];
                 $qt_columns->{$print_aggr} = $quote_aggr;
             }
         }
@@ -1162,9 +1144,7 @@ sub read_table {
                         next WHERE;
                     }
                     else {
-                        $sql->{quote}{where_args} = [];
-                        $sql->{quote}{where_stmt} = '';
-                        $sql->{print}{where_stmt} = '';
+                        $sql = clone( $backup_sql );
                         last WHERE;
                     }
                 }
@@ -1216,8 +1196,7 @@ sub read_table {
             $sql->{print}{group_by_stmt} = " GROUP BY";
             $sql->{quote}{group_by_cols} = [];
             $sql->{print}{group_by_cols} = [];
-            my $backup_s_type = $info->{select_type};
-            $info->{select_type} = 'group_by_cols';
+            $sql->{select_type} = 'group_by_cols';
 
             GROUP_BY: while ( 1 ) {
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
@@ -1238,11 +1217,7 @@ sub read_table {
                         next GROUP_BY;
                     }
                     else {
-                        $info->{select_type} = $backup_s_type;
-                        $sql->{quote}{group_by_stmt} = '';
-                        $sql->{print}{group_by_stmt} = '';
-                        $sql->{quote}{group_by_cols} = [];
-                        $sql->{print}{group_by_cols} = [];
+                        $sql = clone( $backup_sql );
                         last GROUP_BY;
                     }
                 }
@@ -1292,9 +1267,7 @@ sub read_table {
                         next HAVING;
                     }
                     else {
-                        $sql->{quote}{having_args} = [];
-                        $sql->{quote}{having_stmt} = '';
-                        $sql->{print}{having_stmt} = '';
+                        $sql = clone( $backup_sql );
                         last HAVING;
                     }
                 }
@@ -1333,7 +1306,7 @@ sub read_table {
                     $sql->{print}{having_stmt} .= $AND_OR . ' ' . $print_aggr;
                     $quote_col = $qt_columns->{$print_aggr};
                 }
-                elsif ( $aggr =~ /^count\(\*\)\z/i ) {
+                elsif ( $aggr eq 'COUNT(*)' ) {
                     $print_col = '*';
                     $quote_col = '*';
                     $print_aggr = $aggr;
@@ -1382,8 +1355,13 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'order_by'} ) {
-            my @cols = ( @$pr_columns, map( '@' . $_, @{$sql->{print}{aggr_cols}},
-                                                      @{$sql->{print}{hidd}} ) );
+            my @functions = @{$info->{hidd_func_pr}}{@{$info->{keys_hidd_func_pr}}};
+            my $f = join '|', map { quotemeta $_ } @functions;
+            my @not_hidd = map { /^(?:$f)\((.*)\)\z/ ? $1 : () } @{$sql->{print}{aggr_cols}};
+            my @cols =
+                ( ! $sql->{select_type} || $sql->{select_type} eq 'chosen_cols' )
+                ? ( @$pr_columns, @{$sql->{print}{hidd}} )
+                : ( @{$sql->{print}{group_by_cols}}, @not_hidd, @{$sql->{print}{aggr_cols}} );
             my $col_sep = ' ';
             $sql->{quote}{order_by_stmt} = " ORDER BY";
             $sql->{print}{order_by_stmt} = " ORDER BY";
@@ -1406,9 +1384,7 @@ sub read_table {
                         next ORDER_BY;
                     }
                     else {
-                        $sql->{quote}{order_by_args} = [];
-                        $sql->{quote}{order_by_stmt} = '';
-                        $sql->{print}{order_by_stmt} = '';
+                        $sql = clone( $backup_sql );
                         last ORDER_BY;
                     }
                 }
@@ -1418,11 +1394,6 @@ sub read_table {
                         $sql->{print}{order_by_stmt} = '';
                     }
                     last ORDER_BY;
-                }
-                if ( any { '@' . $_ eq $print_col } @{$sql->{print}{aggr_cols}},
-                                                    @{$sql->{print}{hidd}}
-                ) {
-                    $print_col =~ s/^\@//;
                 }
                 ( my $quote_col = $qt_columns->{$print_col} ) =~ s/\sAS\s\S+\z//;
                 $sql->{quote}{order_by_stmt} .= $col_sep . $quote_col;
@@ -1471,8 +1442,7 @@ sub read_table {
                         next LIMIT;
                     }
                     else {
-                        $sql->{quote}{limit_stmt} = '';
-                        $sql->{print}{limit_stmt} = $auto_limit;
+                        $sql = clone( $backup_sql );
                         last LIMIT;
                     }
                 }
@@ -1508,67 +1478,56 @@ sub read_table {
             }
         }
         elsif ( $custom eq $customize{'hidden'} ) {
-            my @functions = ( qw( Epoch_to_Date Truncate Epoch_to_DateTime ) );
-            #delete @{$qt_columns}{@{$sql->{print}{hidd}}};
-            $sql->{print}{hidd} = [];
-            my $default_cols_sql = 0;
+            my @functions = @{$info->{keys_hidd_func_pr}};
             my $stmt_key;
-            if ( @{$sql->{print}{aggr_cols}} ) {
-                if ( ! exists $sql->{backup}{print}{aggr_cols} ) {
-                    @{$sql->{backup}{print}{aggr_cols}} = @{$sql->{print}{aggr_cols}};
-                }
-                $stmt_key = 'aggr_cols';
-            }
-            else {
-                if ( ! @{$sql->{quote}{chosen_cols}} ) {
-                    @{$sql->{quote}{chosen_cols}} = map { $qt_columns->{$_} } @$pr_columns;
-                    @{$sql->{print}{chosen_cols}} = @$pr_columns;
-                    $default_cols_sql = 1;
-                }
-                if ( ! exists $sql->{backup}{print}{chosen_cols} ) {
-                    @{$sql->{backup}{print}{chosen_cols}} = @{$sql->{print}{chosen_cols}};
-                }
+            if ( ! $sql->{select_type} ) {
+                @{$sql->{quote}{chosen_cols}} = map { $qt_columns->{$_} } @$pr_columns;
+                @{$sql->{print}{chosen_cols}} = @$pr_columns;
                 $stmt_key = 'chosen_cols';
             }
+            elsif ( $sql->{select_type} eq 'chosen_cols' ) {
+                $stmt_key = 'chosen_cols';
+            }
+            else {
+                $stmt_key = 'aggr_cols';
+            }
+            if ( ! $sql->{backup}{print}{$stmt_key} ) {
+                @{$sql->{backup}{print}{$stmt_key}} = @{$sql->{print}{$stmt_key}};
+            }
+            my $changed = 0;
 
             HIDDEN: while ( 1 ) {
-                my @cols = $stmt_key eq 'chosen_cols' ? @{$sql->{print}{chosen_cols}}
-                                                      : @{$sql->{print}{aggr_cols}};
+                my @cols = @{$sql->{print}{$stmt_key}};
                 my $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
-                my $choices = [ undef, map( "- $_", @cols ), $info->{_confirm} ];
+                my $choices = [ undef, $info->{_confirm}, map( "- $_", @cols ) ];
                 # Choose
-                my $i = choose(
+                my $print_col = choose(
                     $choices,
-                    { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}}, index => 1 }
+                    { prompt => $prompt, lf => [0,4], %{$info->{lyt_3_cs}} }
                 );
-                my $print_col;
-                $print_col = $choices->[$i] if defined $i;
                 if ( ! defined $print_col ) {
-                    for my $key ( qw( chosen_cols aggr_cols ) ) {
-                        for my $i ( 0 .. $#{$sql->{print}{$key}} ) {
-                            if ( $sql->{print}{$key}[$i] ne $sql->{backup}{print}{$key}[$i] ) {
-                                $sql->{print}{$key}[$i] = $sql->{backup}{print}{$key}[$i];
-                                $sql->{quote}{$key}[$i] = $qt_columns->{$sql->{backup}{print}{$key}[$i]};
-                            }
-                        }
-                    }
-                    if ( $default_cols_sql ) {
-                        $sql->{quote}{chosen_cols} = [];
-                        $sql->{print}{chosen_cols} = [];
-                    }
-                    #delete @{$qt_columns}{@{$sql->{print}{hidd}}};
-                    $sql->{print}{hidd} = [];
+                    $sql = clone( $backup_sql );
                     last HIDDEN;
                 }
                 if ( $print_col eq $info->{_confirm} ) {
+                    if ( ! $changed ) {
+                        $sql = clone( $backup_sql );
+                        last HIDDEN;
+                    }
+                    $sql->{select_type} = $stmt_key if ! $sql->{select_type};
                     last HIDDEN;
                 }
                 $print_col =~ s/^\-\s//;
-                $i--;
+                my $i = first_index { $_ eq $print_col }  @cols;
                 if ( $sql->{print}{$stmt_key}[$i] ne $sql->{backup}{print}{$stmt_key}[$i] ) {
+                    if ( $stmt_key eq 'chosen_cols' ) {
+                        my $i = first_index { $sql->{print}{$stmt_key}[$i] eq $_ } @{$sql->{print}{hidd}};
+                        splice( @{$sql->{print}{hidd}}, $i, 1 );
+                    }
                     $sql->{print}{$stmt_key}[$i] = $sql->{backup}{print}{$stmt_key}[$i];
                     $sql->{quote}{$stmt_key}[$i] = $qt_columns->{$sql->{backup}{print}{$stmt_key}[$i]};
-                   next HIDDEN;
+                    $changed++;
+                    next HIDDEN;
                 }
                 $prompt = print_select_statement( $info, $sql, $table, 'Choose:' );
                 # Choose
@@ -1585,27 +1544,30 @@ sub read_table {
                 if ( ! defined $quote_hidd ) {
                     next HIDDEN;
                 }
+                $print_hidd = unambiguous_key( $print_hidd, $pr_columns );
                 $sql->{quote}{$stmt_key}[$i] = $quote_hidd . ' AS ' . $dbh->quote_identifier( $print_hidd );
                 $sql->{print}{$stmt_key}[$i] = $print_hidd;
                 $qt_columns->{$print_hidd} = $quote_hidd;
                 if ( $stmt_key eq 'chosen_cols' ) { # WHERE: aggregate functions are not allowed
                     push @{$sql->{print}{hidd}}, $print_hidd;
                 }
+                $changed++;
             }
         }
         elsif( $custom eq $customize{'print_table'} ) {
             my ( $default_cols_sql, $from_stmt ) = $select_from_stmt =~ /^SELECT\s(.*?)(\sFROM\s.*)\z/;
-            my $cols_sql = '';
-            if ( @{$sql->{quote}{aggr_cols}} || @{$sql->{quote}{group_by_cols}} ) {
-                $cols_sql = ' ' . join( ', ', @{$sql->{quote}{group_by_cols}},
-                                              @{$sql->{quote}{aggr_cols}} );
+            my $cols_sql;
+            if ( ! $sql->{select_type} ) {
+                $cols_sql = ' ' . $default_cols_sql;
             }
-            elsif ( @{$sql->{quote}{chosen_cols}} ) {
+            elsif ( $sql->{select_type} eq 'chosen_cols' ) {
                 $cols_sql = ' ' . join( ', ', @{$sql->{quote}{chosen_cols}} );
             }
             else {
-                $cols_sql = ' ' . $default_cols_sql;
+                $cols_sql = ' ' . join( ', ', @{$sql->{quote}{group_by_cols}},
+                                              @{$sql->{quote}{aggr_cols}} );
             }
+            $cols_sql = ' ' . $default_cols_sql if $cols_sql eq ' ';
             my $select .= "SELECT" . $sql->{quote}{distinct_stmt} . $cols_sql . $from_stmt;
             $select .= $sql->{quote}{where_stmt};
             $select .= $sql->{quote}{group_by_stmt};
@@ -1646,6 +1608,13 @@ sub read_table {
     return;
 }
 
+sub unambiguous_key {
+    my ( $new_key, $keys ) = @_;
+    while ( any { $new_key eq $_ } @$keys ) {
+        $new_key .= '_';
+    }
+    return $new_key;
+}
 
 sub set_operator_sql {
     my ( $info, $opt, $sql, $clause, $table, $cols, $qt_columns, $quote_col ) = @_;
@@ -2775,8 +2744,6 @@ sub get_db_handle {
                 my ( $number, $places ) = @_;
                 return if ! defined $number;
                 return $number if ! looks_like_number( $number );
-                #die "Argument isn't numeric in TRUNCATE" if ! looks_like_number( $number );
-                #return sprintf( "%.*f", $places // 2, $number ) } # round
                 return sprintf( "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places );
             }
         )
@@ -3103,13 +3070,14 @@ sub concatenate {
 
 sub col_functions {
     my ( $info, $sql, $table, $func, $quote_col, $print_col ) = @_;
-    my %lyt_stmt = %{$info->{lyt_stmt}};
-    my $db_type = $info->{db_type};
+    my %lyt_stmt     = %{$info->{lyt_stmt}};
+    my $db_type      = $info->{db_type};
+    my $hidd_func_pr = $info->{hidd_func_pr};
     my ( $quote_f, $print_f );
-    if ( $func =~ /^epoch_to_date(?:time)?\z/i ) {
-        $print_f = $func =~ /^epoch_to_date\z/i ? "DATE($print_col)" : "DATETIME($print_col)";
+    $print_f = $hidd_func_pr->{$func} . '(' . $print_col . ')';
+    if ( $func =~ /^Epoch_to_Date(?:Time)?\z/ ) {
         my $prompt = print_select_statement( $info, $sql, $table, "$print_f\nInterval:" );
-        my ( $seconds, $milliseconds, $microseconds ) = ( '1 Second', '1 Millisecond', '1 Microsecond' );
+        my ( $seconds, $milliseconds, $microseconds ) = ( 'Second', 'Millisecond', 'Microsecond' );
         my $choices =  [ $seconds, $milliseconds, $microseconds ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
         # Choose
@@ -3117,7 +3085,7 @@ sub col_functions {
         return if ! defined $interval;
         my $div = $interval eq $microseconds ? 1000000 :
                   $interval eq $milliseconds ? 1000 : 1;
-        if ( $func =~ /^epoch_to_datetime\z/i ) {
+        if ( $func eq 'Epoch_to_DateTime' ) {
             $quote_f = "FROM_UNIXTIME($quote_col/$div,'%Y-%m-%d %H:%i:%s')"    if $db_type eq 'mysql';
             $quote_f = "( TO_TIMESTAMP(${quote_col}::bigint/$div))::timestamp" if $db_type eq 'postgres';
             $quote_f = "DATETIME($quote_col/$div,'unixepoch','localtime')"     if $db_type eq 'sqlite';
@@ -3129,7 +3097,7 @@ sub col_functions {
             $quote_f = "DATE($quote_col/$div,'unixepoch','localtime')"   if $db_type eq 'sqlite';
         }
     }
-    elsif ( $func =~ /^TRUNCATE\z/i ) {
+    elsif ( $func eq 'Truncate' ) {
         my $prompt = print_select_statement( $info, $sql, $table, "TRUNC $print_col\nDecimal places:" );
         my $choices = [ 0 .. 9 ];
         unshift @$choices, undef if $opt->{menu}{sssc_mode}[v];
@@ -3138,7 +3106,6 @@ sub col_functions {
         $quote_f = "TRUNCATE($quote_col,$precision)" if $db_type eq 'mysql';
         $quote_f = "TRUNC($quote_col,$precision)"    if $db_type eq 'postgres';
         $quote_f = "TRUNCATE($quote_col,$precision)" if $db_type eq 'sqlite'; # round
-        $print_f = "TRUNC($print_col)"; # "TRUNC($print_col,$precision)";
     }
     return $quote_f, $print_f;
 }
@@ -3165,7 +3132,7 @@ table_watch_SQLite.pl - Read SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 1.066
+Version 1.067
 
 =cut
 
@@ -3268,6 +3235,8 @@ With MySQL the sensitive match is achieved be enabling the BINARY operator.
 =head2 "Binary filter"
 
 Print "BNRY" instead of arbitrary binary data.
+
+If the data matches the repex qr/[\x00-\x08\x0B-\x0C\x0E-\x1F]/ it is considered arbitrary binary data.
 
 Printing arbitrary binary data could break the output.
 
