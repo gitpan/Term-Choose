@@ -1,4 +1,4 @@
-use 5.010000;
+use 5.010001;
 use warnings;
 use strict;
 use ExtUtils::MakeMaker;
@@ -6,7 +6,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
     PL_FILES         => {},
-    MIN_PERL_VERSION => '5.010000',
+    MIN_PERL_VERSION => '5.010001',
     LICENSE          => 'perl',
     AUTHOR           => 'Matthaeus Kiem <cuer2s@gmail.com>',
     NAME             => 'Term::Choose',

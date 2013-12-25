@@ -1,11 +1,11 @@
 #!/usr/bin/env perl
 use warnings FATAL => qw(all);
 use strict;
-use 5.10.0;
+use 5.10.1;
 use open qw(:std :utf8);
 no warnings 'utf8';
 
-# Version 1.067
+#our $VERSION = '1.068';
 
 use Encode                qw(encode_utf8 decode_utf8);
 use File::Basename        qw(basename);
@@ -414,7 +414,7 @@ DB_TYPES: while ( 1 ) {
                     my $sql;
                     $sql->{strg_keys} = [ qw( distinct_stmt where_stmt group_by_stmt having_stmt order_by_stmt limit_stmt ) ];
                     $sql->{list_keys} = [ qw( chosen_cols aggr_cols where_args group_by_cols having_args limit_args hidd ) ];
-                    reset_stmts( $sql, $qt_columns );
+                    reset_sql( $sql, $qt_columns );
 
                     $info->{lock} = $opt->{sql}{lock_stmt}[v];
 
@@ -817,13 +817,13 @@ sub join_tables {
     }
 
     my $length_uniq = 2;
-    AB: while ( 1 ) {
+    ABBREV: while ( 1 ) {
         $length_uniq++;
-        my %abbr;
+        my %abbreviation;
         for my $table ( @used_tables, ) {
-            next AB if $abbr{ substr $table, 0, $length_uniq }++;
+            next ABBREV if $abbreviation{ substr $table, 0, $length_uniq }++;
         }
-        last AB;
+        last ABBREV;
     }
     my @dup;
     my %seen;
@@ -877,11 +877,12 @@ sub print_select_statement {
     elsif ( $sql->{select_type} eq 'chosen_cols' ) {
         $cols_sql = ' ' . join( ', ', @{$sql->{print}{chosen_cols}} );
     }
-    else {
-        $cols_sql = ' ' . join( ', ', @{$sql->{print}{group_by_cols}},
-                                      @{$sql->{print}{aggr_cols}} );
+    elsif ( @{$sql->{print}{aggr_cols}} || @{$sql->{print}{group_by_cols}} ) {
+        $cols_sql = ' ' . join( ', ', @{$sql->{print}{group_by_cols}}, @{$sql->{print}{aggr_cols}} );
     }
-    $cols_sql = ' *' if $cols_sql eq ' ';
+    else {
+        $cols_sql = ' *';
+    }
     my $str = "SELECT";
     $str .= $sql->{print}{distinct_stmt} if $sql->{print}{distinct_stmt};
     $str .= $cols_sql . "\n";
@@ -897,14 +898,14 @@ sub print_select_statement {
 }
 
 
-sub reset_stmts {
+sub reset_sql {
     my ( $sql, $qt_columns ) = @_;
     delete $sql->{select_type};
     @{$sql->{print}}{ @{$sql->{strg_keys}} } = ( '' ) x  @{$sql->{strg_keys}};
     @{$sql->{quote}}{ @{$sql->{strg_keys}} } = ( '' ) x  @{$sql->{strg_keys}};
     @{$sql->{print}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
     @{$sql->{quote}}{ @{$sql->{list_keys}} } = map{ [] } @{$sql->{list_keys}};
-    delete $sql->{backup};
+    delete $sql->{backup_in_hidd};
 }
 
 
@@ -928,7 +929,7 @@ sub read_table {
     );
     my ( $DISTINCT, $ALL, $ASC, $DESC, $AND, $OR ) = ( "DISTINCT", "ALL", "ASC", "DESC", "AND", "OR" );
     if ( $info->{lock} == 0 ) {
-        reset_stmts( $sql, $qt_columns );
+        reset_sql( $sql, $qt_columns );
     }
     my $auto_limit = '';
     if ( $info->{set_limit} && ! $sql->{print}{limit_stmt} ) {
@@ -951,7 +952,7 @@ sub read_table {
             if ( $info->{lock} == 1 ) {
                 $info->{lock} = 0;
                 $customize{lock} = $lk->[0];
-                reset_stmts( $sql, $qt_columns );
+                reset_sql( $sql, $qt_columns );
             }
             elsif ( $info->{lock} == 0 )   {
                 $info->{lock} = 1;
@@ -959,6 +960,7 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'columns'} ) {
+            reset_sql( $sql, $qt_columns ) if $sql->{select_type} && $sql->{select_type} ne 'chosen_cols';
             my @cols = ( @$pr_columns );
             $sql->{quote}{chosen_cols} = [];
             $sql->{print}{chosen_cols} = [];
@@ -988,13 +990,8 @@ sub read_table {
                     if ( ! @{$sql->{quote}{chosen_cols}} ) {
                         delete $sql->{select_type};
                     }
-                    delete $sql->{backup};
-                    my @list_keys = ( qw( aggr_cols group_by_cols having_args hidd ) );
-                    my @strg_keys = ( qw( group_by_stmt having_stmt ) );
-                    for my $key ( qw( quote print ) ) {
-                        @{$sql->{$key}}{@list_keys} = map { [] } @list_keys;
-                        @{$sql->{$key}}{@strg_keys} = ( '' )   x @strg_keys;
-                    }
+                    delete $sql->{backup_in_hidd};
+                    $sql->{print}{hidd} = [];
                     last COLUMNS;
                 }
                 push @{$sql->{quote}{chosen_cols}}, $qt_columns->{$print_col};
@@ -1033,6 +1030,7 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'aggregate'} ) {
+            reset_sql( $sql, $qt_columns ) if ! $sql->{select_type} || $sql->{select_type} eq 'chosen_cols';
             my @cols = ( @$pr_columns );
             $sql->{quote}{aggr_cols} = [];
             $sql->{print}{aggr_cols} = [];
@@ -1059,10 +1057,7 @@ sub read_table {
                     }
                 }
                 if ( $aggr eq $info->{ok} ) {
-                    $sql->{quote}{chosen_cols} = [];
-                    $sql->{print}{chosen_cols} = [];
-                    delete $sql->{backup};
-                    $sql->{print}{hidd} = [];
+                    delete $sql->{backup_in_hidd};
                     last AGGREGATE;
                 }
                 my $i = @{$sql->{quote}{aggr_cols}};
@@ -1133,7 +1128,6 @@ sub read_table {
                     $choices,
                     { prompt => $prompt, %lyt_stmt }
                 );
-
                 if ( ! defined $print_col ) {
                     if ( $sql->{quote}{where_stmt} ne " WHERE" ) {
                         $sql->{quote}{where_args} = [];
@@ -1190,6 +1184,7 @@ sub read_table {
             }
         }
         elsif( $custom eq $customize{'group_by'} ) {
+            reset_sql( $sql, $qt_columns ) if ! $sql->{select_type} || $sql->{select_type} eq 'chosen_cols';
             my @cols = ( @$pr_columns );
             my $col_sep = ' ';
             $sql->{quote}{group_by_stmt} = " GROUP BY";
@@ -1225,10 +1220,6 @@ sub read_table {
                     if ( $col_sep eq ' ' ) {
                         $sql->{quote}{group_by_stmt} = '';
                         $sql->{print}{group_by_stmt} = '';
-                    }
-                    else {
-                        $sql->{quote}{chosen_cols} = [];
-                        $sql->{print}{chosen_cols} = [];
                     }
                     last GROUP_BY;
                 }
@@ -1361,7 +1352,7 @@ sub read_table {
             my @cols =
                 ( ! $sql->{select_type} || $sql->{select_type} eq 'chosen_cols' )
                 ? ( @$pr_columns, @{$sql->{print}{hidd}} )
-                : ( @{$sql->{print}{group_by_cols}}, @not_hidd, @{$sql->{print}{aggr_cols}} );
+                : ( @{$sql->{print}{group_by_cols}}, @{$sql->{print}{aggr_cols}}, @not_hidd );
             my $col_sep = ' ';
             $sql->{quote}{order_by_stmt} = " ORDER BY";
             $sql->{print}{order_by_stmt} = " ORDER BY";
@@ -1491,8 +1482,8 @@ sub read_table {
             else {
                 $stmt_key = 'aggr_cols';
             }
-            if ( ! $sql->{backup}{print}{$stmt_key} ) {
-                @{$sql->{backup}{print}{$stmt_key}} = @{$sql->{print}{$stmt_key}};
+            if ( ! $sql->{backup_in_hidd}{print}{$stmt_key} ) {
+                @{$sql->{backup_in_hidd}{print}{$stmt_key}} = @{$sql->{print}{$stmt_key}};
             }
             my $changed = 0;
 
@@ -1519,13 +1510,13 @@ sub read_table {
                 }
                 $print_col =~ s/^\-\s//;
                 my $i = first_index { $_ eq $print_col }  @cols;
-                if ( $sql->{print}{$stmt_key}[$i] ne $sql->{backup}{print}{$stmt_key}[$i] ) {
+                if ( $sql->{print}{$stmt_key}[$i] ne $sql->{backup_in_hidd}{print}{$stmt_key}[$i] ) {
                     if ( $stmt_key eq 'chosen_cols' ) {
                         my $i = first_index { $sql->{print}{$stmt_key}[$i] eq $_ } @{$sql->{print}{hidd}};
                         splice( @{$sql->{print}{hidd}}, $i, 1 );
                     }
-                    $sql->{print}{$stmt_key}[$i] = $sql->{backup}{print}{$stmt_key}[$i];
-                    $sql->{quote}{$stmt_key}[$i] = $qt_columns->{$sql->{backup}{print}{$stmt_key}[$i]};
+                    $sql->{print}{$stmt_key}[$i] = $sql->{backup_in_hidd}{print}{$stmt_key}[$i];
+                    $sql->{quote}{$stmt_key}[$i] = $qt_columns->{$sql->{backup_in_hidd}{print}{$stmt_key}[$i]};
                     $changed++;
                     next HIDDEN;
                 }
@@ -1563,11 +1554,12 @@ sub read_table {
             elsif ( $sql->{select_type} eq 'chosen_cols' ) {
                 $cols_sql = ' ' . join( ', ', @{$sql->{quote}{chosen_cols}} );
             }
-            else {
-                $cols_sql = ' ' . join( ', ', @{$sql->{quote}{group_by_cols}},
-                                              @{$sql->{quote}{aggr_cols}} );
+            elsif ( @{$sql->{quote}{aggr_cols}} || @{$sql->{quote}{group_by_cols}} ) {
+                $cols_sql = ' ' . join( ', ', @{$sql->{quote}{group_by_cols}}, @{$sql->{quote}{aggr_cols}} );
             }
-            $cols_sql = ' ' . $default_cols_sql if $cols_sql eq ' ';
+            else {
+                $cols_sql = ' ' . $default_cols_sql;
+            }
             my $select .= "SELECT" . $sql->{quote}{distinct_stmt} . $cols_sql . $from_stmt;
             $select .= $sql->{quote}{where_stmt};
             $select .= $sql->{quote}{group_by_stmt};
@@ -1956,7 +1948,7 @@ sub func_print_tbl {
     my ( $term_width ) = GetTerminalSize;
     my $binary_filter = $opt->{$info->{db_type} . '_' . $db}{binary_filter}[v] // $opt->{$info->{db_type}}{binary_filter}[v];
     my $show_progress = 0;
-    if ( defined $opt->{print}{progress_bar}[v] && @$a_ref * @{$a_ref->[0]}  > $opt->{print}{progress_bar}[v] ) {
+    if ( defined $opt->{print}{progress_bar}[v] && @$a_ref * @{$a_ref->[0]} > $opt->{print}{progress_bar}[v] ) {
         $show_progress = 1;
     }
     say 'Computing: ...' if $show_progress;
@@ -2743,7 +2735,7 @@ sub get_db_handle {
         $dbh->sqlite_create_function( 'truncate', 2, sub {
                 my ( $number, $places ) = @_;
                 return if ! defined $number;
-                return $number if ! looks_like_number( $number );
+                #return sprintf( "%s", $number ) if ! looks_like_number( $number );
                 return sprintf( "%.*f", $places, int( $number * 10 ** $places ) / 10 ** $places );
             }
         )
@@ -3132,7 +3124,7 @@ table_watch_SQLite.pl - Read SQLite/MySQL/PostgreSQL databases.
 
 =head1 VERSION
 
-Version 1.067
+Version 1.068
 
 =cut
 
@@ -3186,7 +3178,7 @@ Set the maximum number of fetched table rows. Can be overwritten by setting the 
 
 =head2 ProgressBar
 
-Set the progress bar threshold. The threshold refers to the list size.
+Set the progress bar threshold. The threshold refers to the list size (rows x columns).
 
 =head2 DB types
 
@@ -3202,9 +3194,9 @@ Choose the thousands separator displayed in menus.
 
 =head2 Sssc mode
 
-With the Sssc mode "compat" enabled back-arrows are offered in the SQL "sub-statement" menus.
+With the Sssc mode "compat" enabled back-arrows are offered in the SQL "sub-statement" menus. In the "simple" mode it can be used the "q" key instead of the back-arrows.
 
-To reset a SQL "sub-statement" (e.g WHERE) in the "simple" mode re-enter into the "sub-statement" and choose '- OK -' or use the "q" key.
+To reset a SQL "sub-statement" (e.g WHERE) re-enter into the "sub-statement" and choose '- OK -'.
 
 =head2 Expand
 
@@ -3236,7 +3228,7 @@ With MySQL the sensitive match is achieved be enabling the BINARY operator.
 
 Print "BNRY" instead of arbitrary binary data.
 
-If the data matches the repex qr/[\x00-\x08\x0B-\x0C\x0E-\x1F]/ it is considered arbitrary binary data.
+If the data matches the repexp qr/[\x00-\x08\x0B-\x0C\x0E-\x1F]/ it is considered arbitrary binary data.
 
 Printing arbitrary binary data could break the output.
 
@@ -3256,7 +3248,7 @@ Determine how often I<table_watch_SQLite.pl> asks for the login data:
 
   -once per database: log in data is asked only once per database.
 
-  -only one: log in data is asked only once and then used for all connections.
+  -only once: log in data is asked only once and then used for all connections.
 
 =head1 AUTHOR
 

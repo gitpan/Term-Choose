@@ -1,6 +1,6 @@
+use 5.010001;
 use warnings;
 use strict;
-use 5.10.0;
 use Perl::MinimumVersion;
 use Perl::Version;
 use File::Find;

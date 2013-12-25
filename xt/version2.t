@@ -1,4 +1,4 @@
-use 5.010000;
+use 5.010001;
 use strict;
 use warnings;
 use Time::Piece;
@@ -30,7 +30,8 @@ close $fh1;
 
 open my $fh2, '<', 'example/table_watch_SQLite.pl' or die $!;
 while ( my $line = <$fh2> ) {
-    if ( $line =~ /^#\sVersion\s(\d\.\d\d\d)/ ) {
+    #if ( $line =~ /^#\sVersion\s(\d\.\d\d\d)/ ) {
+    if ( $line =~ /^#our\s\$VERSION\s=\s'(\d\.\d\d\d)'/ ) {
         $v_example = $1;
     }
     if ( $line =~ /^=pod/ .. $line =~ /^=cut/ ) {

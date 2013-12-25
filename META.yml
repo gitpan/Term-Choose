@@ -23,5 +23,5 @@ requires:
   Term::ReadKey: 2.30
   Text::LineFold: 2012.04
   Unicode::GCString: 2013.10
-  perl: 5.010000
-version: 1.067
+  perl: 5.010001
+version: 1.068
