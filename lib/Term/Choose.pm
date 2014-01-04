@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.1;
 use strict;
 
-our $VERSION = '1.068';
+our $VERSION = '1.069';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -477,9 +477,9 @@ sub _prepare_page_number {
         $arg->{width_pp} = length $arg->{pp};
         $arg->{pp_printf_fmt} = "--- Page %0*d/%d ---";
         $arg->{pp_printf_type} = 0;
-        if ( length sprintf( $arg->{pp_printf_fmt}, $arg->{width_pp}, $arg->{pp}, $arg->{pp} )  > $arg->{avail_width} ) {
+        if ( length sprintf( $arg->{pp_printf_fmt}, $arg->{width_pp}, $arg->{pp}, $arg->{pp} ) > $arg->{avail_width} ) {
             $arg->{pp_printf_fmt} = "%0*d/%d";
-            if ( length sprintf( $arg->{pp_printf_fmt}, $arg->{width_pp}, $arg->{pp}, $arg->{pp} )  > $arg->{avail_width} ) {
+            if ( length sprintf( $arg->{pp_printf_fmt}, $arg->{width_pp}, $arg->{pp}, $arg->{pp} ) > $arg->{avail_width} ) {
                 $arg->{width_pp} = $arg->{avail_width} if $arg->{width_pp} > $arg->{avail_width};
                 $arg->{pp_printf_fmt} = "%0*.*s";
                 $arg->{pp_printf_type} = 1;
@@ -530,7 +530,7 @@ sub _write_first_screen {
         $arg->{avail_width}  = MAX_COL_MOUSE_1003 if $arg->{avail_width}  > MAX_COL_MOUSE_1003;
         $arg->{avail_height} = MAX_ROW_MOUSE_1003 if $arg->{avail_height} > MAX_ROW_MOUSE_1003;
     }
-    $arg->{avail_width} = 1 if $arg->{avail_width}  < 1;
+    $arg->{avail_width} = 1 if $arg->{avail_width} < 1;
     if ( $arg->{prompt} eq '' ) {
         $arg->{nr_prompt_lines} = 0;
     }
@@ -1055,7 +1055,7 @@ sub _size_and_layout {
             my $end = $rows - 1;
             for my $c ( 0 .. $cols_per_row - 1 ) {
                 --$end if $arg->{rest} && $c >= $arg->{rest};
-                $rearranged_idx[$c]  = [ $begin .. $end ];
+                $rearranged_idx[$c] = [ $begin .. $end ];
                 $begin = $end + 1;
                 $end = $begin + $rows - 1;
             }
@@ -1211,7 +1211,7 @@ sub _handle_mouse {
     if ( $button_number == 1 ) {
         $return_char = KEY_ENTER;
     }
-    elsif ( $button_number == 3  ) {
+    elsif ( $button_number == 3 ) {
         $return_char = KEY_SPACE;
     }
     else {
@@ -1243,7 +1243,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.068
+Version 1.069
 
 =cut
 
@@ -1398,7 +1398,7 @@ There is a general upper limit of one billion for options which expect a number 
 
 If I<prompt> is undefined a default prompt-string will be shown.
 
-If the I<prompt> value is  an empty string ("") no prompt-line will be shown.
+If the I<prompt> value is an empty string ("") no prompt-line will be shown.
 
 default in list and scalar context: 'Your choice:'
 
@@ -1511,13 +1511,13 @@ Default may change in a future release.
 
 Sets the number of whitespaces between columns. (default: 2)
 
-Allowed values:  0 or greater
+Allowed values: 0 or greater
 
 =head4 pad_one_row
 
 Sets the number of whitespaces between elements if we have only one row. (default: value of the option I<pad>)
 
-Allowed values:  0 or greater
+Allowed values: 0 or greater
 
 =head4 clear_screen
 
@@ -1533,7 +1533,7 @@ I<default> expects a zero indexed value, so e.g. to highlight the third element 
 
 If the passed value is greater than the index of the last array element the first element is highlighted.
 
-Allowed values:  0 or greater
+Allowed values: 0 or greater
 
 (default: undef)
 
@@ -1591,7 +1591,7 @@ Allowed values: 1 or greater
 
 Sets the maximal allowed length of the array. (default: 100_000)
 
-Allowed values:  1 or greater
+Allowed values: 1 or greater
 
 =head4 undef
 
@@ -1655,7 +1655,7 @@ Allowed values: 1 or greater
 
 =item * If the first argument is not a array reference I<choose> dies.
 
-=item * If the array referred by the first argument is empty I<choose> returns  I<undef> respectively an empty list and issues a warning.
+=item * If the array referred by the first argument is empty I<choose> returns I<undef> respectively an empty list and issues a warning.
 
 =item * If the array referred by the first argument has more than I<limit> elements (default 100_000) I<choose> warns and uses the first I<limit> array elements.
 
@@ -1663,7 +1663,7 @@ Allowed values: 1 or greater
 
 =item * If an option does not exist I<choose> warns.
 
-=item * If an option value is not valid  I<choose> warns an falls back to the default value.
+=item * If an option value is not valid I<choose> warns an falls back to the default value.
 
 =item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> I<choose> warns with "EOT: $!" and returns I<undef> respectively an empty list.
 
@@ -1715,7 +1715,7 @@ The Terminal needs to understand the following ANSI escape sequences:
 
     "\e[C"      Cursor Forward
 
-    "\e[0J"     Clear to  End of Screen (Erase Data)
+    "\e[0J"     Clear to End of Screen (Erase Data)
 
     "\e[0m"     Normal/Reset
 
@@ -1805,7 +1805,7 @@ Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people f
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2012-2013 Matthäus Kiem.
+Copyright 2012-2014 Matthäus Kiem.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 

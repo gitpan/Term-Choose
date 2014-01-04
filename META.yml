@@ -24,4 +24,4 @@ requires:
   Text::LineFold: 2012.04
   Unicode::GCString: 2013.10
   perl: 5.010001
-version: 1.068
+version: 1.069

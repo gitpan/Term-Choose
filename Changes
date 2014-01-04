@@ -1,6 +1,10 @@
 Revision history for Term::Choose
 
 
+1.069   2014-01-04
+        - Update copyright.
+        - Removed example. A bugfixed version of the example-script is now located in the "App::DBBrowser" distribution and is called "db-browser".
+
 1.068   2013-12-25
         - Increased the minimum required Perl version from "5.10.0" to "5.10.1".
         - Update documentation.
