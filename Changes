@@ -1,6 +1,11 @@
 Revision history for Term::Choose
 
 
+1.070   2014-01-18
+        - Default value for option "limit" from 100_000 to not set (undef).
+        - Removed the artificial general upper limit for options with no specific upper limit.
+        - Update documentation.
+
 1.069   2014-01-04
         - Update copyright.
         - Removed example. A bugfixed version of the example-script is now located in the "App::DBBrowser" distribution and is called "db-browser".

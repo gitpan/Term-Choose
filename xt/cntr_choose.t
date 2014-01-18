@@ -11,10 +11,10 @@ my $test_env = 0;
 
 open my $fh1, '<', $file or die $!;
 while ( my $line = readline $fh1 ) {
-    if ( $line =~ /\A\s*use\s+warnings\s+FATAL/s ) {
+    if ( $line =~ /^\s*use\s+warnings/s ) {
         $test_env++;
     }
-	if ( $line =~ /(?:\A\s*|\s+)use\s+Log::Log4perl/ ) {
+	if ( $line =~ /(?:^\s*|\s+)use\s+Log::Log4perl/ ) {
 		$test_env++;
 	}
 }
@@ -29,9 +29,9 @@ my $c = 0;
 
 open my $fh2, '<', $file or die $!;
 while ( my $line = readline $fh2 ) {
-    if ( $line =~ /\Asub _set_defaults/ .. $line =~ /\A\}/ ) {
-        $c++ if $line =~ /\A\s*\$\Qconfig->{pad}\E/;
-        if ( $line =~ /\A\s*\$\Qconfig->{pad_one_row}\E/ ) {
+    if ( $line =~ /^sub _set_defaults/ .. $line =~ /^\}/ ) {
+        $c++ if $line =~ /^\s*\$\Qconfig->{pad}\E/;
+        if ( $line =~ /^\s*\$\Qconfig->{pad_one_row}\E/ ) {
             $pad_before_pad_one_row = 1 if $c;
             last;
         }

@@ -23,8 +23,8 @@ close $fh_m or die $!;
 my $pod_minimum;
 open my $fh_p, '<', 'lib/Term/Choose.pm' or die $!;
 while ( my $line = <$fh_p> ) {
-    if ( $line =~ /^=head2\s+Perl\s+Version/ .. $line =~ /^=head2\s+Modules/ ) {
-        if ( $line =~ /(5\.[0-9.]+[0-9])\s/ ) {
+    if ( $line =~ /^=head2\s+Perl\s+version/ .. $line =~ /^=head2\s+Modules/ ) {
+        if ( $line =~ /Perl\sversion\s(5\.\d\d\.\d+)\s/ ) {
             my $version   = Perl::Version->new( $1 );
             my $numified  = $version->numify;
             $pod_minimum  = $numified;

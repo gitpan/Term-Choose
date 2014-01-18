@@ -14,7 +14,7 @@ my $release_date  = -1;
 
 open my $fh, '<', 'lib/Term/Choose.pm' or die $!;
 while ( my $line = <$fh> ) {
-    if ( $line =~ /^our\ \$VERSION\ =\ '(\d\.\d\d\d)';/ ) {
+    if ( $line =~ /^our\s\$VERSION\s=\s'(\d\.\d\d\d)';/ ) {
         $v = $1;
     }
     if ( $line =~ /^=pod/ .. $line =~ /^=cut/ ) {
@@ -28,7 +28,7 @@ close $fh;
 
 open my $fh_ch, '<', 'Changes' or die $!;
 while ( my $line = <$fh_ch> ) {
-    if ( $line =~ /^\s*([0-9][0-9.]*)\s+(\d\d\d\d-\d\d-\d\d)\s*\Z/ ) {
+    if ( $line =~ /^\s*(\d+\.\d\d\d)\s+(\d\d\d\d-\d\d-\d\d)\s*\z/ ) {
         $v_changes = $1;
         $release_date = $2;
         last;

@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.1;
 use strict;
 
-our $VERSION = '1.069';
+our $VERSION = '1.070';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -341,7 +341,7 @@ sub _set_defaults {
     $config->{layout}           //= 1;
     #$config->{lf}              //= undef;
     #$config->{ll}              //= undef;
-    $config->{limit}            //= 100_000;
+    #$config->{limit}           //= undef;
     #$config->{max_height}      //= undef;
     #$config->{max_width}       //= undef;
     $config->{mouse}            //= 0;
@@ -357,27 +357,26 @@ sub _set_defaults {
 
 sub _validate_options {
     my ( $config, $wantarray, $list_length ) = @_;
-    my $limit = 1_000_000_000;
-    my $validate = {    #   min      max
-        beep            => [ 0,       1 ],
-        clear_screen    => [ 0,       1 ],
-        default         => [ 0,  $limit ],
+    my $validate = {    #   min   max
+        beep            => [ 0,   1 ],
+        clear_screen    => [ 0,   1 ],
+        default         => [ 0      ],
         empty           => '',
-        hide_cursor     => [ 0,       1 ],
-        index           => [ 0,       1 ],
-        justify         => [ 0,       2 ],
-        keep            => [ 1,  $limit ],
-        layout          => [ 0,       3 ],
+        hide_cursor     => [ 0,   1 ],
+        index           => [ 0,   1 ],
+        justify         => [ 0,   2 ],
+        keep            => [ 1      ],
+        layout          => [ 0,   3 ],
         lf              => 'ARRAY',
-        ll              => [ 1,  $limit ],
-        limit           => [ 1,  $limit ],
-        max_height      => [ 1,  $limit ],
-        max_width       => [ 1,  $limit ],
-        mouse           => [ 0,       4 ],
-        order           => [ 0,       1 ],
-        pad             => [ 0,  $limit ],
-        pad_one_row     => [ 0,  $limit ],
-        page            => [ 0,       1 ],
+        ll              => [ 1      ],
+        limit           => [ 1      ],
+        max_height      => [ 1      ],
+        max_width       => [ 1      ],
+        mouse           => [ 0,   4 ],
+        order           => [ 0,   1 ],
+        pad             => [ 0      ],
+        pad_one_row     => [ 0      ],
+        page            => [ 0,   1 ],
         prompt          => '',
         undef           => '',
     };
@@ -415,8 +414,8 @@ sub _validate_options {
                 }
             }
             elsif (   $config->{$key} !~ m/^[0-9]+\z/
-                   || $config->{$key} < $validate->{$key}[MIN]
-                   || $config->{$key} > $validate->{$key}[MAX]
+                   ||                                   $config->{$key} < $validate->{$key}[MIN]
+                   || defined $validate->{$key}[MAX] && $config->{$key} > $validate->{$key}[MAX]
             ) {
                 carp "choose: \"$config->{$key}\" is not a valid value for the option \"$key\"."
                     . " Falling back to the default value.";
@@ -429,13 +428,9 @@ sub _validate_options {
         # }
     }
     $config = _set_defaults( $config, $wantarray );
-    if ( $list_length > $config->{limit} ) {
-        carp "choose: The list has $list_length items. Option \"limit\" is set to $config->{limit}. "
-           . "The first $config->{limit} itmes are used by choose.";
-        $config->{list_to_long} = 1;
-        print "Press a key to continue";
-        $warn++;
-    }
+    #if ( defined $config->{limit} && $list_length > $config->{limit} ) {
+    #    $config->{list_to_long} = 1;
+    #}
     if ( $warn ) {
         print "Press a key to continue";
         my $dummy = <STDIN>;
@@ -1243,7 +1238,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.069
+Version 1.070
 
 =cut
 
@@ -1391,8 +1386,6 @@ All these modifications are made on a copy of the original array so I<choose> re
 =head3 Options
 
 Options which expect a number as their value expect integers.
-
-There is a general upper limit of one billion for options which expect a number as their value and where no upper limit is mentioned.
 
 =head4 prompt
 
@@ -1589,7 +1582,9 @@ Allowed values: 1 or greater
 
 =head4 limit
 
-Sets the maximal allowed length of the array. (default: 100_000)
+Sets the maximal allowed length of the array. (default: undef)
+
+If the array referred by the first argument has more than limit elements choose uses only the first limit array elements.
 
 Allowed values: 1 or greater
 
@@ -1657,8 +1652,6 @@ Allowed values: 1 or greater
 
 =item * If the array referred by the first argument is empty I<choose> returns I<undef> respectively an empty list and issues a warning.
 
-=item * If the array referred by the first argument has more than I<limit> elements (default 100_000) I<choose> warns and uses the first I<limit> array elements.
-
 =item * If the (optional) second argument is defined and not a hash reference I<choose> dies.
 
 =item * If an option does not exist I<choose> warns.
@@ -1671,9 +1664,9 @@ Allowed values: 1 or greater
 
 =head1 REQUIREMENTS
 
-=head2 Perl Version
+=head2 Perl version
 
-Requires Perl Version 5.10.1 or greater.
+Requires Perl version 5.10.1 or greater.
 
 =head2 Modules
 
@@ -1805,7 +1798,7 @@ Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people f
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2012-2014 Matthäus Kiem.
+Copyright (C) 2012-2014 Matthäus Kiem.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
