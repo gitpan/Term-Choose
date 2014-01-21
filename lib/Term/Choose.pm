@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.1;
 use strict;
 
-our $VERSION = '1.070';
+our $VERSION = '1.071';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -308,6 +308,9 @@ sub _copy_orig_list {
                     $copy = $arg->{undef} if ! defined $copy;
                     $copy = $arg->{empty} if $copy eq '';
                 }
+                #if ( ref $copy ) {
+                #    $copy = ref( $copy ) . ' REF';
+                #}
                 $copy =~ s/\p{Space}/ /g;  # replace, but don't squash sequences of spaces
                 $copy =~ s/\p{C}//g;
                 $copy;
@@ -319,6 +322,9 @@ sub _copy_orig_list {
                 $copy = $arg->{undef} if ! defined $copy;
                 $copy = $arg->{empty} if $copy eq '';
             }
+            #if ( ref $copy ) {
+            #    $copy = ref( $copy ) . ' REF';
+            #}
             $copy =~ s/\p{Space}/ /g;
             $copy =~ s/\p{C}//g;
             $copy;
@@ -517,7 +523,8 @@ sub _prepare_promptline {
 
 sub _write_first_screen {
     my ( $arg ) = @_;
-    ( $arg->{avail_width}, $arg->{avail_height} ) = GetTerminalSize( $arg->{handle_out} );
+    ( $arg->{term_width}, $arg->{term_height} ) = GetTerminalSize( $arg->{handle_out} );
+    ( $arg->{avail_width}, $arg->{avail_height} ) = ( $arg->{term_width}, $arg->{term_height} );
     if ( $arg->{max_width} && $arg->{avail_width} > $arg->{max_width} ) {
         $arg->{avail_width} = $arg->{max_width};
     }
@@ -599,12 +606,6 @@ sub choose {
         exit( 1 );
     };
     my $init = Term::Choose->_init_scr( $arg );
-    $arg->{size_changed} = 0;
-    my $orig_sigwinch = $SIG{'WINCH'};
-    local $SIG{'WINCH'} = sub {
-        $orig_sigwinch->() if $orig_sigwinch && ref $orig_sigwinch eq 'CODE';
-        $arg->{size_changed} = 1;
-    };
     _write_first_screen( $arg );
 
     while ( 1 ) {
@@ -613,12 +614,12 @@ sub choose {
             $arg->{EOT} = 1;
             return;
         }
-        if ( $arg->{size_changed} ) {
+        my ( $new_width, $new_height ) = GetTerminalSize( $arg->{handle_out} );
+        if ( $new_width != $arg->{term_width} || $new_height != $arg->{term_height} ) {
             $arg->{list} = _copy_orig_list( $arg );
             print CR, UP x ( $arg->{screen_row} + $arg->{nr_prompt_lines} );
             print CLEAR_TO_END_OF_SCREEN;
             _write_first_screen( $arg );
-            $arg->{size_changed} = 0;
             next;
         }
         next if $key == NEXT_get_key;
@@ -1238,7 +1239,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.070
+Version 1.071
 
 =cut
 
@@ -1256,7 +1257,6 @@ Version 1.070
     say "@choices";
 
     choose( [ 'Press ENTER to continue' ], { prompt => '' } );    # no choice
-
 
 =head1 DESCRIPTION
 
@@ -1344,7 +1344,6 @@ Home key (or Ctrl-A) to jump to the beginning of the list, End key (or Ctrl-E) t
 
 =back
 
-
 =head3 Modifications for the output
 
 For the output on the screen the array elements are modified:
@@ -1428,7 +1427,6 @@ From broad to narrow: 0 > 1 > 2 > 3
  |                      |   |                      |   | .. .. ..             |   | .. .. .. .. .. .. .. |
  |                      |   |                      |   |                      |   | .. .. .. .. .. .. .. |
  '----------------------'   '----------------------'   '----------------------'   '----------------------'
-
 
 =item
 
@@ -1695,10 +1693,6 @@ I<choose> expects decoded strings as array elements.
 =head2 Monospaced font
 
 It is needed a terminal that uses a monospaced font which supports the printed characters.
-
-=head2 SIGWINCH
-
-L<Term::Choose> makes use of the Perl signal handling as described in L<perlipc/Signals|http://search.cpan.org/perldoc?perlipc#Signals>. It is needed an operating system which knows the WINCH signal: I<choose> uses SIGWINCH to check if the windows size has changed.
 
 =head2 Escape sequences
 
