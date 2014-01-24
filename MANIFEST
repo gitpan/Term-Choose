@@ -10,6 +10,7 @@ t/00-load.t
 xt/check_pod_defaults.t
 xt/cmp_buildpl_makepl.t
 xt/cntr_choose.t
+xt/compare_Choose_Win32.t
 xt/manifest.t
 xt/perl_minimum_version.t
 xt/pod-coverage.t

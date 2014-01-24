@@ -20,8 +20,8 @@ my %option_default;
 
 open $fh, '<', $file or die $!;
 while ( my $line = readline $fh ) {
-    if ( $line =~ /\Asub _set_defaults {/ .. $line =~ /\A\s+return\s\$config;/ ) {
-        if ( $line =~ m|\A\s+#?\s*\$config->{(\w+)}\s+//=\s(.*);| ) {
+    if ( $line =~ /^sub _set_defaults {/ .. $line =~ /^\s+return\s\$config;/ ) {
+        if ( $line =~ m|^\s+#?\s*\$config->{(\w+)}\s+//=\s(.*);| ) {
             my $op = $1;
             next if $op eq 'prompt';
             next if $op ~~ @deprecated;
@@ -39,9 +39,9 @@ for my $key ( @all ) {
     next if $key ~~ @deprecated;
     open $fh, '<', $file or die $!;
     while ( my $line = readline $fh ) {
-        if ( $line =~ /\A=head4\s\Q$key\E/ ... $line =~ /\A=head/ ) {
+        if ( $line =~ /^=head4\s\Q$key\E/ ... $line =~ /^=head/ ) {
             chomp $line;
-            next if $line =~ /\A\s*\z/;
+            next if $line =~ /^\s*\z/;
             push @{$pod{$key}}, $line;
         }
     }

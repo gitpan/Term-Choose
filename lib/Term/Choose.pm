@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.1;
 use strict;
 
-our $VERSION = '1.071';
+our $VERSION = '1.072';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -308,9 +308,9 @@ sub _copy_orig_list {
                     $copy = $arg->{undef} if ! defined $copy;
                     $copy = $arg->{empty} if $copy eq '';
                 }
-                #if ( ref $copy ) {
-                #    $copy = ref( $copy ) . ' REF';
-                #}
+                if ( ref $copy ) {
+                    $copy = sprintf "%s(0x%x)", ref $copy, $copy;
+                }
                 $copy =~ s/\p{Space}/ /g;  # replace, but don't squash sequences of spaces
                 $copy =~ s/\p{C}//g;
                 $copy;
@@ -322,9 +322,9 @@ sub _copy_orig_list {
                 $copy = $arg->{undef} if ! defined $copy;
                 $copy = $arg->{empty} if $copy eq '';
             }
-            #if ( ref $copy ) {
-            #    $copy = ref( $copy ) . ' REF';
-            #}
+            if ( ref $copy ) {
+                $copy = sprintf "%s(0x%x)", ref $copy, $copy;
+            }
             $copy =~ s/\p{Space}/ /g;
             $copy =~ s/\p{C}//g;
             $copy;
@@ -1239,7 +1239,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.071
+Version 1.072
 
 =cut
 
@@ -1794,6 +1794,11 @@ Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people f
 
 Copyright (C) 2012-2014 Matthäus Kiem.
 
-This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
+This library is free software; you can redistribute it and/or modify it under the same terms as Perl 5.10.0.
+
+See http://dev.perl.org/licenses/ for more information.
+
+This program is distributed in the hope that it will be useful, but without any warranty; without even the implied
+warranty of merchantability or fitness for a particular purpose.
 
 =cut

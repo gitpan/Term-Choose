@@ -1,6 +1,11 @@
 Revision history for Term::Choose
 
 
+1.072   2014-01-24
+        - Prevent references from breaking the output.
+        - Update README.
+        - Update license.
+
 1.071   2014-01-21
         - Keep track of the terminal size instead of using "SIGWINCH".
         - Update documentation.
