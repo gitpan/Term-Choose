@@ -72,7 +72,7 @@ while ( <$fh> ) {
         next if $_ eq q/        ( $arg->{abs_cursor_x}, $arg->{abs_cursor_y} ) = Cursor();/;
         next if $_ eq q/        #$arg->{abs_cursor_x}--;/;
         next if $_ eq q/        $arg->{abs_cursor_y}--;/;
-        s/chars\(/GetTerminalSize(/;
+        s/_get_term_size\(/GetTerminalSize(/;
         s/Term::Choose::_/_/g;
         push @{$hash_win->{_write_first_screen}}, $. . '|' . $_;
     }
@@ -98,7 +98,7 @@ while ( <$fh> ) {
     if ( /^sub\s(choose)/ .. /^\}/ ) {
         next if $_ eq q/            print LEFT x $arg->{screen_col}, UP x ( $arg->{screen_row} + $arg->{nr_prompt_lines} );/;
         s/Term::Choose::Win32/Term::Choose/g;
-        s/chars\(/GetTerminalSize(/;
+        s/_get_term_size\(/GetTerminalSize(/;
         s/Term::Choose::_/_/g;
         push @{$hash_win->{choose}}, $. . '|' . $_;
     }

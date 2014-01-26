@@ -1,6 +1,9 @@
 Revision history for Term::Choose
 
 
+1.073   2014-01-26
+        - Update release test "compare_Choose_Win32.t" to sync with Term::Choose::Win32 version 0.020.
+
 1.072   2014-01-24
         - Prevent references from breaking the output.
         - Update README.

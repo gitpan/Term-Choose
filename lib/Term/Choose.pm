@@ -3,7 +3,7 @@ package Term::Choose;
 use 5.10.1;
 use strict;
 
-our $VERSION = '1.072';
+our $VERSION = '1.073';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -434,9 +434,6 @@ sub _validate_options {
         # }
     }
     $config = _set_defaults( $config, $wantarray );
-    #if ( defined $config->{limit} && $list_length > $config->{limit} ) {
-    #    $config->{list_to_long} = 1;
-    #}
     if ( $warn ) {
         print "Press a key to continue";
         my $dummy = <STDIN>;
@@ -1239,7 +1236,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.072
+Version 1.073
 
 =cut
 
