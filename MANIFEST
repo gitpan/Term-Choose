@@ -1,6 +1,7 @@
 Build.PL
 Changes
 lib/Term/Choose.pm
+LICENSE
 Makefile.PL
 MANIFEST			This list of files
 META.json
@@ -20,3 +21,4 @@ xt/spelling.t
 xt/version1.t
 xt/version2.t
 xt/whitespaces.t
+xt/year_copyright.t

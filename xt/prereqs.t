@@ -40,14 +40,15 @@ for my $file ( @files ) {
     my $scanner = Perl::PrereqScanner->new;
     my $prereqs = $scanner->scan_file( $file );
     for my $module ( keys %{$prereqs->{requirements}} ) {
-        next if $module =~ /^\p{Lowercase}/;
+        next if $module eq 'perl';
         $modules{$module} = $module;
     }
 }
 
 
+my %all_keys = ( %modules, %prereqs_make );
 
-for my $module ( sort keys %modules ) {
+for my $module ( sort keys %all_keys ) {
     is( $prereqs_make{$module}, $modules{$module} );
 }
 

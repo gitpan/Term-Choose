@@ -1,6 +1,12 @@
 Revision history for Term::Choose
 
 
+1.074   2014-02-13
+        - Added "use warnings;".
+        - Added LICENSE file.
+        - Added release test "year_copyright.t"
+        - Update documentation.
+
 1.073   2014-01-26
         - Update release test "compare_Choose_Win32.t" to sync with Term::Choose::Win32 version 0.020.
 

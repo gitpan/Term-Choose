@@ -1,9 +1,10 @@
 package Term::Choose;
 
 use 5.10.1;
+use warnings;
 use strict;
 
-our $VERSION = '1.073';
+our $VERSION = '1.074';
 use Exporter 'import';
 our @EXPORT_OK = qw(choose);
 
@@ -1236,7 +1237,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.073
+Version 1.074
 
 =cut
 
@@ -1279,9 +1280,11 @@ Nothing by default.
 
               choose( $array_ref [, \%options] );
 
-I<choose> expects as a first argument an array reference. The array the reference refers to holds the list items available for selection (in void context no selection can be made).
+I<choose> expects as a first argument an array reference. The array the reference refers to holds the list items
+available for selection (in void context no selection can be made).
 
-The array the reference - passed with the first argument - refers to is called in the documentation simply array or list respectively elements (of the array).
+The array the reference - passed with the first argument - refers to is called in the documentation simply array or list
+respective elements (of the array).
 
 Options can be passed with a hash reference as a second (optional) argument.
 
@@ -1291,7 +1294,8 @@ Options can be passed with a hash reference as a second (optional) argument.
 
 =item
 
-If I<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and confirming with "Return".
+If I<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and
+confirming with "Return".
 
 I<choose> then returns the chosen item.
 
@@ -1305,7 +1309,8 @@ In I<list context> "Ctrl-SpaceBar" inverts the choices: marked items are unmarke
 
 =item
 
-If I<choose> is called in an I<void context>, the user can move around but mark nothing; the output shown by I<choose> can be closed with "Return".
+If I<choose> is called in an I<void context>, the user can move around but mark nothing; the output shown by I<choose>
+can be closed with "Return".
 
 Called in void context I<choose> returns nothing.
 
@@ -1313,11 +1318,13 @@ Called in void context I<choose> returns nothing.
 
 If the items of the list don't fit on the screen, the user can scroll to the next (previous) page(s).
 
-If the window size is changed, then as soon as the user enters a keystroke I<choose> rewrites the screen. In list context marked items are reset.
+If the window size is changed, then as soon as the user enters a keystroke I<choose> rewrites the screen. In list
+context marked items are reset.
 
 The "q" key (or Ctrl-D) returns I<undef> or an empty list in list context.
 
-With a I<mouse> mode enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list context the right mouse key can be used instead the "SpaceBar" key.
+With a I<mouse> mode enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list
+context the right mouse key can be used instead the "SpaceBar" key.
 
 =head3 Keys to move around:
 
@@ -1377,7 +1384,8 @@ if the length of an element is greater than the width of the screen the element 
 
 =back
 
-All these modifications are made on a copy of the original array so I<choose> returns the chosen elements as they were passed to the function without modifications.
+All these modifications are made on a copy of the original array so I<choose> returns the chosen elements as they were
+passed to the function without modifications.
 
 =head3 Options
 
@@ -1515,7 +1523,8 @@ Allowed values: 0 or greater
 
 =head4 default
 
-With the option I<default> it can be selected an element, which will be highlighted as the default instead of the first element.
+With the option I<default> it can be selected an element, which will be highlighted as the default instead of the first
+element.
 
 I<default> expects a zero indexed value, so e.g. to highlight the third element the value would be I<2>.
 
@@ -1529,7 +1538,8 @@ Allowed values: 0 or greater
 
 0 - off (default)
 
-1 - return the index of the chosen element instead of the chosen element respectively the indices of the chosen elements instead of the chosen elements.
+1 - return the index of the chosen element instead of the chosen element respective the indices of the chosen elements
+instead of the chosen elements.
 
 =head4 page
 
@@ -1543,13 +1553,15 @@ Allowed values: 0 or greater
 
 1 - mouse mode 1003 enabled
 
-2 - mouse mode 1003 enabled; the output width is limited to 223 print-columns and the height to 223 rows (mouse mode 1003 doesn't work above 223)
+2 - mouse mode 1003 enabled; the output width is limited to 223 print-columns and the height to 223 rows (mouse mode
+1003 doesn't work above 223)
 
 3 - extended mouse mode (1005) - uses utf8
 
 4 - extended SGR mouse mode (1006)
 
-If a mouse mode is enabled layers for STDIN are changed. Then before leaving I<choose> as a cleanup STDIN is marked as UTF-8 with ":encoding(UTF-8)".
+If a mouse mode is enabled layers for STDIN are changed. Then before leaving I<choose> as a cleanup STDIN is marked as
+UTF-8 with ":encoding(UTF-8)".
 
 =head4 keep
 
@@ -1579,7 +1591,8 @@ Allowed values: 1 or greater
 
 Sets the maximal allowed length of the array. (default: undef)
 
-If the array referred by the first argument has more than limit elements choose uses only the first limit array elements.
+If the array referred by the first argument has more than limit elements choose uses only the first limit array
+elements.
 
 Allowed values: 1 or greater
 
@@ -1603,7 +1616,8 @@ The option I<lf> expects a reference to an array with two elements;
 
 - first element (INITIAL_TAB): the number of spaces inserted at beginning of paragraphs
 
-- second element (SUBSEQUENT_TAB): the number of spaces inserted at the beginning of all broken lines apart from the beginning of paragraphs
+- second element (SUBSEQUENT_TAB): the number of spaces inserted at the beginning of all broken lines apart from the
+beginning of paragraphs
 
 Allowed values for the two elements are: 0 or greater.
 
@@ -1613,19 +1627,24 @@ See INITIAL_TAB and SUBSEQUENT_TAB in L<Text::LineFold>.
 
 =head4 ll
 
-If all elements have the same length and this length is known before calling I<choose> the length can be passed with this option.
+If all elements have the same length and this length is known before calling I<choose> the length can be passed with
+this option.
 
-If I<ll> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed with this option.
+If I<ll> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed
+with this option.
 
 I<length> refers here to the number of print columns the element will use on the terminal.
 
 A way to determine the number of print columns is the use of I<columns> from L<Unicode::GCString>.
 
-The length of undefined elements and elements with an empty string depends on the value of the option I<undef> respectively on the value of the option I<empty>.
+The length of undefined elements and elements with an empty string depends on the value of the option I<undef>
+respective on the value of the option I<empty>.
 
 If the option I<ll> is set the replacements described in L</Modifications for the output> are not applied.
 
-If elements contain unsupported characters the output might break if the width (number of print columns) of the replacement character does not correspond to the width of the replaced character - for example when a unsupported non-spacing character is replaced by a replacement character with a normal width.
+If elements contain unsupported characters the output might break if the width (number of print columns) of the
+replacement character does not correspond to the width of the replaced character - for example when a unsupported
+non-spacing character is replaced by a replacement character with a normal width.
 
 I<ll> is set to a value less than the length of the elements the output could break.
 
@@ -1645,7 +1664,8 @@ Allowed values: 1 or greater
 
 =item * If the first argument is not a array reference I<choose> dies.
 
-=item * If the array referred by the first argument is empty I<choose> returns I<undef> respectively an empty list and issues a warning.
+=item * If the array referred by the first argument is empty I<choose> returns I<undef> respective an empty list and
+issues a warning.
 
 =item * If the (optional) second argument is defined and not a hash reference I<choose> dies.
 
@@ -1653,7 +1673,8 @@ Allowed values: 1 or greater
 
 =item * If an option value is not valid I<choose> warns an falls back to the default value.
 
-=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> I<choose> warns with "EOT: $!" and returns I<undef> respectively an empty list.
+=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> I<choose> warns with "EOT: $!" and returns
+I<undef> or an empty list in list context.
 
 =back
 
@@ -1687,13 +1708,17 @@ L<Unicode::GCString>
 
 I<choose> expects decoded strings as array elements.
 
+=head2 encoding layer for STDOUT
+
+For a correct output it is required to set an encoding layer for STDOUT matching the terminal's character set.
+
 =head2 Monospaced font
 
-It is needed a terminal that uses a monospaced font which supports the printed characters.
+It is required a terminal that uses a monospaced font which supports the printed characters.
 
 =head2 Escape sequences
 
-The Terminal needs to understand the following ANSI escape sequences:
+The Terminal has to understand the following ANSI escape sequences:
 
     "\e[A"      Cursor Up
 
@@ -1737,39 +1762,56 @@ are used to enable/disable the different mouse modes.
 
 =head1 MOTIVATION
 
-The reason for writing L<Term::Choose> was to get something like L<Term::Clui::choose|http://search.cpan.org/perldoc?Term%3A%3AClui#SUBROUTINES> but with a nicer output in the case the list doesn't fit in one row.
+The reason for writing L<Term::Choose> was to get something like
+L<Term::Clui::choose|http://search.cpan.org/perldoc?Term%3A%3AClui#SUBROUTINES> but with a nicer output in the case the
+list doesn't fit in one row.
 
-If the list does not fit in one row, I<choose> from L<Term::Clui> puts the items on the screen without ordering the items in columns. L<Term::Choose> arranges the items in columns which makes it easier for me to find items and easier to navigate on the screen.
+If the list does not fit in one row, I<choose> from L<Term::Clui> puts the items on the screen without ordering the
+items in columns. L<Term::Choose> arranges the items in columns which makes it easier for me to find items and easier to
+navigate on the screen.
 
 =over
 
 =item Differences between L<Term::Clui> and L<Term::Choose>
 
-L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose> the available choices are passed with an array reference as first argument. Options can be passed with a hash reference as an optional second argument. The I<question> can be passed with the option I<prompt>.
+L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose>
+the available choices are passed with an array reference as first argument. Options can be passed with a hash reference
+as an optional second argument. The I<question> can be passed with the option I<prompt>.
 
-As mentioned above I<choose> from L<Term::Clui> does not order the elements in columns if there is more than one row on the screen while L<Term::Choose> arranges the elements in such situations in columns.
+As mentioned above I<choose> from L<Term::Clui> does not order the elements in columns if there is more than one row on
+the screen while L<Term::Choose> arranges the elements in such situations in columns.
 
-Another difference is how lists which don't fit on the screen are handled. L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when scrolling and reaching the end (respectively the begin) of the screen - to the next (respectively previous) page.
+Another difference is how lists which don't fit on the screen are handled.
+L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a
+clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when
+scrolling and reaching the end (respective the begin) of the screen - to the next (respective previous) page.
 
-Strings with characters where I<length(>characterI<)>* is not equal to the number of print columns of the respective character might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with such kind of Unicode strings it uses the method I<columns> from L<Unicode::GCString> to determine the string length.
+Strings with characters where I<length(>characterI<)>* is not equal to the number of print columns of the respective
+character might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with such kind of
+Unicode strings it uses the method I<columns> from L<Unicode::GCString> to determine the string length.
 
 * Perl builtin function I<length>.
 
-Multiline question/prompt: I<choose> from L<Term::Clui> puts the first line on the top, the subsequent lines are displayed below the list. I<choose> from L<Term::Choose> puts all lines of a multiline prompt on top of the list.
+Multiline question/prompt: I<choose> from L<Term::Clui> puts the first line on the top, the subsequent lines are
+displayed below the list. I<choose> from L<Term::Choose> puts all lines of a multiline prompt on top of the list.
 
-L<Term::Clui>'s I<choose> prints and returns the chosen items while I<choose> from L<Term::Choose> only returns the chosen items.
+L<Term::Clui>'s I<choose> prints and returns the chosen items while I<choose> from L<Term::Choose> only returns the
+chosen items.
 
-L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> is set to I<off>. In L<Term::Choose> the mouse mode is set with the option I<mouse>.
+L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> is set to I<off>. In L<Term::Choose> the
+mouse mode is set with the option I<mouse>.
 
 =item Only in L<Term::Clui>
 
-L<Term::Clui> provides a speaking interface, offers a bundle of command-line related functions and has a fallback to work when only Perl core modules are available.
+L<Term::Clui> provides a speaking interface, offers a bundle of command-line related functions and has a fallback to
+work when only Perl core modules are available.
 
 The I<choose> function from L<Term::Clui> can remember choices made in scalar context.
 
 =back
 
-These differences refer to L<Term::Clui> version 1.66. For a more precise description of L<Term::Clui> consult its own documentation.
+These differences refer to L<Term::Clui> version 1.66. For a more precise description of L<Term::Clui> consult its own
+documentation.
 
 =head1 SUPPORT
 
@@ -1785,17 +1827,14 @@ Matthäus Kiem <cuer2s@gmail.com>
 
 Based on and inspired by the I<choose> function from the L<Term::Clui> module.
 
-Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people form L<stackoverflow|http://stackoverflow.com> for the help.
+Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people form
+L<stackoverflow|http://stackoverflow.com> for the help.
 
 =head1 LICENSE AND COPYRIGHT
 
 Copyright (C) 2012-2014 Matthäus Kiem.
 
-This library is free software; you can redistribute it and/or modify it under the same terms as Perl 5.10.0.
-
-See http://dev.perl.org/licenses/ for more information.
-
-This program is distributed in the hope that it will be useful, but without any warranty; without even the implied
-warranty of merchantability or fitness for a particular purpose.
+This library is free software; you can redistribute it and/or modify it under the same terms as Perl 5.10.0. For
+details, see the full text of the licenses in the file LICENSE.
 
 =cut

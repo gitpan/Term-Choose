@@ -11,7 +11,7 @@ my $test_env = 0;
 
 open my $fh1, '<', $file or die $!;
 while ( my $line = readline $fh1 ) {
-    if ( $line =~ /^\s*use\s+warnings/s ) {
+    if ( $line =~ /^\s*use\s+warnings\s+FATAL/s ) {
         $test_env++;
     }
 	if ( $line =~ /(?:^\s*|\s+)use\s+Log::Log4perl/ ) {

@@ -17,6 +17,9 @@ my $builder = Module::Build->new(
     },
     requires => {
         'perl'              => '5.010001',
+        'constant'          => 0,
+        'strict'            => 0,
+        'warnings'          => 0,
         'Carp'              => 0,
         'Exporter'          => 0,
         'Term::ReadKey'     => 0,

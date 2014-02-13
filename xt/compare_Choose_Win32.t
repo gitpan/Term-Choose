@@ -194,17 +194,15 @@ while ( <$fh> ) {
     else {
         $empty = 0;
     }
-    if ( /^=head1 SYNOPSIS/ .. /^=head2 Modules/ ) {
+    if ( /^=head1 SYNOPSIS/ .. /^=head4 mouse/ ) {
         next if /^For OS 'MSWin32' see L<Term::Choose::Win32>\.\z/;
         next if m&L</MOTIVATION>&;
-        next if /^1 - mouse mode 1003 enabled\z/;
-        next if /^2 - mouse mode 1003 enabled; the output width is limited to 223 print-columns and the height to 223 rows \(mouse mode 1003 doesn't work above 223\)\z/;
-        next if /^3 - extended mouse mode \(1005\) - uses utf8\z/;
-        next if /^4 - extended SGR mouse mode \(1006\)\z/;
-        next if /^If a mouse mode is enabled layers for STDIN are changed. Then before leaving I<choose> as a cleanup STDIN is marked as UTF-8 with ":encoding\(UTF-8\)"\.\z/;
         push @unix_pod, $. . '|' . $_;
     }
-    if ( /^=head2 Monospaced font/ .. /^=head2 Escape sequences/ ) {
+    if ( /^=head4 keep/ .. /^=head2 Modules/ ) {
+        push @unix_pod, $. . '|' . $_;
+    }
+    if ( /=head2 encoding layer for STDOUT/ .. /^=head2 Escape sequences/ ) {
         push @unix_pod, $. . '|' . $_;
     }
     if ( /^    "\e\[A"      Cursor Up/  .. /^    "\e\[\?25h"   Show Cursor/ ) {
@@ -231,16 +229,18 @@ while ( <$fh> ) {
     else {
         $empty = 0;
     }
-    if ( /^=head1 SYNOPSIS/ .. /^=head2 Modules/ ) {
+    if ( /^=head1 SYNOPSIS/ .. /^=head4 mouse/ ) {
         next if /^L<Term::Choose::Win32> is intended for 'MSWin32' operating systems\. For other operating system see L<Term::Choose>\.\z/;
+        next if m&Based on the I<choose> function from the L<Term::Clui> module - for more details see\z&;
         next if m&L<Term::choose/MOTIVATION\|https://metacpan.org/module/Term::Choose#MOTIVATION>&;
-        next if /^1 - mouse mode enabled\z/;
-        next if /^2 - mouse mode enabled; the output width is limited to 223 print-columns and the height to 223 rows\z/;
-        next if /^Mouse mode 3 and 4 behave like mouse mode 1\.\z/;
         s/Term::Choose::Win32/Term::Choose/g;
         push @win_pod, $. . '|' . $_;
     }
-    if ( /^=head2 Monospaced font/ .. /^=head2 Escape sequences/ ) {
+    if ( /^=head4 keep/ .. /^=head2 Modules/ ) {
+        s/Term::Choose::Win32/Term::Choose/g;
+        push @win_pod, $. . '|' . $_;
+    }
+    if ( /^=head2 encoding layer for STDOUT/ .. /^=head2 Escape sequences/ ) {
         s/Term::Choose::Win32/Term::Choose/g;
         push @win_pod, $. . '|' . $_;
     }
