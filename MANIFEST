@@ -1,6 +1,8 @@
 Build.PL
 Changes
 lib/Term/Choose.pm
+lib/Term/Choose/Linux.pm
+lib/Term/Choose/Win32.pm
 LICENSE
 Makefile.PL
 MANIFEST			This list of files
@@ -8,14 +10,13 @@ META.json
 META.yml
 README
 t/00-load.t
-xt/check_pod_defaults.t
 xt/cmp_buildpl_makepl.t
 xt/cntr_choose.t
-xt/compare_Choose_Win32.t
 xt/manifest.t
 xt/perl_minimum_version.t
 xt/pod-coverage.t
 xt/pod.t
+xt/pod_defaults.t
 xt/prereqs.t
 xt/spelling.t
 xt/version1.t

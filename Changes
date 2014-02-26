@@ -1,6 +1,10 @@
 Revision history for Term::Choose
 
 
+1.074_01   2014-02-26
+        - Rewritten in OO.
+        - Outsourced OS specific code to "Term::Choose::Linux" and "Term::Choose::Win32".
+
 1.074   2014-02-13
         - Added "use warnings;".
         - Added LICENSE file.

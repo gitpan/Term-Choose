@@ -8,7 +8,7 @@ use Test::More;
 my @long = ( qw( pad pad_one_row empty undef ll default limit max_height max_width lf keep ) );
 my @simple = ( qw( justify layout order clear_screen page mouse beep hide_cursor index ) ); # prompt
 my @all = ( @long, @simple );
-my @deprecated = ( qw(screen_width) );
+my @deprecated = ( qw() );
 
 
 plan tests => 2 + scalar @all;
@@ -19,9 +19,9 @@ my $fh;
 my %option_default;
 
 open $fh, '<', $file or die $!;
-while ( my $line = readline $fh ) {
-    if ( $line =~ /^sub _set_defaults {/ .. $line =~ /^\s+return\s\$config;/ ) {
-        if ( $line =~ m|^\s+#?\s*\$config->{(\w+)}\s+//=\s(.*);| ) {
+while ( my $line = <$fh> ) {
+    if ( $line =~ /^sub __set_defaults {/ .. $line =~ /^}/ ) {
+        if ( $line =~ m|^\s+#?\s*\$self->{(\w+)}\s+//=\s(.*);| ) {
             my $op = $1;
             next if $op eq 'prompt';
             next if $op ~~ @deprecated;
@@ -38,7 +38,7 @@ my %pod;
 for my $key ( @all ) {
     next if $key ~~ @deprecated;
     open $fh, '<', $file or die $!;
-    while ( my $line = readline $fh ) {
+    while ( my $line = <$fh> ) {
         if ( $line =~ /^=head4\s\Q$key\E/ ... $line =~ /^=head/ ) {
             chomp $line;
             next if $line =~ /^\s*\z/;
@@ -88,7 +88,7 @@ for my $key ( sort keys %option_default ) {
     next if $key ~~ @deprecated;
     if ( $key eq 'pad_one_row' ) {
         my $por = 0;
-        if ( $option_default{$key} eq '$config->{pad}' and $pod_default{$key} eq 'value of the option I<pad>' ) {
+        if ( $option_default{$key} eq '$self->{pad}' and $pod_default{$key} eq 'value of the option I<pad>' ) {
             $por = 1;
         }
         is( $por, '1', "option $key: default value in pod OK" );

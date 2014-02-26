@@ -1,22 +1,24 @@
 package Term::Choose;
 
-use 5.10.1;
 use warnings;
 use strict;
+use 5.10.1;
 
-our $VERSION = '1.074';
+our $VERSION = '1.074_01';
 use Exporter 'import';
-our @EXPORT_OK = qw(choose);
+our @EXPORT_OK = qw( choose );
 
-use Carp qw(croak carp);
-use Term::ReadKey qw(GetTerminalSize ReadKey);
+use Carp qw( croak carp );
 use Text::LineFold;
 use Unicode::GCString;
 
 no warnings 'utf8';
-#use warnings FATAL => qw(all);
-#use Log::Log4perl qw(get_logger);
+#use warnings FATAL => qw( all );
+#use Log::Log4perl qw( get_logger );
 #my $log = get_logger( 'Term::Choose' );
+
+use if $^O eq 'MSWin32', 'Term::Choose::Win32' => qw( __init_term __get_key __get_term_size __term_cursor_position __reset_term );
+use if $^O ne 'MSWin32', 'Term::Choose::Linux' => qw( __init_term __get_key __get_term_size __term_cursor_position __reset_term );
 
 use constant {
     ROW     => 0,
@@ -28,26 +30,15 @@ use constant {
 use constant {
     UP                              => "\e[A",
     RIGHT                           => "\e[C",
+    LEFT                            => "\e[D",
     LF                              => "\n",
     CR                              => "\r",
-    GET_CURSOR_POSITION             => "\e[6n",
-
-    HIDE_CURSOR                     => "\e[?25l",
-    SHOW_CURSOR                     => "\e[?25h",
-
-    SET_ANY_EVENT_MOUSE_1003        => "\e[?1003h",
-    SET_EXT_MODE_MOUSE_1005         => "\e[?1005h",
-    SET_SGR_EXT_MODE_MOUSE_1006     => "\e[?1006h",
-    UNSET_ANY_EVENT_MOUSE_1003      => "\e[?1003l",
-    UNSET_EXT_MODE_MOUSE_1005       => "\e[?1005l",
-    UNSET_SGR_EXT_MODE_MOUSE_1006   => "\e[?1006l",
 
     MAX_ROW_MOUSE_1003              => 223,
     MAX_COL_MOUSE_1003              => 223,
 
     BEEP                            => "\07",
-    CLEAR_SCREEN                    => "\e[2J",
-    GO_TO_TOP_LEFT                  => "\e[1;1H",
+    CLEAR_SCREEN                    => "\e[2J\e[1;1H",
     CLEAR_TO_END_OF_SCREEN          => "\e[0J",
     RESET                           => "\e[0m",
     UNDERLINE                       => "\e[4m",
@@ -79,292 +70,71 @@ use constant {
     KEY_q           => 0x71,
     KEY_Tilde       => 0x7e,
     KEY_BSPACE      => 0x7f,
+};
 
-    KEY_UP          => 0x1b5b41,
-    KEY_DOWN        => 0x1b5b42,
-    KEY_RIGHT       => 0x1b5b43,
-    KEY_LEFT        => 0x1b5b44,
-    KEY_PAGE_UP     => 0x1b5b35,
-    KEY_PAGE_DOWN   => 0x1b5b36,
-    KEY_HOME        => 0x1b5b48,
-    KEY_END         => 0x1b5b46,
-    KEY_INSERT      => 0x1b5b32,
-    KEY_DELETE      => 0x1b5b33,
+use constant {
+    VK_PAGE_UP   => 33,
+    VK_PAGE_DOWN => 34,
+    VK_END       => 35,
+    VK_HOME      => 36,
+    VK_LEFT      => 37,
+    VK_UP        => 38,
+    VK_RIGHT     => 39,
+    VK_DOWN      => 40,
+    VK_INSERT    => 45,
+    VK_DELETE    => 46,
 };
 
 
-sub _get_key {
-    my ( $arg ) = @_;
-    my $c1 = ReadKey 0;
-    return if ! defined $c1;
-    if ( $c1 eq "\e" ) {
-        my $c2 = ReadKey 0.10;
-        if ( ! defined $c2 ) { return KEY_ESC; } # unused
-        elsif ( $c2 eq '[' ) {
-            my $c3 = ReadKey 0;
-               if ( $c3 eq 'A' ) { return KEY_UP; }
-            elsif ( $c3 eq 'B' ) { return KEY_DOWN; }
-            elsif ( $c3 eq 'C' ) { return KEY_RIGHT; }
-            elsif ( $c3 eq 'D' ) { return KEY_LEFT; }
-            elsif ( $c3 eq 'F' ) { return KEY_END; }
-            elsif ( $c3 eq 'H' ) { return KEY_HOME; }
-            elsif ( $c3 eq 'Z' ) { return KEY_BTAB; }
-            elsif ( $c3 =~ /^[0-9]$/ ) {
-                my $c4 = ReadKey 0;
-                   if ( $c4 eq '~' ) {
-                       if ( $c3 eq '2' ) { return KEY_INSERT; } # unused
-                    elsif ( $c3 eq '3' ) { return KEY_DELETE; } # unused
-                    elsif ( $c3 eq '5' ) { return KEY_PAGE_UP; }
-                    elsif ( $c3 eq '6' ) { return KEY_PAGE_DOWN; }
-                    else {
-                        return NEXT_get_key;
-                    }
-                }
-                elsif ( $c4 =~ /^[;0-9]$/ ) { # response to "\e[6n"
-                    my $abs_curs_y = $c3;
-                    my $ry = $c4;
-                    while ( $ry =~ m/^[0-9]$/ ) {
-                        $abs_curs_y .= $ry;
-                        $ry = ReadKey 0;
-                    }
-                    return NEXT_get_key if $ry ne ';';
-                    my $abs_curs_x = '';
-                    my $rx = ReadKey 0;
-                    while ( $rx =~ m/^[0-9]$/ ) {
-                        $abs_curs_x .= $rx;
-                        $rx = ReadKey 0;
-                    }
-                    if ( $rx eq 'R' ) {
-                        $arg->{abs_cursor_y} = $abs_curs_y;
-                        $arg->{abs_cursor_x} = $abs_curs_x; # unused
-                    }
-                    return NEXT_get_key;
-                }
-                else {
-                    return NEXT_get_key;
-                }
-            }
-            # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
-            elsif ( $c3 eq 'M' && $arg->{mouse} ) {
-                my $event_type = ord( ReadKey 0 ) - 32;
-                my $x          = ord( ReadKey 0 ) - 32;
-                my $y          = ord( ReadKey 0 ) - 32;
-                return _handle_mouse( $arg, $event_type, $x, $y );
-            }
-            elsif ( $c3 eq '<' && $arg->{mouse} ) {  # SGR 1006
-                my $event_type = '';
-                my $m1;
-                while ( ( $m1 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
-                    $event_type .= $m1;
-                }
-                return NEXT_get_key if $m1 ne ';';
-                my $x = '';
-                my $m2;
-                while ( ( $m2 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
-                    $x .= $m2;
-                }
-                return NEXT_get_key if $m2 ne ';';
-                my $y = '';
-                my $m3;
-                while ( ( $m3 = ReadKey 0 ) =~ m/^[0-9]$/ ) {
-                    $y .= $m3;
-                }
-                return NEXT_get_key if $m3 !~ /^[mM]$/;
-                my $button_released = $m3 eq 'm' ? 1 : 0;
-                return NEXT_get_key if $button_released;
-                return _handle_mouse( $arg, $event_type, $x, $y );
-            }
-            else {
-                return NEXT_get_key;
-            }
-        }
-        else {
-            return NEXT_get_key;
-        }
-    }
-    else {
-        return ord $c1;
-    }
-}
-
-
-sub _init_scr {
-    # OO so DESTROY does the cleanup.
+sub new {
     my $class = shift;
-    my ( $arg ) = @_;
-    my $self = bless $arg, $class;
-    $self->{old_handle} = select( $self->{handle_out} );
-    $self->{backup_flush} = $|;
-    $| = 1;
-    if ( $self->{mouse} ) {
-        if ( $self->{mouse} == 3 ) {
-            my $return = binmode STDIN, ':utf8';
-            if ( $return ) {
-                print SET_ANY_EVENT_MOUSE_1003;
-                print SET_EXT_MODE_MOUSE_1005;
-            }
-            else {
-                $self->{mouse} = 0;
-                warn "binmode STDIN, :utf8: $!\n";
-                warn "mouse-mode disabled\n";
-            }
-        }
-        elsif ( $self->{mouse} == 4 ) {
-            my $return = binmode STDIN, ':raw';
-            if ( $return ) {
-                print SET_ANY_EVENT_MOUSE_1003;
-                print SET_SGR_EXT_MODE_MOUSE_1006;
-            }
-            else {
-                $self->{mouse} = 0;
-                warn "binmode STDIN, :raw: $!\n";
-                warn "mouse-mode disabled\n";
-            }
-        }
-        else {
-            my $return = binmode STDIN, ':raw';
-            if ( $return ) {
-                print SET_ANY_EVENT_MOUSE_1003;
-            }
-            else {
-                $self->{mouse} = 0;
-                warn "binmode STDIN, :raw: $!\n";
-                warn "mouse-mode disabled\n";
-            }
-        }
-    }
-    print HIDE_CURSOR if $self->{hide_cursor};
-    Term::ReadKey::ReadMode 'ultra-raw';
+    my ( $opt ) = @_;
+    croak "new: called with " . scalar @_ . " arguments - 0 or 1 arguments expected." if @_ > 1;
+    croak "new: the (optional) argument must be a HASH reference." if defined $opt && ref( $opt ) ne 'HASH';
+    my $self = {};
+    bless $self, $class;
+    $self->__validate_options( $opt );
     return $self;
 }
 
+
 sub DESTROY {
-    my $self = shift;
-    print CR, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
-    print CLEAR_TO_END_OF_SCREEN;
-    print RESET;
-    if ( $self->{mouse} ) {
-        binmode STDIN, ':encoding(UTF-8)' or warn "binmode STDIN, :encoding(UTF-8): $!\n";
-        print UNSET_EXT_MODE_MOUSE_1005     if $self->{mouse} == 3;
-        print UNSET_SGR_EXT_MODE_MOUSE_1006 if $self->{mouse} == 4;
-        print UNSET_ANY_EVENT_MOUSE_1003;
-    }
-    print SHOW_CURSOR if $self->{hide_cursor};
-    $| = $self->{backup_flush};
-    Term::ReadKey::ReadMode 'restore';
-    select( $self->{old_handle} );
-    carp "EOT: $!"      if $self->{EOT};
-    print STDERR "^C\n" if $self->{cC};
+    my ( $self ) = @_;
+    $self->__reset_term();
 }
 
 
-sub _length_longest {
-    my ( $arg ) = @_;
-    if ( defined $arg->{ll} ) {
-        $arg->{length_longest} = $arg->{ll};
-        $arg->{length} = [];
-    }
-    else {
-        my $list = $arg->{list};
-        my $len = [];
-        my $longest = 0;
-        for my $i ( 0 .. $#$list ) {
-            my $gcs = Unicode::GCString->new( $list->[$i] );
-            $len->[$i] = $gcs->columns();
-            $longest = $len->[$i] if $len->[$i] > $longest;
-        }
-        $arg->{length_longest} = $longest;
-        $arg->{length} = $len;
-    }
+sub __set_defaults {
+    my ( $self ) = @_;
+    my $prompt = defined $self->{wantarray} ? 'Your choice:' : 'Close with ENTER';
+    $self->{prompt}           //= $prompt;
+    $self->{beep}             //= 0;
+    $self->{clear_screen}     //= 0;
+    #$self->{default}         //= undef;
+    $self->{empty}            //= '<empty>';
+    $self->{hide_cursor}      //= 1;
+    $self->{index}            //= 0;
+    $self->{justify}          //= 0;
+    $self->{keep}             //= 5;
+    $self->{layout}           //= 1;
+    #$self->{lf}              //= undef;
+    #$self->{ll}              //= undef;
+    #$self->{limit}           //= undef;
+    #$self->{max_height}      //= undef;
+    #$self->{max_width}       //= undef;
+    $self->{mouse}            //= 0;
+    $self->{order}            //= 1;
+    $self->{pad}              //= 2;
+    $self->{pad_one_row}      //= $self->{pad};
+    $self->{page}             //= 1;
+    $self->{undef}            //= '<undef>';
 }
 
 
-sub _copy_orig_list {
-    my ( $arg ) = @_;
-    if ( $arg->{ll} ) {
-        if ( $arg->{list_to_long} ) {
-            return [ map {
-                my $copy = $_;
-                if ( ! $copy ) {
-                    $copy = $arg->{undef} if ! defined $copy;
-                    $copy = $arg->{empty} if $copy eq '';
-                }
-                $copy;
-            } @{$arg->{orig_list}}[ 0 .. $arg->{limit} - 1 ] ];
-        }
-        return [ map {
-            my $copy = $_;
-            if ( ! $copy ) {
-                $copy = $arg->{undef} if ! defined $copy;
-                $copy = $arg->{empty} if $copy eq '';
-            }
-            $copy;
-        } @{$arg->{orig_list}} ];
-    }
-    else {
-        if ( $arg->{list_to_long} ) {
-            return [ map {
-                my $copy = $_;
-                if ( ! $copy ) {
-                    $copy = $arg->{undef} if ! defined $copy;
-                    $copy = $arg->{empty} if $copy eq '';
-                }
-                if ( ref $copy ) {
-                    $copy = sprintf "%s(0x%x)", ref $copy, $copy;
-                }
-                $copy =~ s/\p{Space}/ /g;  # replace, but don't squash sequences of spaces
-                $copy =~ s/\p{C}//g;
-                $copy;
-            } @{$arg->{orig_list}}[ 0 .. $arg->{limit} - 1 ] ];
-        }
-        return [ map {
-            my $copy = $_;
-            if ( ! $copy ) {
-                $copy = $arg->{undef} if ! defined $copy;
-                $copy = $arg->{empty} if $copy eq '';
-            }
-            if ( ref $copy ) {
-                $copy = sprintf "%s(0x%x)", ref $copy, $copy;
-            }
-            $copy =~ s/\p{Space}/ /g;
-            $copy =~ s/\p{C}//g;
-            $copy;
-        } @{$arg->{orig_list}} ];
-    }
-}
-
-
-sub _set_defaults {
-    my ( $config, $wantarray ) = @_;
-    my $prompt = defined $wantarray ? 'Your choice:' : 'Close with ENTER';
-    $config->{beep}             //= 0;
-    $config->{clear_screen}     //= 0;
-    #$config->{default}         //= undef;
-    $config->{empty}            //= '<empty>';
-    $config->{hide_cursor}      //= 1;
-    $config->{index}            //= 0;
-    $config->{justify}          //= 0;
-    $config->{keep}             //= 5;
-    $config->{layout}           //= 1;
-    #$config->{lf}              //= undef;
-    #$config->{ll}              //= undef;
-    #$config->{limit}           //= undef;
-    #$config->{max_height}      //= undef;
-    #$config->{max_width}       //= undef;
-    $config->{mouse}            //= 0;
-    $config->{order}            //= 1;
-    $config->{pad}              //= 2;
-    $config->{pad_one_row}      //= $config->{pad};
-    $config->{page}             //= 1;
-    $config->{prompt}           //= $prompt;
-    $config->{undef}            //= '<undef>';
-    return $config;
-}
-
-
-sub _validate_options {
-    my ( $config, $wantarray, $list_length ) = @_;
-    my $validate = {    #   min   max
+sub __validate_options {
+    my ( $self, $opt ) = @_;
+    return if ! defined $opt;
+    my $valid = {       #   min   max
         beep            => [ 0,   1 ],
         clear_screen    => [ 0,   1 ],
         default         => [ 0      ],
@@ -387,746 +157,49 @@ sub _validate_options {
         prompt          => '',
         undef           => '',
     };
-    my $warn = 0;
-    for my $key ( keys %$config ) {
-        if ( ! exists $validate->{$key} ) {
-            carp "choose: \"$key\" is not a valid option";
-            delete $config->{$key};
-            $warn++;
+    my @warn = ();
+    for my $key ( keys %$opt ) {
+        if ( ! exists $valid->{$key} ) {
+            push @warn, "choose: '$key' is not a valid option name.";
         }
-        elsif ( $validate->{$key} ) {
-            next if ! defined $config->{$key};
-            if ( $key eq 'lf' ) {
-                my $warn_str;
-                if ( ref( $config->{$key} ) ne 'ARRAY' ) {
-                    $warn_str = "choose: the value for the option \"$key\" is not a ARRAY reference.";
-                }
-                elsif ( @{$config->{$key}} != 2 ) {
-                    $warn_str = "choose: the value for the option \"$key\" is not a reference to an array with 2 elements.";
-                }
-                else {
-                    for my $i ( 0 .. $#{$config->{$key}} ) {
-                        if ( defined $config->{$key}[$i] && $config->{$key}[$i] !~ m/^[0-9]+\z/ ) {
-                            my $sep = $warn_str ? "\n" : "";
-                            $warn_str .= "choose: option \"$key\": ";
-                            $warn_str .= "'$config->{$key}[$i]' is not a valid value.$sep";
-                        }
-                    }
-                }
-                if ( $warn_str ) {
-                    $warn_str .= " Falling back to the default value.";
-                    carp $warn_str;
-                    $config->{$key} = undef;
-                    $warn++;
-                }
-            }
-            elsif (   $config->{$key} !~ m/^[0-9]+\z/
-                   ||                                   $config->{$key} < $validate->{$key}[MIN]
-                   || defined $validate->{$key}[MAX] && $config->{$key} > $validate->{$key}[MAX]
+        elsif ( ! defined $opt->{$key} ) {
+        }
+        elsif ( $valid->{$key} eq '' ) {
+            $self->{$key} = $opt->{$key};
+        }
+        elsif ( $key eq 'lf' ) {
+            if (    ref( $opt->{$key} ) ne 'ARRAY' || @{$opt->{$key}} > 2
+                 || defined $opt->{$key}[0] && $opt->{$key}[0] !~ m/^[0-9]+\z/
+                 || defined $opt->{$key}[1] && $opt->{$key}[1] !~ m/^[0-9]+\z/
             ) {
-                carp "choose: \"$config->{$key}\" is not a valid value for the option \"$key\"."
-                    . " Falling back to the default value.";
-                $config->{$key} = undef;
-                $warn++;
+                push @warn, "choose: option '$key': the passed value is not a valid value. Falling back to the default value.";
+            }
+            else {
+                $self->{$key} = $opt->{$key};
             }
         }
-        # elsif ( $validate->{$key} eq '' ) {
-        #     nothing to do;
-        # }
+        elsif ( $opt->{$key} =~ m/^[0-9]+\z/ ) {
+            if ( $opt->{$key} < $valid->{$key}[MIN] || defined $valid->{$key}[MAX] && $opt->{$key} > $valid->{$key}[MAX] ) {
+                push @warn, "choose: option '$key': '$opt->{$key}' is not a valid value. Falling back to the default value.";
+            }
+            else {
+                $self->{$key} = $opt->{$key};
+            }
+        }
+        else {
+            die "Bug!";
+        }
     }
-    $config = _set_defaults( $config, $wantarray );
-    if ( $warn ) {
+    if ( @warn ) {
+        carp $_ for @warn;
         print "Press a key to continue";
         my $dummy = <STDIN>;
     }
-    $config->{wantarray} = $wantarray;
-    return $config;
 }
 
 
-sub _set_default_cell {
-    my ( $arg ) = @_;
-    $arg->{tmp_cursor} = [ 0, 0 ];
-    LOOP: for my $i ( 0 .. $#{$arg->{rc2idx}} ) {
-        # if ( $arg->{default} ~~ @{$arg->{rc2idx}[$i]} ) {
-            for my $j ( 0 .. $#{$arg->{rc2idx}[$i]} ) {
-                if ( $arg->{default} == $arg->{rc2idx}[$i][$j] ) {
-                    $arg->{tmp_cursor} = [ $i, $j ];
-                    last LOOP;
-                }
-            }
-        # }
-    }
-    while ( $arg->{tmp_cursor}[ROW] > $arg->{p_end} ) {
-        $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) + 1 );
-        $arg->{cursor}[ROW] = $arg->{row_on_top};
-        $arg->{p_begin} = $arg->{row_on_top};
-        $arg->{p_end} = $arg->{p_begin} + $arg->{avail_height} - 1;
-        $arg->{p_end} = $#{$arg->{rc2idx}} if $arg->{p_end} > $#{$arg->{rc2idx}};
-    }
-    $arg->{cursor} = $arg->{tmp_cursor};
-}
-
-
-sub _prepare_page_number {
-    my ( $arg ) = @_;
-    $arg->{pp} = int( $#{$arg->{rc2idx}} / ( $arg->{avail_height} + $arg->{tail} ) ) + 1;
-    if ( $arg->{pp} > 1 ) {
-        $arg->{pp} = int( $#{$arg->{rc2idx}} / $arg->{avail_height} ) + 1;
-        $arg->{width_pp} = length $arg->{pp};
-        $arg->{pp_printf_fmt} = "--- Page %0*d/%d ---";
-        $arg->{pp_printf_type} = 0;
-        if ( length sprintf( $arg->{pp_printf_fmt}, $arg->{width_pp}, $arg->{pp}, $arg->{pp} ) > $arg->{avail_width} ) {
-            $arg->{pp_printf_fmt} = "%0*d/%d";
-            if ( length sprintf( $arg->{pp_printf_fmt}, $arg->{width_pp}, $arg->{pp}, $arg->{pp} ) > $arg->{avail_width} ) {
-                $arg->{width_pp} = $arg->{avail_width} if $arg->{width_pp} > $arg->{avail_width};
-                $arg->{pp_printf_fmt} = "%0*.*s";
-                $arg->{pp_printf_type} = 1;
-            }
-        }
-    }
-    else {
-        $arg->{avail_height} += $arg->{tail};
-        $arg->{tail} = 0;
-    }
-}
-
-
-sub _prepare_promptline {
-    my ( $arg ) = @_;
-    $arg->{prompt} =~ s/[^\n\P{Space}]/ /g;
-    $arg->{prompt} =~ s/[^\n\P{C}]//g;
-    my $gcs_prompt = Unicode::GCString->new( $arg->{prompt} );
-    if ( $arg->{prompt} !~ /\n/ && $gcs_prompt->columns() <= $arg->{avail_width} ) {
-        $arg->{nr_prompt_lines} = 1;
-        $arg->{prompt_copy} = $arg->{prompt} . "\n\r";
-    }
-    else {
-        my $line_fold = Text::LineFold->new(
-            Charset=> 'utf-8',
-            ColMax => $arg->{avail_width},
-            OutputCharset => '_UNICODE_',
-            Urgent => 'FORCE'
-        );
-        if ( defined $arg->{lf} ) {
-            $arg->{prompt_copy} = $line_fold->fold( ' ' x $arg->{lf}[0] // 0, ' ' x $arg->{lf}[1] // 0, $arg->{prompt} );
-        }
-        else {
-            $arg->{prompt_copy} = $line_fold->fold( $arg->{prompt}, 'PLAIN' );
-        }
-        $arg->{nr_prompt_lines} = $arg->{prompt_copy} =~ s/\n/\n\r/g;
-    }
-}
-
-
-sub _write_first_screen {
-    my ( $arg ) = @_;
-    ( $arg->{term_width}, $arg->{term_height} ) = GetTerminalSize( $arg->{handle_out} );
-    ( $arg->{avail_width}, $arg->{avail_height} ) = ( $arg->{term_width}, $arg->{term_height} );
-    if ( $arg->{max_width} && $arg->{avail_width} > $arg->{max_width} ) {
-        $arg->{avail_width} = $arg->{max_width};
-    }
-    if ( $arg->{mouse} == 2 ) {
-        $arg->{avail_width}  = MAX_COL_MOUSE_1003 if $arg->{avail_width}  > MAX_COL_MOUSE_1003;
-        $arg->{avail_height} = MAX_ROW_MOUSE_1003 if $arg->{avail_height} > MAX_ROW_MOUSE_1003;
-    }
-    $arg->{avail_width} = 1 if $arg->{avail_width} < 1;
-    if ( $arg->{prompt} eq '' ) {
-        $arg->{nr_prompt_lines} = 0;
-    }
-    else {
-        _prepare_promptline( $arg );
-    }
-    $arg->{tail} = $arg->{page} ? 1 : 0;
-    $arg->{avail_height} -= $arg->{nr_prompt_lines} + $arg->{tail};
-    if ( $arg->{avail_height} < $arg->{keep} ) {
-        my $height = ( GetTerminalSize( $arg->{handle_out} ) )[1];
-        $arg->{avail_height} = $height >= $arg->{keep} ? $arg->{keep} : $height;
-        $arg->{avail_height} = 1 if $arg->{avail_height} < 1;
-    }
-    $arg->{avail_height} = $arg->{max_height} if $arg->{max_height} && $arg->{max_height} < $arg->{avail_height};
-    _size_and_layout( $arg );
-    _prepare_page_number( $arg ) if $arg->{page};
-    $arg->{avail_height_idx} = $arg->{avail_height} - 1;
-    $arg->{p_begin}    = 0;
-    $arg->{p_end}      = $arg->{avail_height_idx};
-    $arg->{p_end}      = $#{$arg->{rc2idx}} if $arg->{avail_height_idx} > $#{$arg->{rc2idx}};
-    $arg->{marked}     = [];
-    $arg->{row_on_top} = 0;
-    $arg->{screen_row} = 0;
-    $arg->{cursor}     = [ 0, 0 ];
-    _set_default_cell( $arg ) if defined $arg->{default} && $arg->{default} <= $#{$arg->{list}};
-    if ( $arg->{clear_screen} ) {
-        print CLEAR_SCREEN;
-        print GO_TO_TOP_LEFT;
-    }
-    print $arg->{prompt_copy} if $arg->{prompt} ne '';
-    _wr_screen( $arg );
-    if ( $arg->{mouse} ) {
-        $arg->{abs_cursor_x} = 0;
-        $arg->{abs_cursor_y} = 0;
-        print GET_CURSOR_POSITION;
-        $arg->{cursor_row} = $arg->{screen_row};
-    }
-}
-
-
-sub choose {
-    my ( $orig_list_ref, $config ) = @_;
-    croak "choose: called without arguments. 'choose' expects 1 or 2 arguments." if @_ < 1;
-    croak "choose: called with " . scalar @_ . " arguments. 'choose' expects 1 or 2 arguments." if @_ > 2;
-    croak "choose: The first argument is not defined. "
-        . "The first argument has to be an ARRAY reference." if ! defined $orig_list_ref;
-    croak "choose: The first argument is not a reference. "
-        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) eq '';
-    croak "choose: The first argument is not an ARRAY reference. "
-        . "The first argument has to be an ARRAY reference." if ref( $orig_list_ref ) ne 'ARRAY';
-    if ( defined $config ) {
-        croak "choose: The second argument is not a reference. "
-            . "The (optional) second argument has to be a HASH reference." if ref( $config ) eq '';
-        croak "choose: The second argument is not a HASH reference. "
-            . "The (optional) second argument has to be a HASH reference." if ref( $config ) ne 'HASH';
-    }
-    if ( ! @$orig_list_ref ) {
-        carp "choose: The first argument refers to an empty list!";
-        return;
-    }
-    local $\ = undef;
-    local $, = undef;
-    my $arg = _validate_options( $config // {}, wantarray, scalar @$orig_list_ref );
-    $arg->{orig_list}  = $orig_list_ref;
-    $arg->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
-    $arg->{list}       = _copy_orig_list( $arg );
-    _length_longest( $arg );
-    $arg->{col_width} = $arg->{length_longest} + $arg->{pad};
-    local $SIG{'INT'} = sub {
-        my $signame = shift;
-        exit( 1 );
-    };
-    my $init = Term::Choose->_init_scr( $arg );
-    _write_first_screen( $arg );
-
-    while ( 1 ) {
-        my $key = _get_key( $arg );
-        if ( ! defined $key ) {
-            $arg->{EOT} = 1;
-            return;
-        }
-        my ( $new_width, $new_height ) = GetTerminalSize( $arg->{handle_out} );
-        if ( $new_width != $arg->{term_width} || $new_height != $arg->{term_height} ) {
-            $arg->{list} = _copy_orig_list( $arg );
-            print CR, UP x ( $arg->{screen_row} + $arg->{nr_prompt_lines} );
-            print CLEAR_TO_END_OF_SCREEN;
-            _write_first_screen( $arg );
-            next;
-        }
-        next if $key == NEXT_get_key;
-        next if $key == KEY_Tilde;
-
-        # $arg->{rc2idx} holds the new list (AoA) formated in "_size_and_layout" appropirate to the choosen layout.
-        # $arg->{rc2idx} does not hold the values dircetly but the respective list indexes from the original list.
-        # If the original list would be ( 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' ) and the new formated list should be
-        #     a d g
-        #     b e h
-        #     c f
-        # then the $arg->{rc2idx} would look like this
-        #     0 3 6
-        #     1 4 7
-        #     2 5
-        # So e.g. the second value in the second row of the new list would be $arg->{list}[ $arg->{rc2idx}[1][1] ].
-        # On the other hand the index of the last row of the new list would be $#{$arg->{rc2idx}}
-        # or the index of the last column in the first row would be $#{$arg->{rc2idx}[0]}.
-
-        if ( $key == KEY_j || $key == KEY_DOWN ) {
-            if ( $#{$arg->{rc2idx}} == 0 || ! (    $arg->{rc2idx}[$arg->{cursor}[ROW]+1]
-                                                && $arg->{rc2idx}[$arg->{cursor}[ROW]+1][$arg->{cursor}[COL]] )
-            ) {
-                _beep( $arg );
-            }
-            else {
-                $arg->{cursor}[ROW]++;
-                if ( $arg->{cursor}[ROW] <= $arg->{p_end} ) {
-                    _wr_cell( $arg, $arg->{cursor}[ROW] - 1, $arg->{cursor}[COL] );
-                    _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
-                }
-                else {
-                    $arg->{row_on_top} = $arg->{cursor}[ROW];
-                    $arg->{p_begin} = $arg->{p_end} + 1;
-                    $arg->{p_end}   = $arg->{p_end} + $arg->{avail_height};
-                    $arg->{p_end}   = $#{$arg->{rc2idx}} if $arg->{p_end} > $#{$arg->{rc2idx}};
-                    _wr_screen( $arg );
-                }
-            }
-        }
-        elsif ( $key == KEY_k || $key == KEY_UP ) {
-            if ( $arg->{cursor}[ROW] == 0 ) {
-                _beep( $arg );
-            }
-            else {
-                $arg->{cursor}[ROW]--;
-                if ( $arg->{cursor}[ROW] >= $arg->{p_begin} ) {
-                    _wr_cell( $arg, $arg->{cursor}[ROW] + 1, $arg->{cursor}[COL] );
-                    _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
-                }
-                else {
-                    $arg->{row_on_top} = $arg->{cursor}[ROW] - ( $arg->{avail_height} - 1 );
-                    $arg->{p_end}   = $arg->{p_begin} - 1;
-                    $arg->{p_begin} = $arg->{p_begin} - $arg->{avail_height};
-                    $arg->{p_begin} = 0 if $arg->{p_begin} < 0;
-                    _wr_screen( $arg );
-                }
-            }
-        }
-        elsif ( $key == KEY_TAB || $key == CONTROL_I ) {
-            if (    $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
-                 && $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
-            ) {
-                _beep( $arg );
-            }
-            else {
-                if ( $arg->{cursor}[COL] < $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]} ) {
-                    $arg->{cursor}[COL]++;
-                    _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] - 1 );
-                    _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
-                }
-                else {
-                    $arg->{cursor}[ROW]++;
-                    if ( $arg->{cursor}[ROW] <= $arg->{p_end} ) {
-                        $arg->{cursor}[COL] = 0;
-                        _wr_cell( $arg, $arg->{cursor}[ROW] - 1, $#{$arg->{rc2idx}[$arg->{cursor}[ROW] - 1]} );
-                        _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
-                    }
-                    else {
-                        $arg->{row_on_top} = $arg->{cursor}[ROW];
-                        $arg->{p_begin} = $arg->{p_end} + 1;
-                        $arg->{p_end}   = $arg->{p_end} + $arg->{avail_height};
-                        $arg->{p_end}   = $#{$arg->{rc2idx}} if $arg->{p_end} > $#{$arg->{rc2idx}};
-                        $arg->{cursor}[COL] = 0;
-                        _wr_screen( $arg );
-                    }
-                }
-            }
-        }
-        elsif ( $key == KEY_BSPACE || $key == CONTROL_H || $key == KEY_BTAB ) {
-            if ( $arg->{cursor}[COL] == 0 && $arg->{cursor}[ROW] == 0 ) {
-                _beep( $arg );
-            }
-            else {
-                if ( $arg->{cursor}[COL] > 0 ) {
-                    $arg->{cursor}[COL]--;
-                    _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] + 1 );
-                    _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
-                }
-                else {
-                    $arg->{cursor}[ROW]--;
-                    if ( $arg->{cursor}[ROW] >= $arg->{p_begin} ) {
-                        $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
-                        _wr_cell( $arg, $arg->{cursor}[ROW] + 1, 0 );
-                        _wr_cell( $arg, $arg->{cursor}[ROW],     $arg->{cursor}[COL] );
-                    }
-                    else {
-                        $arg->{row_on_top} = $arg->{cursor}[ROW] - ( $arg->{avail_height} - 1 );
-                        $arg->{p_end}   = $arg->{p_begin} - 1;
-                        $arg->{p_begin} = $arg->{p_begin} - $arg->{avail_height};
-                        $arg->{p_begin} = 0 if $arg->{p_begin} < 0;
-                        $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
-                        _wr_screen( $arg );
-                    }
-                }
-            }
-        }
-        elsif ( $key == KEY_l || $key == KEY_RIGHT ) {
-            if ( $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]} ) {
-                _beep( $arg );
-            }
-            else {
-                $arg->{cursor}[COL]++;
-                _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] - 1 );
-                _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
-            }
-        }
-        elsif ( $key == KEY_h || $key == KEY_LEFT ) {
-            if ( $arg->{cursor}[COL] == 0 ) {
-                _beep( $arg );
-            }
-            else {
-                $arg->{cursor}[COL]--;
-                _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] + 1 );
-                _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
-            }
-        }
-        elsif ( $key == CONTROL_B || $key == KEY_PAGE_UP ) {
-            if ( $arg->{p_begin} <= 0 ) {
-                _beep( $arg );
-            }
-            else {
-                $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) - 1 );
-                $arg->{cursor}[ROW] -= $arg->{avail_height};
-                $arg->{p_begin} = $arg->{row_on_top};
-                $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
-                _wr_screen( $arg );
-            }
-        }
-        elsif ( $key == CONTROL_F || $key == KEY_PAGE_DOWN ) {
-            if ( $arg->{p_end} >= $#{$arg->{rc2idx}} ) {
-                _beep( $arg );
-            }
-            else {
-                $arg->{row_on_top} = $arg->{avail_height} * ( int( $arg->{cursor}[ROW] / $arg->{avail_height} ) + 1 );
-                $arg->{cursor}[ROW] += $arg->{avail_height};
-                if ( $arg->{cursor}[ROW] >= $#{$arg->{rc2idx}} ) {
-                    if ( $#{$arg->{rc2idx}} == $arg->{row_on_top} || ! $arg->{rest} || $arg->{cursor}[COL] <= $arg->{rest} - 1 ) {
-                        if ( $arg->{cursor}[ROW] != $#{$arg->{rc2idx}} ) {
-                            $arg->{cursor}[ROW] = $#{$arg->{rc2idx}};
-                        }
-                        if ( $arg->{rest} && $arg->{cursor}[COL] > $arg->{rest} - 1 ) {
-                            $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
-                        }
-                    }
-                    else {
-                        $arg->{cursor}[ROW] = $#{$arg->{rc2idx}} - 1;
-                    }
-                }
-                $arg->{p_begin} = $arg->{row_on_top};
-                $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
-                $arg->{p_end}   = $#{$arg->{rc2idx}} if $arg->{p_end} > $#{$arg->{rc2idx}};
-                _wr_screen( $arg );
-            }
-        }
-        elsif ( $key == CONTROL_A || $key == KEY_HOME ) {
-            if ( $arg->{cursor}[COL] == 0 && $arg->{cursor}[ROW] == 0 ) {
-                _beep( $arg );
-            }
-            else {
-                $arg->{row_on_top} = 0;
-                $arg->{cursor}[ROW] = $arg->{row_on_top};
-                $arg->{cursor}[COL] = 0;
-                $arg->{p_begin} = $arg->{row_on_top};
-                $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
-                $arg->{p_end}   = $#{$arg->{rc2idx}} if $arg->{p_end} > $#{$arg->{rc2idx}};
-                _wr_screen( $arg );
-            }
-        }
-        elsif ( $key == CONTROL_E || $key == KEY_END ) {
-            if ( $arg->{order} == 1 && $arg->{rest} ) {
-                if (    $arg->{cursor}[ROW] == $#{$arg->{rc2idx}} - 1
-                     && $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
-                ) {
-                    _beep( $arg );
-                }
-                else {
-                    $arg->{row_on_top} = @{$arg->{rc2idx}} - ( @{$arg->{rc2idx}} % $arg->{avail_height} || $arg->{avail_height} );
-                    $arg->{cursor}[ROW] = $#{$arg->{rc2idx}} - 1;
-                    $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
-                    if ( $arg->{row_on_top} == $#{$arg->{rc2idx}} ) {
-                        $arg->{row_on_top} = $arg->{row_on_top} - $arg->{avail_height};
-                        $arg->{p_begin} = $arg->{row_on_top};
-                        $arg->{p_end}   = $arg->{p_begin} + $arg->{avail_height} - 1;
-                    }
-                    else {
-                        $arg->{p_begin} = $arg->{row_on_top};
-                        $arg->{p_end}   = $#{$arg->{rc2idx}};
-                    }
-                    _wr_screen( $arg );
-                }
-            }
-            else {
-                if (    $arg->{cursor}[ROW] == $#{$arg->{rc2idx}}
-                     && $arg->{cursor}[COL] == $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]}
-                ) {
-                    _beep( $arg );
-                }
-                else {
-                    $arg->{row_on_top} = @{$arg->{rc2idx}} - ( @{$arg->{rc2idx}} % $arg->{avail_height} || $arg->{avail_height} );
-                    $arg->{cursor}[ROW] = $#{$arg->{rc2idx}};
-                    $arg->{cursor}[COL] = $#{$arg->{rc2idx}[$arg->{cursor}[ROW]]};
-                    $arg->{p_begin} = $arg->{row_on_top};
-                    $arg->{p_end}   = $#{$arg->{rc2idx}};
-                    _wr_screen( $arg );
-                }
-            }
-        }
-        elsif ( $key == CONTROL_SPACE ) {
-            if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
-                for my $i ( 0 .. $#{$arg->{rc2idx}} ) {
-                    for my $j ( 0 .. $#{$arg->{rc2idx}[$i]} ) {
-                        $arg->{marked}[$i][$j] = $arg->{marked}[$i][$j] ? 0 : 1;
-                    }
-                }
-                _wr_screen( $arg );
-            }
-        }
-        elsif ( $key == KEY_q || $key == CONTROL_D ) {
-            return;
-        }
-        elsif ( $key == CONTROL_C ) {
-            $arg->{cC} = 1;
-            exit( 1 );
-        }
-        elsif ( $key == KEY_ENTER ) {
-            my @chosen;
-            return if ! defined $arg->{wantarray};
-            if ( $arg->{wantarray} ) {
-                if ( $arg->{order} == 1 ) {
-                    for my $col ( 0 .. $#{$arg->{rc2idx}[0]} ) {
-                        for my $row ( 0 .. $#{$arg->{rc2idx}} ) {
-                            if ( $arg->{marked}[$row][$col] || $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL] ) {
-                                my $i = $arg->{rc2idx}[$row][$col];
-                                push @chosen, $arg->{index} ? $i : $arg->{orig_list}[$i];
-                            }
-                        }
-                    }
-                }
-                else {
-                    for my $row ( 0 .. $#{$arg->{rc2idx}} ) {
-                        for my $col ( 0 .. $#{$arg->{rc2idx}[$row]} ) {
-                            if ( $arg->{marked}[$row][$col] || $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL] ) {
-                                my $i = $arg->{rc2idx}[$row][$col];
-                                push @chosen, $arg->{index} ? $i : $arg->{orig_list}[$i];
-                            }
-                        }
-                    }
-                }
-                return @chosen;
-            }
-            else {
-                my $i = $arg->{rc2idx}[$arg->{cursor}[ROW]][$arg->{cursor}[COL]];
-                return $arg->{index} ? $i : $arg->{orig_list}[$i];
-            }
-        }
-        elsif ( $key == KEY_SPACE ) {
-            if ( defined $arg->{wantarray} && $arg->{wantarray} ) {
-                if ( ! $arg->{marked}[$arg->{cursor}[ROW]][$arg->{cursor}[COL]] ) {
-                    $arg->{marked}[$arg->{cursor}[ROW]][$arg->{cursor}[COL]] = 1;
-                }
-                else {
-                    $arg->{marked}[$arg->{cursor}[ROW]][$arg->{cursor}[COL]] = 0;
-                }
-                _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
-            }
-        }
-        else {
-            _beep( $arg );
-        }
-    }
-}
-
-
-sub _beep {
-    my ( $arg ) = @_;
-    print BEEP if $arg->{beep};
-}
-
-
-sub _goto {
-    my ( $arg, $newrow, $newcol ) = @_;
-    print CR, RIGHT x $newcol;
-    if ( $newrow > $arg->{screen_row} ) {
-        print LF x ( $newrow - $arg->{screen_row} );
-        $arg->{screen_row} += ( $newrow - $arg->{screen_row} );
-    }
-    elsif ( $newrow < $arg->{screen_row} ) {
-        print UP x ( $arg->{screen_row} - $newrow );
-        $arg->{screen_row} -= ( $arg->{screen_row} - $newrow );
-    }
-}
-
-
-sub _wr_screen {
-    my ( $arg ) = @_;
-    _goto( $arg, 0, 0 );
-    print CLEAR_TO_END_OF_SCREEN;
-    if ( $arg->{page} && $arg->{pp} > 1 ) {
-        _goto( $arg, $arg->{avail_height_idx} + $arg->{tail}, 0 );
-        if ( $arg->{pp_printf_type} == 0 ) {
-            printf $arg->{pp_printf_fmt}, $arg->{width_pp}, int( $arg->{row_on_top} / $arg->{avail_height} ) + 1, $arg->{pp};
-        }
-        elsif ( $arg->{pp_printf_type} == 1 ) {
-            printf $arg->{pp_printf_fmt}, $arg->{width_pp}, $arg->{width_pp}, int( $arg->{row_on_top} / $arg->{avail_height} ) + 1;
-        }
-     }
-    for my $row ( $arg->{p_begin} .. $arg->{p_end} ) {
-        for my $col ( 0 .. $#{$arg->{rc2idx}[$row]} ) {
-            _wr_cell( $arg, $row, $col );
-        }
-    }
-    _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
-}
-
-
-sub _wr_cell {
-    my( $arg, $row, $col ) = @_;
-    if ( $#{$arg->{rc2idx}} == 0 ) {
-        my $lngth = 0;
-        if ( $col > 0 ) {
-            for my $cl ( 0 .. $col - 1 ) {
-                my $gcs_element = Unicode::GCString->new( $arg->{list}[$arg->{rc2idx}[$row][$cl]] );
-                $lngth += $gcs_element->columns();
-                $lngth += $arg->{pad_one_row};
-            }
-        }
-        _goto( $arg, $row - $arg->{row_on_top}, $lngth );
-        print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
-        print REVERSE         if $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
-        print $arg->{list}[$arg->{rc2idx}[$row][$col]];
-    }
-    else {
-        _goto( $arg, $row - $arg->{row_on_top}, $col * $arg->{col_width} );
-        print BOLD, UNDERLINE if $arg->{marked}[$row][$col];
-        print REVERSE         if $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
-        print _unicode_sprintf( $arg, $arg->{rc2idx}[$row][$col] );
-    }
-    print RESET if $arg->{marked}[$row][$col] || $row == $arg->{cursor}[ROW] && $col == $arg->{cursor}[COL];
-}
-
-
-sub _size_and_layout {
-    my ( $arg ) = @_;
-    my $layout = $arg->{layout};
-    $arg->{rc2idx} = [];
-    if ( $arg->{length_longest} > $arg->{avail_width} ) {
-        $arg->{avail_col_width} = $arg->{avail_width};
-        $layout = 3;
-    }
-    else {
-        $arg->{avail_col_width} = $arg->{length_longest};
-    }
-    my $all_in_first_row;
-    if ( $layout == 2 ) {
-        $layout = 3 if scalar @{$arg->{list}} <= $arg->{avail_height};
-    }
-    elsif ( $layout < 2 ) {
-        for my $idx ( 0 .. $#{$arg->{list}} ) {
-            $all_in_first_row .= $arg->{list}[$idx];
-            $all_in_first_row .= ' ' x $arg->{pad_one_row} if $idx < $#{$arg->{list}};
-            my $gcs_first_row = Unicode::GCString->new( $all_in_first_row );
-            if ( $gcs_first_row->columns() > $arg->{avail_width} ) {
-                $all_in_first_row = '';
-                last;
-            }
-        }
-    }
-    if ( $all_in_first_row ) {
-        $arg->{rc2idx}[0] = [ 0 .. $#{$arg->{list}} ];
-    }
-    elsif ( $layout == 3 ) {
-        if ( $arg->{length_longest} <= $arg->{avail_width} ) {
-            for my $idx ( 0 .. $#{$arg->{list}} ) {
-                $arg->{rc2idx}[$idx][0] = $idx;
-            }
-        }
-        else {
-            for my $idx ( 0 .. $#{$arg->{list}} ) {
-                my $gcs_element = Unicode::GCString->new( $arg->{list}[$idx] );
-                if ( $gcs_element->columns > $arg->{avail_width} ) {
-                    $arg->{list}[$idx] = _unicode_trim( $gcs_element, $arg->{avail_width} - 3 ) . '...';
-                }
-                $arg->{rc2idx}[$idx][0] = $idx;
-            }
-        }
-    }
-    else {
-        # auto_format
-        my $tmp_avail_width = $arg->{avail_width};
-        if ( $arg->{layout} == 1 || $arg->{layout} == 2 ) {
-            my $tmc = int( @{$arg->{list}} / $arg->{avail_height} );
-            $tmc++ if @{$arg->{list}} % $arg->{avail_height};
-            $tmc *= $arg->{col_width};
-            if ( $tmc < $tmp_avail_width ) {
-                $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 1.5 ) ) if $arg->{layout} == 1;
-                $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 6 ) )   if $arg->{layout} == 2;
-                $tmp_avail_width = $tmc;
-            }
-        }
-        # order
-        my $cols_per_row = int( $tmp_avail_width / $arg->{col_width} );
-        $cols_per_row = 1 if $cols_per_row < 1;
-        my $rows = int( ( $#{$arg->{list}} + $cols_per_row ) / $cols_per_row );
-        $arg->{rest} = @{$arg->{list}} % $cols_per_row;
-        if ( $arg->{order} == 1 ) {
-            my @rearranged_idx;
-            my $begin = 0;
-            my $end = $rows - 1;
-            for my $c ( 0 .. $cols_per_row - 1 ) {
-                --$end if $arg->{rest} && $c >= $arg->{rest};
-                $rearranged_idx[$c] = [ $begin .. $end ];
-                $begin = $end + 1;
-                $end = $begin + $rows - 1;
-            }
-            for my $r ( 0 .. $rows - 1 ) {
-                my @temp_idx;
-                for my $c ( 0 .. $cols_per_row - 1 ) {
-                    next if $arg->{rest} && $r == $rows - 1 && $c >= $arg->{rest};
-                    push @temp_idx, $rearranged_idx[$c][$r];
-                }
-                push @{$arg->{rc2idx}}, \@temp_idx;
-            }
-        }
-        else {
-            my $begin = 0;
-            my $end = $cols_per_row - 1;
-            $end = $#{$arg->{list}} if $end > $#{$arg->{list}};
-            push @{$arg->{rc2idx}}, [ $begin .. $end ];
-            while ( $end < $#{$arg->{list}} ) {
-                $begin += $cols_per_row;
-                $end   += $cols_per_row;
-                $end    = $#{$arg->{list}} if $end > $#{$arg->{list}};
-                push @{$arg->{rc2idx}}, [ $begin .. $end ];
-            }
-        }
-    }
-}
-
-
-sub _unicode_trim {
-    my ( $gcs, $len ) = @_;
-    return '' if $len <= 0; #
-    my $pos = $gcs->pos;
-    $gcs->pos( 0 );
-    my $cols = 0;
-    my $gc;
-    while ( defined( $gc = $gcs->next ) ) {
-        if ( $len < ( $cols += $gc->columns ) ) {
-            my $ret = $gcs->substr( 0, $gcs->pos - 1 );
-            $gcs->pos( $pos );
-            return $ret->as_string;
-        }
-    }
-    $gcs->pos( $pos );
-    return $gcs->as_string;
-}
-
-
-sub _unicode_sprintf {
-    my ( $arg, $idx ) = @_;
-    my $unicode;
-    my $str_length = $arg->{length}[$idx] // $arg->{length_longest};
-    if ( $str_length > $arg->{avail_col_width} ) {
-        my $gcs = Unicode::GCString->new( $arg->{list}[$idx] );
-        $unicode = _unicode_trim( $gcs, $arg->{avail_col_width} );
-    }
-    elsif ( $str_length < $arg->{avail_col_width} ) {
-        if ( $arg->{justify} == 0 ) {
-            $unicode = $arg->{list}[$idx] . " " x ( $arg->{avail_col_width} - $str_length );
-        }
-        elsif ( $arg->{justify} == 1 ) {
-            $unicode = " " x ( $arg->{avail_col_width} - $str_length ) . $arg->{list}[$idx];
-        }
-        elsif ( $arg->{justify} == 2 ) {
-            my $all = $arg->{avail_col_width} - $str_length;
-            my $half = int( $all / 2 );
-            $unicode = " " x $half . $arg->{list}[$idx] . " " x ( $all - $half );
-        }
-    }
-    else {
-        $unicode = $arg->{list}[$idx];
-    }
-    return $unicode;
-}
-
-
-sub _handle_mouse {
-    my ( $arg, $event_type, $abs_mouse_x, $abs_mouse_y ) = @_;
+sub __handle_mouse {
+    my ( $self, $event_type, $abs_mouse_x, $abs_mouse_y ) = @_;
     my $button_drag = ( $event_type & 0x20 ) >> 5;
     return NEXT_get_key if $button_drag;
     my $button_number;
@@ -1143,33 +216,33 @@ sub _handle_mouse {
         }
     }
     if ( $button_number == 4 ) {
-        return KEY_PAGE_UP;
+        return VK_PAGE_UP;
     }
     elsif ( $button_number == 5 ) {
-        return KEY_PAGE_DOWN;
+        return VK_PAGE_DOWN;
     }
-    my $pos_top_row = $arg->{abs_cursor_y} - $arg->{cursor_row};
+    my $pos_top_row = $self->{abs_cursor_y} - $self->{cursor_row};
     return NEXT_get_key if $abs_mouse_y < $pos_top_row;
     my $mouse_row = $abs_mouse_y - $pos_top_row;
     my $mouse_col = $abs_mouse_x;
     my( $found_row, $found_col );
     my $found = 0;
-    if ( $#{$arg->{rc2idx}} == 0 ) {
+    if ( $#{$self->{rc2idx}} == 0 ) {
         my $row = 0;
         if ( $row == $mouse_row ) {
             my $end_last_col = 0;
-            COL: for my $col ( 0 .. $#{$arg->{rc2idx}[$row]} ) {
-                my $gcs_element = Unicode::GCString->new( $arg->{list}[$arg->{rc2idx}[$row][$col]] );
-                my $end_this_col = $end_last_col + $gcs_element->columns() + $arg->{pad_one_row};
+            COL: for my $col ( 0 .. $#{$self->{rc2idx}[$row]} ) {
+                my $gcs_element = Unicode::GCString->new( $self->{list}[$self->{rc2idx}[$row][$col]] );
+                my $end_this_col = $end_last_col + $gcs_element->columns() + $self->{pad_one_row};
                 if ( $col == 0 ) {
-                    $end_this_col -= int( $arg->{pad_one_row} / 2 );
+                    $end_this_col -= int( $self->{pad_one_row} / 2 );
                 }
-                if ( $col == $#{$arg->{rc2idx}[$row]} ) {
-                    $end_this_col = $arg->{avail_width} if $end_this_col > $arg->{avail_width};
+                if ( $col == $#{$self->{rc2idx}[$row]} ) {
+                    $end_this_col = $self->{avail_width} if $end_this_col > $self->{avail_width};
                 }
                 if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
                     $found = 1;
-                    $found_row = $row + $arg->{row_on_top};
+                    $found_row = $row + $self->{row_on_top};
                     $found_col = $col;
                     last;
                 }
@@ -1178,20 +251,20 @@ sub _handle_mouse {
         }
     }
     else {
-        ROW: for my $row ( 0 .. $#{$arg->{rc2idx}} ) {
+        ROW: for my $row ( 0 .. $#{$self->{rc2idx}} ) {
             if ( $row == $mouse_row ) {
                 my $end_last_col = 0;
-                COL: for my $col ( 0 .. $#{$arg->{rc2idx}[$row]} ) {
-                    my $end_this_col = $end_last_col + $arg->{col_width};
+                COL: for my $col ( 0 .. $#{$self->{rc2idx}[$row]} ) {
+                    my $end_this_col = $end_last_col + $self->{col_width};
                     if ( $col == 0 ) {
-                        $end_this_col -= int( $arg->{pad} / 2 );
+                        $end_this_col -= int( $self->{pad} / 2 );
                     }
-                    if ( $col == $#{$arg->{rc2idx}[$row]} ) {
-                        $end_this_col = $arg->{avail_width} if $end_this_col > $arg->{avail_width};
+                    if ( $col == $#{$self->{rc2idx}[$row]} ) {
+                        $end_this_col = $self->{avail_width} if $end_this_col > $self->{avail_width};
                     }
                     if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
                         $found = 1;
-                        $found_row = $row + $arg->{row_on_top};
+                        $found_row = $row + $self->{row_on_top};
                         $found_col = $col;
                         last ROW;
                     }
@@ -1211,20 +284,798 @@ sub _handle_mouse {
     else {
         return NEXT_get_key;
     }
-    if ( $found_row != $arg->{cursor}[ROW] || $found_col != $arg->{cursor}[COL] ) {
-        my $tmp = $arg->{cursor};
-        $arg->{cursor} = [ $found_row, $found_col ];
-        _wr_cell( $arg, $tmp->[0], $tmp->[1] );
-        _wr_cell( $arg, $arg->{cursor}[ROW], $arg->{cursor}[COL] );
+    if ( $found_row != $self->{cursor}[ROW] || $found_col != $self->{cursor}[COL] ) {
+        my $tmp = $self->{cursor};
+        $self->{cursor} = [ $found_row, $found_col ];
+        $self->__wr_cell( $tmp->[0], $tmp->[1] );
+        $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
     }
     return $return_char;
 }
 
 
+sub config {
+    my $self = shift;
+    my ( $opt ) = @_;
+    croak "config: called with " . scalar @_ . " arguments - 0 or 1 arguments expected." if @_ > 1; # ?
+    croak "config: the argument must be a HASH reference." if defined $opt && ref( $opt ) ne 'HASH';
+    $self->__validate_options( $opt );
+}
+
+sub choose {
+    if ( ref( $_[0] ) ne 'Term::Choose' ) {
+        my $n = Term::Choose->new( $_[1] // {} );
+        return $n->choose( $_[0] );
+    }
+    my $self = shift;
+    my ( $orig_list_ref, $opt ) = @_;
+    croak "choose: called with " . scalar @_ . " arguments - 0 or 1 arguments expected." if @_ < 1 || @_ > 2;
+    croak "choose: the first argument must be an ARRAY reference." if ref( $orig_list_ref ) ne 'ARRAY';
+    croak "choose: the (optional) second argument must be a HASH reference." if defined $opt && ref( $opt ) ne 'HASH';
+    if ( ! @$orig_list_ref ) {
+        carp "choose: The first argument refers to an empty list!";
+        return;
+    }
+    local $\ = undef;
+    local $, = undef;
+    $self->{wantarray}  = wantarray;
+    $self->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
+    $self->{backup_opt} = { map{ $_ => $self->{$_} } keys %$opt } if $opt;
+    $self->__validate_options( $opt );
+    $self->__set_defaults();
+    $self->{orig_list} = $orig_list_ref;
+    $self->{list}      = $self->__copy_orig_list();
+    $self->__length_longest();
+    $self->{col_width} = $self->{length_longest} + $self->{pad};
+    local $SIG{'INT'} = sub {
+        my $signame = shift;
+        exit( 1 );
+    };
+    $self->__init_term();
+    $self->__write_first_screen();
+
+    while ( 1 ) {
+        my $key = $self->__get_key();
+        if ( ! defined $key ) {
+            $self->__reset_term( 1 );
+            carp "EOT: $!";
+            return;
+        }
+        my ( $new_width, $new_height ) = $self->__get_term_size();
+        if ( $new_width != $self->{term_width} || $new_height != $self->{term_height} ) {
+            $self->{list} = $self->__copy_orig_list();
+            print CR, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
+            #print LEFT x $self->{screen_col}, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
+            print CLEAR_TO_END_OF_SCREEN;
+            $self->__write_first_screen();
+            next;
+        }
+        next if $key == NEXT_get_key;
+        next if $key == KEY_Tilde;
+
+        # $self->{rc2idx} holds the new list (AoA) formated in "__size_and_layout" appropirate to the choosen layout.
+        # $self->{rc2idx} does not hold the values dircetly but the respective list indexes from the original list.
+        # If the original list would be ( 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' ) and the new formated list should be
+        #     a d g
+        #     b e h
+        #     c f
+        # then the $self->{rc2idx} would look like this
+        #     0 3 6
+        #     1 4 7
+        #     2 5
+        # So e.g. the second value in the second row of the new list would be $self->{list}[ $self->{rc2idx}[1][1] ].
+        # On the other hand the index of the last row of the new list would be $#{$self->{rc2idx}}
+        # or the index of the last column in the first row would be $#{$self->{rc2idx}[0]}.
+
+        if ( $key == KEY_j || $key == VK_DOWN ) {
+            if ( $#{$self->{rc2idx}} == 0 || ! (    $self->{rc2idx}[$self->{cursor}[ROW]+1]
+                                                 && $self->{rc2idx}[$self->{cursor}[ROW]+1][$self->{cursor}[COL]] )
+            ) {
+                $self->__beep();
+            }
+            else {
+                $self->{cursor}[ROW]++;
+                if ( $self->{cursor}[ROW] <= $self->{p_end} ) {
+                    $self->__wr_cell( $self->{cursor}[ROW] - 1, $self->{cursor}[COL] );
+                    $self->__wr_cell( $self->{cursor}[ROW],     $self->{cursor}[COL] );
+                }
+                else {
+                    $self->{row_on_top} = $self->{cursor}[ROW];
+                    $self->{p_begin} = $self->{p_end} + 1;
+                    $self->{p_end}   = $self->{p_end} + $self->{avail_height};
+                    $self->{p_end}   = $#{$self->{rc2idx}} if $self->{p_end} > $#{$self->{rc2idx}};
+                    $self->__wr_screen();
+                }
+            }
+        }
+        elsif ( $key == KEY_k || $key == VK_UP ) {
+            if ( $self->{cursor}[ROW] == 0 ) {
+                $self->__beep();
+            }
+            else {
+                $self->{cursor}[ROW]--;
+                if ( $self->{cursor}[ROW] >= $self->{p_begin} ) {
+                    $self->__wr_cell( $self->{cursor}[ROW] + 1, $self->{cursor}[COL] );
+                    $self->__wr_cell( $self->{cursor}[ROW],     $self->{cursor}[COL] );
+                }
+                else {
+                    $self->{row_on_top} = $self->{cursor}[ROW] - ( $self->{avail_height} - 1 );
+                    $self->{p_end}   = $self->{p_begin} - 1;
+                    $self->{p_begin} = $self->{p_begin} - $self->{avail_height};
+                    $self->{p_begin} = 0 if $self->{p_begin} < 0;
+                    $self->__wr_screen();
+                }
+            }
+        }
+        elsif ( $key == KEY_TAB || $key == CONTROL_I ) {
+            if (    $self->{cursor}[ROW] == $#{$self->{rc2idx}}
+                 && $self->{cursor}[COL] == $#{$self->{rc2idx}[$self->{cursor}[ROW]]}
+            ) {
+                $self->__beep();
+            }
+            else {
+                if ( $self->{cursor}[COL] < $#{$self->{rc2idx}[$self->{cursor}[ROW]]} ) {
+                    $self->{cursor}[COL]++;
+                    $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] - 1 );
+                    $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
+                }
+                else {
+                    $self->{cursor}[ROW]++;
+                    if ( $self->{cursor}[ROW] <= $self->{p_end} ) {
+                        $self->{cursor}[COL] = 0;
+                        $self->__wr_cell( $self->{cursor}[ROW] - 1, $#{$self->{rc2idx}[$self->{cursor}[ROW] - 1]} );
+                        $self->__wr_cell( $self->{cursor}[ROW],     $self->{cursor}[COL] );
+                    }
+                    else {
+                        $self->{row_on_top} = $self->{cursor}[ROW];
+                        $self->{p_begin} = $self->{p_end} + 1;
+                        $self->{p_end}   = $self->{p_end} + $self->{avail_height};
+                        $self->{p_end}   = $#{$self->{rc2idx}} if $self->{p_end} > $#{$self->{rc2idx}};
+                        $self->{cursor}[COL] = 0;
+                        $self->__wr_screen();
+                    }
+                }
+            }
+        }
+        elsif ( $key == KEY_BSPACE || $key == CONTROL_H || $key == KEY_BTAB ) {
+            if ( $self->{cursor}[COL] == 0 && $self->{cursor}[ROW] == 0 ) {
+                $self->__beep();
+            }
+            else {
+                if ( $self->{cursor}[COL] > 0 ) {
+                    $self->{cursor}[COL]--;
+                    $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] + 1 );
+                    $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
+                }
+                else {
+                    $self->{cursor}[ROW]--;
+                    if ( $self->{cursor}[ROW] >= $self->{p_begin} ) {
+                        $self->{cursor}[COL] = $#{$self->{rc2idx}[$self->{cursor}[ROW]]};
+                        $self->__wr_cell( $self->{cursor}[ROW] + 1, 0 );
+                        $self->__wr_cell( $self->{cursor}[ROW],     $self->{cursor}[COL] );
+                    }
+                    else {
+                        $self->{row_on_top} = $self->{cursor}[ROW] - ( $self->{avail_height} - 1 );
+                        $self->{p_end}   = $self->{p_begin} - 1;
+                        $self->{p_begin} = $self->{p_begin} - $self->{avail_height};
+                        $self->{p_begin} = 0 if $self->{p_begin} < 0;
+                        $self->{cursor}[COL] = $#{$self->{rc2idx}[$self->{cursor}[ROW]]};
+                        $self->__wr_screen();
+                    }
+                }
+            }
+        }
+        elsif ( $key == KEY_l || $key == VK_RIGHT ) {
+            if ( $self->{cursor}[COL] == $#{$self->{rc2idx}[$self->{cursor}[ROW]]} ) {
+                $self->__beep();
+            }
+            else {
+                $self->{cursor}[COL]++;
+                $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] - 1 );
+                $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
+            }
+        }
+        elsif ( $key == KEY_h || $key == VK_LEFT ) {
+            if ( $self->{cursor}[COL] == 0 ) {
+                $self->__beep();
+            }
+            else {
+                $self->{cursor}[COL]--;
+                $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] + 1 );
+                $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
+            }
+        }
+        elsif ( $key == CONTROL_B || $key == VK_PAGE_UP ) {
+            if ( $self->{p_begin} <= 0 ) {
+                $self->__beep();
+            }
+            else {
+                $self->{row_on_top} = $self->{avail_height} * ( int( $self->{cursor}[ROW] / $self->{avail_height} ) - 1 );
+                $self->{cursor}[ROW] -= $self->{avail_height};
+                $self->{p_begin} = $self->{row_on_top};
+                $self->{p_end}   = $self->{p_begin} + $self->{avail_height} - 1;
+                $self->__wr_screen();
+            }
+        }
+        elsif ( $key == CONTROL_F || $key == VK_PAGE_DOWN ) {
+            if ( $self->{p_end} >= $#{$self->{rc2idx}} ) {
+                $self->__beep();
+            }
+            else {
+                $self->{row_on_top} = $self->{avail_height} * ( int( $self->{cursor}[ROW] / $self->{avail_height} ) + 1 );
+                $self->{cursor}[ROW] += $self->{avail_height};
+                if ( $self->{cursor}[ROW] >= $#{$self->{rc2idx}} ) {
+                    if ( $#{$self->{rc2idx}} == $self->{row_on_top} || ! $self->{rest} || $self->{cursor}[COL] <= $self->{rest} - 1 ) {
+                        if ( $self->{cursor}[ROW] != $#{$self->{rc2idx}} ) {
+                            $self->{cursor}[ROW] = $#{$self->{rc2idx}};
+                        }
+                        if ( $self->{rest} && $self->{cursor}[COL] > $self->{rest} - 1 ) {
+                            $self->{cursor}[COL] = $#{$self->{rc2idx}[$self->{cursor}[ROW]]};
+                        }
+                    }
+                    else {
+                        $self->{cursor}[ROW] = $#{$self->{rc2idx}} - 1;
+                    }
+                }
+                $self->{p_begin} = $self->{row_on_top};
+                $self->{p_end}   = $self->{p_begin} + $self->{avail_height} - 1;
+                $self->{p_end}   = $#{$self->{rc2idx}} if $self->{p_end} > $#{$self->{rc2idx}};
+                $self->__wr_screen();
+            }
+        }
+        elsif ( $key == CONTROL_A || $key == VK_HOME ) {
+            if ( $self->{cursor}[COL] == 0 && $self->{cursor}[ROW] == 0 ) {
+                $self->__beep();
+            }
+            else {
+                $self->{row_on_top} = 0;
+                $self->{cursor}[ROW] = $self->{row_on_top};
+                $self->{cursor}[COL] = 0;
+                $self->{p_begin} = $self->{row_on_top};
+                $self->{p_end}   = $self->{p_begin} + $self->{avail_height} - 1;
+                $self->{p_end}   = $#{$self->{rc2idx}} if $self->{p_end} > $#{$self->{rc2idx}};
+                $self->__wr_screen();
+            }
+        }
+        elsif ( $key == CONTROL_E || $key == VK_END ) {
+            if ( $self->{order} == 1 && $self->{rest} ) {
+                if (    $self->{cursor}[ROW] == $#{$self->{rc2idx}} - 1
+                     && $self->{cursor}[COL] == $#{$self->{rc2idx}[$self->{cursor}[ROW]]}
+                ) {
+                    $self->__beep();
+                }
+                else {
+                    $self->{row_on_top} = @{$self->{rc2idx}} - ( @{$self->{rc2idx}} % $self->{avail_height} || $self->{avail_height} );
+                    $self->{cursor}[ROW] = $#{$self->{rc2idx}} - 1;
+                    $self->{cursor}[COL] = $#{$self->{rc2idx}[$self->{cursor}[ROW]]};
+                    if ( $self->{row_on_top} == $#{$self->{rc2idx}} ) {
+                        $self->{row_on_top} = $self->{row_on_top} - $self->{avail_height};
+                        $self->{p_begin} = $self->{row_on_top};
+                        $self->{p_end}   = $self->{p_begin} + $self->{avail_height} - 1;
+                    }
+                    else {
+                        $self->{p_begin} = $self->{row_on_top};
+                        $self->{p_end}   = $#{$self->{rc2idx}};
+                    }
+                    $self->__wr_screen();
+                }
+            }
+            else {
+                if (    $self->{cursor}[ROW] == $#{$self->{rc2idx}}
+                     && $self->{cursor}[COL] == $#{$self->{rc2idx}[$self->{cursor}[ROW]]}
+                ) {
+                    $self->__beep();
+                }
+                else {
+                    $self->{row_on_top} = @{$self->{rc2idx}} - ( @{$self->{rc2idx}} % $self->{avail_height} || $self->{avail_height} );
+                    $self->{cursor}[ROW] = $#{$self->{rc2idx}};
+                    $self->{cursor}[COL] = $#{$self->{rc2idx}[$self->{cursor}[ROW]]};
+                    $self->{p_begin} = $self->{row_on_top};
+                    $self->{p_end}   = $#{$self->{rc2idx}};
+                    $self->__wr_screen();
+                }
+            }
+        }
+        elsif ( $key == CONTROL_SPACE ) {
+            if ( defined $self->{wantarray} && $self->{wantarray} ) {
+                for my $i ( 0 .. $#{$self->{rc2idx}} ) {
+                    for my $j ( 0 .. $#{$self->{rc2idx}[$i]} ) {
+                        $self->{marked}[$i][$j] = $self->{marked}[$i][$j] ? 0 : 1;
+                    }
+                }
+                $self->__wr_screen();
+            }
+        }
+        elsif ( $key == KEY_q || $key == CONTROL_D ) {
+            $self->__reset_term( 1 );
+            return;
+        }
+        elsif ( $key == CONTROL_C ) {
+            $self->__reset_term( 1 );
+            print STDERR "^C\n";
+            exit( 1 );
+        }
+        elsif ( $key == KEY_ENTER ) {
+            #$self->__reset_term( 1 );
+            my @chosen;
+            if ( ! defined $self->{wantarray} ) {
+                $self->__reset_term( 1 );
+                return;
+            }
+            elsif ( $self->{wantarray} ) {
+                if ( $self->{order} == 1 ) {
+                    for my $col ( 0 .. $#{$self->{rc2idx}[0]} ) {
+                        for my $row ( 0 .. $#{$self->{rc2idx}} ) {
+                            if ( $self->{marked}[$row][$col] || $row == $self->{cursor}[ROW] && $col == $self->{cursor}[COL] ) {
+                                my $i = $self->{rc2idx}[$row][$col];
+                                push @chosen, $self->{index} ? $i : $self->{orig_list}[$i];
+                            }
+                        }
+                    }
+                }
+                else {
+                    for my $row ( 0 .. $#{$self->{rc2idx}} ) {
+                        for my $col ( 0 .. $#{$self->{rc2idx}[$row]} ) {
+                            if ( $self->{marked}[$row][$col] || $row == $self->{cursor}[ROW] && $col == $self->{cursor}[COL] ) {
+                                my $i = $self->{rc2idx}[$row][$col];
+                                push @chosen, $self->{index} ? $i : $self->{orig_list}[$i];
+                            }
+                        }
+                    }
+                }
+                $self->__reset_term( 1 );
+                return @chosen;
+            }
+            else {
+                my $i = $self->{rc2idx}[$self->{cursor}[ROW]][$self->{cursor}[COL]];
+                $self->__reset_term( 1 );
+                return $self->{index} ? $i : $self->{orig_list}[$i];
+            }
+        }
+        elsif ( $key == KEY_SPACE ) {
+            if ( defined $self->{wantarray} && $self->{wantarray} ) {
+                if ( ! $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] ) {
+                    $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] = 1;
+                }
+                else {
+                    $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] = 0;
+                }
+                $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
+            }
+        }
+        else {
+            $self->__beep();
+        }
+    }
+}
+
+
+sub __beep {
+    my ( $self ) = @_;
+    print BEEP if $self->{beep};
+}
+
+
+sub __copy_orig_list {
+    my ( $self ) = @_;
+    if ( $self->{ll} ) {
+        if ( $self->{list_to_long} ) {
+            return [ map {
+                my $copy = $_;
+                if ( ! $copy ) {
+                    $copy = $self->{undef} if ! defined $copy;
+                    $copy = $self->{empty} if $copy eq '';
+                }
+                $copy;
+            } @{$self->{orig_list}}[ 0 .. $self->{limit} - 1 ] ];
+        }
+        return [ map {
+            my $copy = $_;
+            if ( ! $copy ) {
+                $copy = $self->{undef} if ! defined $copy;
+                $copy = $self->{empty} if $copy eq '';
+            }
+            $copy;
+        } @{$self->{orig_list}} ];
+    }
+    else {
+        if ( $self->{list_to_long} ) {
+            return [ map {
+                my $copy = $_;
+                if ( ! $copy ) {
+                    $copy = $self->{undef} if ! defined $copy;
+                    $copy = $self->{empty} if $copy eq '';
+                }
+                if ( ref $copy ) {
+                    $copy = sprintf "%s(0x%x)", ref $copy, $copy;
+                }
+                $copy =~ s/\p{Space}/ /g;  # replace, but don't squash sequences of spaces
+                $copy =~ s/\p{C}//g;
+                $copy;
+            } @{$self->{orig_list}}[ 0 .. $self->{limit} - 1 ] ];
+        }
+        return [ map {
+            my $copy = $_;
+            if ( ! $copy ) {
+                $copy = $self->{undef} if ! defined $copy;
+                $copy = $self->{empty} if $copy eq '';
+            }
+            if ( ref $copy ) {
+                $copy = sprintf "%s(0x%x)", ref $copy, $copy;
+            }
+            $copy =~ s/\p{Space}/ /g;
+            $copy =~ s/\p{C}//g;
+            $copy;
+        } @{$self->{orig_list}} ];
+    }
+}
+
+
+sub __length_longest {
+    my ( $self ) = @_;
+    if ( defined $self->{ll} ) {
+        $self->{length_longest} = $self->{ll};
+        $self->{length} = [];
+    }
+    else {
+        my $list = $self->{list};
+        my $len = [];
+        my $longest = 0;
+        for my $i ( 0 .. $#$list ) {
+            my $gcs = Unicode::GCString->new( $list->[$i] );
+            $len->[$i] = $gcs->columns();
+            $longest = $len->[$i] if $len->[$i] > $longest;
+        }
+        $self->{length_longest} = $longest;
+        $self->{length} = $len;
+    }
+}
+
+
+sub __write_first_screen {
+    my ( $self ) = @_;
+    ( $self->{term_width}, $self->{term_height} ) = $self->__get_term_size();
+    ( $self->{avail_width}, $self->{avail_height} ) = ( $self->{term_width}, $self->{term_height} );
+    if ( $self->{max_width} && $self->{avail_width} > $self->{max_width} ) {
+        $self->{avail_width} = $self->{max_width};
+    }
+    if ( $self->{mouse} == 2 ) {
+        $self->{avail_width}  = MAX_COL_MOUSE_1003 if $self->{avail_width}  > MAX_COL_MOUSE_1003;
+        $self->{avail_height} = MAX_ROW_MOUSE_1003 if $self->{avail_height} > MAX_ROW_MOUSE_1003;
+    }
+    $self->{avail_width} = 1 if $self->{avail_width} < 1;
+    $self->__prepare_promptline();
+    $self->{tail} = $self->{page} ? 1 : 0;
+    $self->{avail_height} -= $self->{nr_prompt_lines} + $self->{tail};
+    if ( $self->{avail_height} < $self->{keep} ) {
+        my $height = ( $self->__get_term_size() )[1];
+        $self->{avail_height} = $height >= $self->{keep} ? $self->{keep} : $height;
+        $self->{avail_height} = 1 if $self->{avail_height} < 1;
+    }
+    if ( $self->{max_height} && $self->{max_height} < $self->{avail_height} ) {
+        $self->{avail_height} = $self->{max_height};
+    }
+    $self->__size_and_layout();
+    $self->__prepare_page_number() if $self->{page};
+    $self->{avail_height_idx} = $self->{avail_height} - 1;
+    $self->{p_begin}    = 0;
+    $self->{p_end}      = $self->{avail_height_idx} > $#{$self->{rc2idx}} ? $#{$self->{rc2idx}} : $self->{avail_height_idx};
+    $self->{marked}     = [];
+    $self->{row_on_top} = 0;
+    $self->{screen_row} = 0;
+    $self->{screen_col} = 0;
+    $self->{cursor}     = [ 0, 0 ];
+    $self->__set_default_cell() if defined $self->{default} && $self->{default} <= $#{$self->{list}};
+    print CLEAR_SCREEN if $self->{clear_screen};
+    print $self->{prompt_copy} if $self->{prompt} ne '';
+    $self->__wr_screen();
+    $self->__term_cursor_position() if $self->{mouse};
+}
+
+
+sub __prepare_promptline {
+    my ( $self ) = @_;
+    if ( $self->{prompt} eq '' ) {
+        $self->{nr_prompt_lines} = 0;
+        return;
+    }
+    $self->{prompt} =~ s/[^\n\P{Space}]/ /g;
+    $self->{prompt} =~ s/[^\n\P{C}]//g;
+    my $gcs_prompt = Unicode::GCString->new( $self->{prompt} );
+    if ( $self->{prompt} !~ /\n/ && $gcs_prompt->columns() <= $self->{avail_width} ) {
+        $self->{nr_prompt_lines} = 1;
+        $self->{prompt_copy} = $self->{prompt} . "\n\r";
+    }
+    else {
+        my $line_fold = Text::LineFold->new(
+            Charset=> 'utf-8',
+            ColMax => $self->{avail_width},
+            OutputCharset => '_UNICODE_',
+            Urgent => 'FORCE'
+        );
+        if ( defined $self->{lf} ) {
+            $self->{prompt_copy} = $line_fold->fold( ' ' x ( $self->{lf}[0] // 0 ), ' ' x ( $self->{lf}[1] // 0 ), $self->{prompt} );
+        }
+        else {
+            $self->{prompt_copy} = $line_fold->fold( $self->{prompt}, 'PLAIN' );
+        }
+        $self->{nr_prompt_lines} = $self->{prompt_copy} =~ s/\n/\n\r/g;
+    }
+}
+
+
+sub __size_and_layout {
+    my ( $self ) = @_;
+    my $layout = $self->{layout};
+    $self->{rc2idx} = [];
+    if ( $self->{length_longest} > $self->{avail_width} ) {
+        $self->{avail_col_width} = $self->{avail_width};
+        $layout = 3;
+    }
+    else {
+        $self->{avail_col_width} = $self->{length_longest};
+    }
+    my $all_in_first_row;
+    if ( $layout == 2 ) {
+        $layout = 3 if scalar @{$self->{list}} <= $self->{avail_height};
+    }
+    elsif ( $layout < 2 ) {
+        for my $idx ( 0 .. $#{$self->{list}} ) {
+            $all_in_first_row .= $self->{list}[$idx];
+            $all_in_first_row .= ' ' x $self->{pad_one_row} if $idx < $#{$self->{list}};
+            my $gcs_first_row = Unicode::GCString->new( $all_in_first_row );
+            if ( $gcs_first_row->columns() > $self->{avail_width} ) {
+                $all_in_first_row = '';
+                last;
+            }
+        }
+    }
+    if ( $all_in_first_row ) {
+        $self->{rc2idx}[0] = [ 0 .. $#{$self->{list}} ];
+    }
+    elsif ( $layout == 3 ) {
+        if ( $self->{length_longest} <= $self->{avail_width} ) {
+            for my $idx ( 0 .. $#{$self->{list}} ) {
+                $self->{rc2idx}[$idx][0] = $idx;
+            }
+        }
+        else {
+            for my $idx ( 0 .. $#{$self->{list}} ) {
+                my $gcs_element = Unicode::GCString->new( $self->{list}[$idx] );
+                if ( $gcs_element->columns > $self->{avail_width} ) {
+                    $self->{list}[$idx] = $self->__unicode_trim( $gcs_element, $self->{avail_width} - 3 ) . '...';
+                }
+                $self->{rc2idx}[$idx][0] = $idx;
+            }
+        }
+    }
+    else {
+        # auto_format
+        my $tmp_avail_width = $self->{avail_width};
+        if ( $self->{layout} == 1 || $self->{layout} == 2 ) {
+            my $tmc = int( @{$self->{list}} / $self->{avail_height} );
+            $tmc++ if @{$self->{list}} % $self->{avail_height};
+            $tmc *= $self->{col_width};
+            if ( $tmc < $tmp_avail_width ) {
+                $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 1.5 ) ) if $self->{layout} == 1;
+                $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 6 ) )   if $self->{layout} == 2;
+                $tmp_avail_width = $tmc;
+            }
+        }
+        # order
+        my $cols_per_row = int( $tmp_avail_width / $self->{col_width} );
+        $cols_per_row = 1 if $cols_per_row < 1;
+        my $rows = int( ( $#{$self->{list}} + $cols_per_row ) / $cols_per_row );
+        $self->{rest} = @{$self->{list}} % $cols_per_row;
+        if ( $self->{order} == 1 ) {
+            my @rearranged_idx;
+            my $begin = 0;
+            my $end = $rows - 1;
+            for my $c ( 0 .. $cols_per_row - 1 ) {
+                --$end if $self->{rest} && $c >= $self->{rest};
+                $rearranged_idx[$c] = [ $begin .. $end ];
+                $begin = $end + 1;
+                $end = $begin + $rows - 1;
+            }
+            for my $r ( 0 .. $rows - 1 ) {
+                my @temp_idx;
+                for my $c ( 0 .. $cols_per_row - 1 ) {
+                    next if $self->{rest} && $r == $rows - 1 && $c >= $self->{rest};
+                    push @temp_idx, $rearranged_idx[$c][$r];
+                }
+                push @{$self->{rc2idx}}, \@temp_idx;
+            }
+        }
+        else {
+            my $begin = 0;
+            my $end = $cols_per_row - 1;
+            $end = $#{$self->{list}} if $end > $#{$self->{list}};
+            push @{$self->{rc2idx}}, [ $begin .. $end ];
+            while ( $end < $#{$self->{list}} ) {
+                $begin += $cols_per_row;
+                $end   += $cols_per_row;
+                $end    = $#{$self->{list}} if $end > $#{$self->{list}};
+                push @{$self->{rc2idx}}, [ $begin .. $end ];
+            }
+        }
+    }
+}
+
+
+sub __unicode_trim {
+    my ( $self, $gcs, $len ) = @_;
+    return '' if $len <= 0; #
+    my $pos = $gcs->pos;
+    $gcs->pos( 0 );
+    my $cols = 0;
+    my $gc;
+    while ( defined( $gc = $gcs->next ) ) {
+        if ( $len < ( $cols += $gc->columns ) ) {
+            my $ret = $gcs->substr( 0, $gcs->pos - 1 );
+            $gcs->pos( $pos );
+            return $ret->as_string;
+        }
+    }
+    $gcs->pos( $pos );
+    return $gcs->as_string;
+}
+
+
+sub __prepare_page_number {
+    my ( $self ) = @_;
+    $self->{pp} = int( $#{$self->{rc2idx}} / ( $self->{avail_height} + $self->{tail} ) ) + 1;
+    if ( $self->{pp} > 1 ) {
+        $self->{pp} = int( $#{$self->{rc2idx}} / $self->{avail_height} ) + 1;
+        $self->{width_pp} = length $self->{pp};
+        $self->{pp_printf_fmt} = "--- Page %0*d/%d ---";
+        $self->{pp_printf_type} = 0;
+        if ( length sprintf( $self->{pp_printf_fmt}, $self->{width_pp}, $self->{pp}, $self->{pp} ) > $self->{avail_width} ) {
+            $self->{pp_printf_fmt} = "%0*d/%d";
+            if ( length sprintf( $self->{pp_printf_fmt}, $self->{width_pp}, $self->{pp}, $self->{pp} ) > $self->{avail_width} ) {
+                $self->{width_pp} = $self->{avail_width} if $self->{width_pp} > $self->{avail_width};
+                $self->{pp_printf_fmt} = "%0*.*s";
+                $self->{pp_printf_type} = 1;
+            }
+        }
+    }
+    else {
+        $self->{avail_height} += $self->{tail};
+        $self->{tail} = 0;
+    }
+}
+
+
+sub __set_default_cell {
+    my ( $self ) = @_;
+    $self->{tmp_cursor} = [ 0, 0 ];
+    LOOP: for my $i ( 0 .. $#{$self->{rc2idx}} ) {
+        # if ( $self->{default} ~~ @{$self->{rc2idx}[$i]} ) {
+            for my $j ( 0 .. $#{$self->{rc2idx}[$i]} ) {
+                if ( $self->{default} == $self->{rc2idx}[$i][$j] ) {
+                    $self->{tmp_cursor} = [ $i, $j ];
+                    last LOOP;
+                }
+            }
+        # }
+    }
+    while ( $self->{tmp_cursor}[ROW] > $self->{p_end} ) {
+        $self->{row_on_top} = $self->{avail_height} * ( int( $self->{cursor}[ROW] / $self->{avail_height} ) + 1 );
+        $self->{cursor}[ROW] = $self->{row_on_top};
+        $self->{p_begin} = $self->{row_on_top};
+        $self->{p_end} = $self->{p_begin} + $self->{avail_height} - 1;
+        $self->{p_end} = $#{$self->{rc2idx}} if $self->{p_end} > $#{$self->{rc2idx}};
+    }
+    $self->{cursor} = $self->{tmp_cursor};
+}
+
+
+sub __goto {
+    my ( $self, $newrow, $newcol ) = @_;
+    if ( $newrow > $self->{screen_row} ) {
+        print CR, LF x ( $newrow - $self->{screen_row} );
+        $self->{screen_row} += ( $newrow - $self->{screen_row} );
+        $self->{screen_col} = 0;
+    }
+    elsif ( $newrow < $self->{screen_row} ) {
+        print UP x ( $self->{screen_row} - $newrow );
+        $self->{screen_row} -= ( $self->{screen_row} - $newrow );
+    }
+    if ( $newcol > $self->{screen_col} ) {
+        print RIGHT x ( $newcol - $self->{screen_col} );
+        $self->{screen_col} += ( $newcol - $self->{screen_col} );
+    }
+    elsif ( $newcol < $self->{screen_col} ) {
+        print LEFT x ( $self->{screen_col} - $newcol );
+        $self->{screen_col} -= ( $self->{screen_col} - $newcol );
+    }
+}
+
+
+sub __wr_screen {
+    my ( $self ) = @_;
+    $self->__goto( 0, 0 );
+    print CLEAR_TO_END_OF_SCREEN;
+    if ( $self->{page} && $self->{pp} > 1 ) {
+        $self->__goto( $self->{avail_height_idx} + $self->{tail}, 0 );
+        if ( $self->{pp_printf_type} == 0 ) {
+            printf $self->{pp_printf_fmt}, $self->{width_pp}, int( $self->{row_on_top} / $self->{avail_height} ) + 1, $self->{pp};
+            $self->{screen_col} += length sprintf $self->{pp_printf_fmt}, $self->{width_pp}, int( $self->{row_on_top} / $self->{avail_height} ) + 1, $self->{pp};
+        }
+        elsif ( $self->{pp_printf_type} == 1 ) {
+            printf $self->{pp_printf_fmt}, $self->{width_pp}, $self->{width_pp}, int( $self->{row_on_top} / $self->{avail_height} ) + 1;
+            $self->{screen_col} += length sprintf $self->{pp_printf_fmt}, $self->{width_pp}, $self->{width_pp}, int( $self->{row_on_top} / $self->{avail_height} ) + 1;
+        }
+     }
+    for my $row ( $self->{p_begin} .. $self->{p_end} ) {
+        for my $col ( 0 .. $#{$self->{rc2idx}[$row]} ) {
+            $self->__wr_cell( $row, $col );
+        }
+    }
+    $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
+}
+
+
+sub __wr_cell {
+    my( $self, $row, $col ) = @_;
+    if ( $#{$self->{rc2idx}} == 0 ) {
+        my $lngth = 0;
+        if ( $col > 0 ) {
+            for my $cl ( 0 .. $col - 1 ) {
+                my $gcs_element = Unicode::GCString->new( $self->{list}[$self->{rc2idx}[$row][$cl]] );
+                $lngth += $gcs_element->columns();
+                $lngth += $self->{pad_one_row};
+            }
+        }
+        $self->__goto( $row - $self->{row_on_top}, $lngth );
+        print BOLD, UNDERLINE if $self->{marked}[$row][$col];
+        print REVERSE         if $row == $self->{cursor}[ROW] && $col == $self->{cursor}[COL];
+        print $self->{list}[$self->{rc2idx}[$row][$col]];
+        my $gcs_element = Unicode::GCString->new( $self->{list}[$self->{rc2idx}[$row][$col]] );
+        $self->{screen_col} += $gcs_element->columns();
+    }
+    else {
+        $self->__goto( $row - $self->{row_on_top}, $col * $self->{col_width} );
+        print BOLD, UNDERLINE if $self->{marked}[$row][$col];
+        print REVERSE         if $row == $self->{cursor}[ROW] && $col == $self->{cursor}[COL];
+        print $self->__unicode_sprintf( $self->{rc2idx}[$row][$col] );
+        $self->{screen_col} += $self->{length_longest};
+    }
+    print RESET if $self->{marked}[$row][$col] || $row == $self->{cursor}[ROW] && $col == $self->{cursor}[COL];
+}
+
+
+sub __unicode_sprintf {
+    my ( $self, $idx ) = @_;
+    my $unicode;
+    my $str_length = $self->{length}[$idx] // $self->{length_longest};
+    if ( $str_length > $self->{avail_col_width} ) {
+        my $gcs = Unicode::GCString->new( $self->{list}[$idx] );
+        $unicode = $self->__unicode_trim( $gcs, $self->{avail_col_width} );
+    }
+    elsif ( $str_length < $self->{avail_col_width} ) {
+        if ( $self->{justify} == 0 ) {
+            $unicode = $self->{list}[$idx] . " " x ( $self->{avail_col_width} - $str_length );
+        }
+        elsif ( $self->{justify} == 1 ) {
+            $unicode = " " x ( $self->{avail_col_width} - $str_length ) . $self->{list}[$idx];
+        }
+        elsif ( $self->{justify} == 2 ) {
+            my $all = $self->{avail_col_width} - $str_length;
+            my $half = int( $all / 2 );
+            $unicode = " " x $half . $self->{list}[$idx] . " " x ( $all - $half );
+        }
+    }
+    else {
+        $unicode = $self->{list}[$idx];
+    }
+    return $unicode;
+}
+
+
+
 1;
 
 __END__
-
 
 
 =pod
@@ -1237,13 +1088,13 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.074
+Version 1.074_01
 
 =cut
 
 =head1 SYNOPSIS
 
-    use 5.10.0;
+    use 5.10.1;
     use Term::Choose qw(choose);
 
     my $array_ref = [ qw( one two three four five ) ];
@@ -1256,11 +1107,32 @@ Version 1.074
 
     choose( [ 'Press ENTER to continue' ], { prompt => '' } );    # no choice
 
+OO-interface
+
+    use 5.10.1;
+    use Term::Choose;
+
+    my $array_ref = [ qw( one two three four five ) ];
+
+    my $new = Term::Choose->new();
+
+    my $choice = $new->choose( $array_ref );                       # single choice
+    say $choice;
+
+    $new->config( { justify => 1 } )
+    my @choices = $new->choose( [ 1 .. 100 ], { justify => 1 } );  # multiple choice
+    say "@choices";
+
+    my $stopp = Term::Choose->config( { prompt => '' } )
+    $stopp->choose( [ 'Press ENTER to continue' ] );               # no choice
+
 =head1 DESCRIPTION
 
 Choose from a list of items.
 
-Based on the I<choose> function from the L<Term::Clui> module - for more details see L</MOTIVATION>.
+Based on the I<choose> function from the L<Term::Clui> module.
+
+Term::Choose provides a functional interface (L</SUBROUTINES>) and an object-oriented interface (L</METHODS>).
 
 For OS 'MSWin32' see L<Term::Choose::Win32>.
 
@@ -1270,23 +1142,62 @@ Nothing by default.
 
     use Term::Choose qw(choose);
 
+=head1 METHODS
+
+=head2 new( [ \%options ] )
+
+    $new = Term::Choose->new( { prompt => 1, ... } );
+
+This constructor returns a new Term::Choose object.
+
+The argument - a reference to a hash with C<option-key => option-value> pairs - is optional.
+
+For detailed information about the options see L</Options>.
+
+=head2 config( [ \%options ] )
+
+    $new->config( { prompt => 'Choose:', ... } );
+
+This method expects a hash reference as its argument.
+
+The method C<config> can set/change the different options.
+
+For detailed information about the different options, their allowed and default values see L</Options>.
+
+=head2 choose( $array_ref )
+
+The method C<choose> allows to choose from a list.
+
+The first argument is an array reference which holds the list of the available choices.
+
+As a second and optional argument it can be passed a reference to a hash where the keys are the option names and the values the option values.
+
+    $choice = $new->choose( $array_ref );
+
+    @choices= $new->choose( $array_ref );
+
+              $new->choose( $array_ref );
+
+The array the reference refers to is called in the documentation simply array or list respective elements (of the
+array).
+
+For more information how to use C<choose> and its return values see L<Usage and return values>.
+
 =head1 SUBROUTINES
 
-=head2 choose
+=head2 choose( $array_ref, [ \%options ] )
 
-    $scalar = choose( $array_ref [, \%options] );
+The function C<choose> allows to choose from a list. It takes the same arguments as the method L</choose>.
 
-    @array =  choose( $array_ref [, \%options] );
+    $choice = choose( $array_ref [, \%options] );
+
+    @choices= choose( $array_ref [, \%options] );
 
               choose( $array_ref [, \%options] );
 
-I<choose> expects as a first argument an array reference. The array the reference refers to holds the list items
-available for selection (in void context no selection can be made).
+See the L</Options> section for more details about the different options and how to set them.
 
-The array the reference - passed with the first argument - refers to is called in the documentation simply array or list
-respective elements (of the array).
-
-Options can be passed with a hash reference as a second (optional) argument.
+See also the following section L<Usage and return values>.
 
 =head3 Usage and return values
 
@@ -1549,6 +1460,8 @@ instead of the chosen elements.
 
 =head4 mouse
 
+The following is valid if the OS is not MSWin32. For MSWin32 see the end of this section.
+
 0 - no mouse mode (default)
 
 1 - mouse mode 1003 enabled
@@ -1562,6 +1475,10 @@ instead of the chosen elements.
 
 If a mouse mode is enabled layers for STDIN are changed. Then before leaving I<choose> as a cleanup STDIN is marked as
 UTF-8 with ":encoding(UTF-8)".
+
+If the OS is MSWin32 1, 3 and 4 enable the mouse and are equivalent. The mouse mode 2 enables also the mouse but the
+output width is limited to 223 print-columns and the output height is limited to 223 rows. The mouse mode 0 disables the
+mouse (default).
 
 =head4 keep
 
@@ -1612,11 +1529,11 @@ default: '<empty>'
 
 If I<prompt> lines are folded the option I<lf> allows to insert spaces at beginning of the folded lines.
 
-The option I<lf> expects a reference to an array with two elements;
+The option I<lf> expects a reference to an array with one or two elements;
 
-- first element (INITIAL_TAB): the number of spaces inserted at beginning of paragraphs
+- the first element (INITIAL_TAB) sets the number of spaces inserted at beginning of paragraphs
 
-- second element (SUBSEQUENT_TAB): the number of spaces inserted at the beginning of all broken lines apart from the
+- a second element (SUBSEQUENT_TAB) sets the number of spaces inserted at the beginning of all broken lines apart from the
 beginning of paragraphs
 
 Allowed values for the two elements are: 0 or greater.
@@ -1656,25 +1573,28 @@ Allowed values: 1 or greater
 
 =head3 Error handling
 
+=head4 croak
+
 =over
 
-=item * With no arguments I<choose> dies.
+=item * If passed an invalid number of arguments to a method/function it dies.
 
-=item * With more than two arguments I<choose> dies.
+=item * If passed an invalid argument to a method/function it dies.
 
-=item * If the first argument is not a array reference I<choose> dies.
+=back
 
-=item * If the array referred by the first argument is empty I<choose> returns I<undef> respective an empty list and
-issues a warning.
+=head4 carp
 
-=item * If the (optional) second argument is defined and not a hash reference I<choose> dies.
+=over
 
-=item * If an option does not exist I<choose> warns.
+=item * If the array referred by the first argument is empty I<choose> warns and returns I<undef> respective an empty list.
 
-=item * If an option value is not valid I<choose> warns an falls back to the default value.
+=item * If an option does not exist I<new|config|choose> warns.
 
-=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> I<choose> warns with "EOT: $!" and returns
-I<undef> or an empty list in list context.
+=item * If an option value is not valid I<new|config|choose> warns and the default is used instead.
+
+=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> (I<choose> warns with "EOT: $!" and returns
+I<undef> or an empty list in list context).
 
 =back
 
@@ -1704,6 +1624,38 @@ L<Unicode::GCString>
 
 =back
 
+If the OS is MSWin32 the following module are required additionally
+
+=over
+
+=item
+
+L<Term::Size::Win32>
+
+=item
+
+L<Win32::Console>
+
+=item
+
+L<Win32::Console::ANSI>
+
+=back
+
+else
+
+=over
+
+=item
+
+L<Term::ReadKey>
+
+=item
+
+=back
+
+required.
+
 =head2 Decoded strings
 
 I<choose> expects decoded strings as array elements.
@@ -1718,7 +1670,7 @@ It is required a terminal that uses a monospaced font which supports the printed
 
 =head2 Escape sequences
 
-The Terminal has to understand the following ANSI escape sequences:
+The following ANSI escape sequences are used:
 
     "\e[A"      Cursor Up
 
@@ -1746,72 +1698,19 @@ If the option "clear_screen" is enabled:
 
     "\e[1;1H"   Go to Top Left (Cursor Position)
 
-If a "mouse" mode is enabled:
+If the OS is MSWin32 the Win32::Console::ANSI module is used to understand these escape sequences.
 
-    "\e[6n"     Get Cursor Position (Device Status Report)
+If a "mouse" mode is enabled
 
-Mouse Tracking: The escape sequences
+    "\e[6n"    Get Cursor Position (Device Status Report)
 
-    "\e[?1003h", "\e[?1005h", "\e[?1006h"
+    "\e[?1003h", "\e[?1005h", "\e[?1006h"   Enable Mouse Tracking
 
-and
-
-    "\e[?1003l", "\e[?1005l", "\e[?1006l"
+    "\e[?1003l", "\e[?1005l", "\e[?1006l"   Disable Mouse Tracking
 
 are used to enable/disable the different mouse modes.
 
-=head1 MOTIVATION
-
-The reason for writing L<Term::Choose> was to get something like
-L<Term::Clui::choose|http://search.cpan.org/perldoc?Term%3A%3AClui#SUBROUTINES> but with a nicer output in the case the
-list doesn't fit in one row.
-
-If the list does not fit in one row, I<choose> from L<Term::Clui> puts the items on the screen without ordering the
-items in columns. L<Term::Choose> arranges the items in columns which makes it easier for me to find items and easier to
-navigate on the screen.
-
-=over
-
-=item Differences between L<Term::Clui> and L<Term::Choose>
-
-L<Term::Clui>'s I<choose> expects a I<question> as the first argument, and then the list of items. With L<Term::Choose>
-the available choices are passed with an array reference as first argument. Options can be passed with a hash reference
-as an optional second argument. The I<question> can be passed with the option I<prompt>.
-
-As mentioned above I<choose> from L<Term::Clui> does not order the elements in columns if there is more than one row on
-the screen while L<Term::Choose> arranges the elements in such situations in columns.
-
-Another difference is how lists which don't fit on the screen are handled.
-L<Term::Clui::choose|http://search.cpan.org/perldoc?Term::Clui#SUBROUTINES> asks the user to enter a substring as a
-clue. As soon as the matching items will fit, they are displayed as normal. I<choose> from L<Term::Choose> skips - when
-scrolling and reaching the end (respective the begin) of the screen - to the next (respective previous) page.
-
-Strings with characters where I<length(>characterI<)>* is not equal to the number of print columns of the respective
-character might break the output from L<Term::Clui>. To make L<Term::Choose>'s I<choose> function work with such kind of
-Unicode strings it uses the method I<columns> from L<Unicode::GCString> to determine the string length.
-
-* Perl builtin function I<length>.
-
-Multiline question/prompt: I<choose> from L<Term::Clui> puts the first line on the top, the subsequent lines are
-displayed below the list. I<choose> from L<Term::Choose> puts all lines of a multiline prompt on top of the list.
-
-L<Term::Clui>'s I<choose> prints and returns the chosen items while I<choose> from L<Term::Choose> only returns the
-chosen items.
-
-L<Term::Clui> disables the mouse mode if the environment variable I<CLUI_MOUSE> is set to I<off>. In L<Term::Choose> the
-mouse mode is set with the option I<mouse>.
-
-=item Only in L<Term::Clui>
-
-L<Term::Clui> provides a speaking interface, offers a bundle of command-line related functions and has a fallback to
-work when only Perl core modules are available.
-
-The I<choose> function from L<Term::Clui> can remember choices made in scalar context.
-
-=back
-
-These differences refer to L<Term::Clui> version 1.66. For a more precise description of L<Term::Clui> consult its own
-documentation.
+To read key and mouse events with MSWin32  Win32::Console is used instead.
 
 =head1 SUPPORT
 

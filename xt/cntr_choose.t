@@ -10,7 +10,7 @@ my $file = 'lib/Term/Choose.pm';
 my $test_env = 0;
 
 open my $fh1, '<', $file or die $!;
-while ( my $line = readline $fh1 ) {
+while ( my $line = <$fh1> ) {
     if ( $line =~ /^\s*use\s+warnings\s+FATAL/s ) {
         $test_env++;
     }
@@ -28,10 +28,10 @@ my $pad_before_pad_one_row = 0;
 my $c = 0;
 
 open my $fh2, '<', $file or die $!;
-while ( my $line = readline $fh2 ) {
-    if ( $line =~ /^sub _set_defaults/ .. $line =~ /^\}/ ) {
-        $c++ if $line =~ /^\s*\$\Qconfig->{pad}\E/;
-        if ( $line =~ /^\s*\$\Qconfig->{pad_one_row}\E/ ) {
+while ( my $line = <$fh2> ) {
+    if ( $line =~ /^sub __set_defaults/ .. $line =~ /^\}/ ) {
+        $c++ if $line =~ /^\s*\$self->{pad}/;
+        if ( $line =~ /^\s*\$self->{pad_one_row}/ ) {
             $pad_before_pad_one_row = 1 if $c;
             last;
         }

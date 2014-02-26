@@ -4,6 +4,21 @@ use strict;
 use Module::Build;
 
 
+my %prereqs_os_specific;
+if ( $^O eq 'MSWin32' ) {
+    %prereqs_os_specific = (
+        'Term::Size::Win32'    => 0,
+        'Win32::Console'       => 0,
+        'Win32::Console::ANSI' => 0,
+    );
+}
+else {
+    %prereqs_os_specific = (
+        'Term::ReadKey'        => 0,
+    );
+}
+
+
 my $builder = Module::Build->new(
     module_name         => 'Term::Choose',
     license             => 'perl',
@@ -18,13 +33,14 @@ my $builder = Module::Build->new(
     requires => {
         'perl'              => '5.010001',
         'constant'          => 0,
+        'if'                => 0,
         'strict'            => 0,
         'warnings'          => 0,
         'Carp'              => 0,
         'Exporter'          => 0,
-        'Term::ReadKey'     => 0,
         'Text::LineFold'    => 0,
         'Unicode::GCString' => 0,
+        %prereqs_os_specific,
     },
     add_to_cleanup      => [ 'Term-Choose-*' ],
     #create_makefile_pl => 'traditional',
