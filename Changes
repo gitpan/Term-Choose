@@ -1,6 +1,9 @@
 Revision history for Term::Choose
 
 
+1.075_01   2014-02-27
+        - Increased version number to get "prerequisite" warning.
+
 1.074_01   2014-02-26
         - Rewritten in OO.
         - Outsourced OS specific code to "Term::Choose::Linux" and "Term::Choose::Win32".

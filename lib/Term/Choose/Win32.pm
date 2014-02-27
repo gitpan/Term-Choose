@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.074_01';
+our $VERSION = '1.075_01';
 
 use Exporter qw(import);
 our @EXPORT_OK = qw( __init_term __get_key __get_term_size __term_cursor_position __reset_term );
@@ -198,7 +198,7 @@ Term::Choose::Win32
 
 =head1 VERSION
 
-Version 1.074_01
+Version 1.075_01
 
 =head1 DESCRIPTION
 
