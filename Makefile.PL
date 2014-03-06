@@ -32,7 +32,6 @@ WriteMakefile(
     },
     PREREQ_PM => {
         'constant'          => 0,
-        'if'                => 0,
         'strict'            => 0,
         'warnings'          => 0,
         'Carp'              => 0,

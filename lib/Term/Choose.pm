@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.075_01';
+our $VERSION = '1.100';
 use Exporter 'import';
 our @EXPORT_OK = qw( choose );
 
@@ -17,8 +17,18 @@ no warnings 'utf8';
 #use Log::Log4perl qw( get_logger );
 #my $log = get_logger( 'Term::Choose' );
 
-use if $^O eq 'MSWin32', 'Term::Choose::Win32' => qw( __init_term __get_key __get_term_size __term_cursor_position __reset_term );
-use if $^O ne 'MSWin32', 'Term::Choose::Linux' => qw( __init_term __get_key __get_term_size __term_cursor_position __reset_term );
+my $Plugin_Package;
+
+BEGIN {
+    if ( $^O eq 'MSWin32' ) {
+        require Term::Choose::Win32;
+        $Plugin_Package = 'Term::Choose::Win32';
+    }
+    else {
+        require Term::Choose::Linux;
+        $Plugin_Package = 'Term::Choose::Linux';
+    }
+}
 
 use constant {
     ROW     => 0,
@@ -33,6 +43,9 @@ use constant {
     LEFT                            => "\e[D",
     LF                              => "\n",
     CR                              => "\r",
+
+    HIDE_CURSOR                     => "\e[?25l",
+    SHOW_CURSOR                     => "\e[?25h",
 
     MAX_ROW_MOUSE_1003              => 223,
     MAX_COL_MOUSE_1003              => 223,
@@ -81,16 +94,18 @@ use constant {
     VK_UP        => 38,
     VK_RIGHT     => 39,
     VK_DOWN      => 40,
-    VK_INSERT    => 45,
-    VK_DELETE    => 46,
+    VK_INSERT    => 45, # unused
+    VK_DELETE    => 46, # unused
 };
 
 
 sub new {
-    my $class = shift;
-    my ( $opt ) = @_;
-    croak "new: called with " . scalar @_ . " arguments - 0 or 1 arguments expected." if @_ > 1;
-    croak "new: the (optional) argument must be a HASH reference." if defined $opt && ref( $opt ) ne 'HASH';
+    return bless {}, $_[0] if @_ == 1;
+    return bless {}, $_[0] if ! defined $_[1];
+    my ( $class, $opt ) = @_;
+    my $argc = @_ - 1;
+    croak "new: called with $argc arguments - 0 or 1 arguments expected." if $argc > 1;
+    croak "new: the (optional) argument must be a HASH reference."        if ref $opt ne 'HASH';
     my $self = {};
     bless $self, $class;
     $self->__validate_options( $opt );
@@ -168,7 +183,7 @@ sub __validate_options {
             $self->{$key} = $opt->{$key};
         }
         elsif ( $key eq 'lf' ) {
-            if (    ref( $opt->{$key} ) ne 'ARRAY' || @{$opt->{$key}} > 2
+            if (    ref $opt->{$key} ne 'ARRAY' || @{$opt->{$key}} > 2
                  || defined $opt->{$key}[0] && $opt->{$key}[0] !~ m/^[0-9]+\z/
                  || defined $opt->{$key}[1] && $opt->{$key}[1] !~ m/^[0-9]+\z/
             ) {
@@ -198,133 +213,77 @@ sub __validate_options {
 }
 
 
-sub __handle_mouse {
-    my ( $self, $event_type, $abs_mouse_x, $abs_mouse_y ) = @_;
-    my $button_drag = ( $event_type & 0x20 ) >> 5;
-    return NEXT_get_key if $button_drag;
-    my $button_number;
-    my $low_2_bits = $event_type & 0x03;
-    if ( $low_2_bits == 3 ) {
-        $button_number = 0;
+sub __init_term {
+    my ( $self ) = @_;
+    $self->{old_handle} = select( $self->{handle_out} );
+    $self->{backup_flush} = $|;
+    $| = 1;
+    ( $self->{plugin}, $self->{mouse} ) = $Plugin_Package->new()->__set_mode( $self->{mouse} );
+    print HIDE_CURSOR if $self->{hide_cursor};
+}
+
+
+sub __reset_term {
+    my ( $self, $from_choose ) = @_;
+    if ( $from_choose ) {
+        print CR, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
+        print CLEAR_TO_END_OF_SCREEN;
     }
-    else {
-        if ( $event_type & 0x40 ) {
-            $button_number = $low_2_bits + 4; # 4,5
-        }
-        else {
-            $button_number = $low_2_bits + 1; # 1,2,3
-        }
-    }
-    if ( $button_number == 4 ) {
-        return VK_PAGE_UP;
-    }
-    elsif ( $button_number == 5 ) {
-        return VK_PAGE_DOWN;
-    }
-    my $pos_top_row = $self->{abs_cursor_y} - $self->{cursor_row};
-    return NEXT_get_key if $abs_mouse_y < $pos_top_row;
-    my $mouse_row = $abs_mouse_y - $pos_top_row;
-    my $mouse_col = $abs_mouse_x;
-    my( $found_row, $found_col );
-    my $found = 0;
-    if ( $#{$self->{rc2idx}} == 0 ) {
-        my $row = 0;
-        if ( $row == $mouse_row ) {
-            my $end_last_col = 0;
-            COL: for my $col ( 0 .. $#{$self->{rc2idx}[$row]} ) {
-                my $gcs_element = Unicode::GCString->new( $self->{list}[$self->{rc2idx}[$row][$col]] );
-                my $end_this_col = $end_last_col + $gcs_element->columns() + $self->{pad_one_row};
-                if ( $col == 0 ) {
-                    $end_this_col -= int( $self->{pad_one_row} / 2 );
-                }
-                if ( $col == $#{$self->{rc2idx}[$row]} ) {
-                    $end_this_col = $self->{avail_width} if $end_this_col > $self->{avail_width};
-                }
-                if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
-                    $found = 1;
-                    $found_row = $row + $self->{row_on_top};
-                    $found_col = $col;
-                    last;
-                }
-                $end_last_col = $end_this_col;
-            }
+    print RESET;
+    $self->{plugin}->__reset_mode( $self->{mouse} );
+    print SHOW_CURSOR if $self->{hide_cursor};
+    $| = $self->{backup_flush};
+    select( $self->{old_handle} );
+    if ( $self->{backup_opt} ) {
+        my $backup_opt = delete $self->{backup_opt};
+        for my $key ( keys %$backup_opt ) {
+            $self->{$key} = $backup_opt->{$key};
         }
     }
-    else {
-        ROW: for my $row ( 0 .. $#{$self->{rc2idx}} ) {
-            if ( $row == $mouse_row ) {
-                my $end_last_col = 0;
-                COL: for my $col ( 0 .. $#{$self->{rc2idx}[$row]} ) {
-                    my $end_this_col = $end_last_col + $self->{col_width};
-                    if ( $col == 0 ) {
-                        $end_this_col -= int( $self->{pad} / 2 );
-                    }
-                    if ( $col == $#{$self->{rc2idx}[$row]} ) {
-                        $end_this_col = $self->{avail_width} if $end_this_col > $self->{avail_width};
-                    }
-                    if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
-                        $found = 1;
-                        $found_row = $row + $self->{row_on_top};
-                        $found_col = $col;
-                        last ROW;
-                    }
-                    $end_last_col = $end_this_col;
-                }
-            }
-        }
-    }
-    return NEXT_get_key if ! $found;
-    my $return_char = '';
-    if ( $button_number == 1 ) {
-        $return_char = KEY_ENTER;
-    }
-    elsif ( $button_number == 3 ) {
-        $return_char = KEY_SPACE;
-    }
-    else {
-        return NEXT_get_key;
-    }
-    if ( $found_row != $self->{cursor}[ROW] || $found_col != $self->{cursor}[COL] ) {
-        my $tmp = $self->{cursor};
-        $self->{cursor} = [ $found_row, $found_col ];
-        $self->__wr_cell( $tmp->[0], $tmp->[1] );
-        $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
-    }
-    return $return_char;
+}
+
+
+sub __get_key {
+    my ( $self ) = @_;
+    my $key = $self->{plugin}->__get_key_OS( $self->{mouse} );
+    return $key if ref $key ne 'ARRAY';
+    return $self->__mouse_info_to_key( @$key );
 }
 
 
 sub config {
-    my $self = shift;
-    my ( $opt ) = @_;
-    croak "config: called with " . scalar @_ . " arguments - 0 or 1 arguments expected." if @_ > 1; # ?
-    croak "config: the argument must be a HASH reference." if defined $opt && ref( $opt ) ne 'HASH';
+    my ( $self, $opt ) = @_;
+    my $argc = @_ - 1;
+    croak "config: called with $argc arguments - 0 or 1 arguments expected." if $argc > 1;
+    croak "config: the argument must be a HASH reference." if defined $_[1] && ref $_[1] ne 'HASH';
     $self->__validate_options( $opt );
 }
 
+
 sub choose {
-    if ( ref( $_[0] ) ne 'Term::Choose' ) {
-        my $n = Term::Choose->new( $_[1] // {} );
-        return $n->choose( $_[0] );
+    if ( ref $_[0] ne 'Term::Choose' ) {
+        return Term::Choose->new( $_[1] )->choose( $_[0] );
     }
-    my $self = shift;
-    my ( $orig_list_ref, $opt ) = @_;
-    croak "choose: called with " . scalar @_ . " arguments - 0 or 1 arguments expected." if @_ < 1 || @_ > 2;
-    croak "choose: the first argument must be an ARRAY reference." if ref( $orig_list_ref ) ne 'ARRAY';
-    croak "choose: the (optional) second argument must be a HASH reference." if defined $opt && ref( $opt ) ne 'HASH';
+    my ( $self, $orig_list_ref, $opt ) = @_;
+    my $argc = @_ - 1;
+    croak "choose: called with $argc arguments - 0 or 1 arguments expected." if $argc < 1 || $argc > 2;
+    croak "choose: the first argument must be an ARRAY reference."           if ref $orig_list_ref ne 'ARRAY';
     if ( ! @$orig_list_ref ) {
         carp "choose: The first argument refers to an empty list!";
         return;
+    }
+    if ( defined $opt ) {
+        croak "choose: the (optional) second argument must be a HASH reference." if ref $opt ne 'HASH';
+        $self->{backup_opt} = { map{ $_ => $self->{$_} } keys %$opt };
+        $self->__validate_options( $opt );
     }
     local $\ = undef;
     local $, = undef;
     $self->{wantarray}  = wantarray;
     $self->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
-    $self->{backup_opt} = { map{ $_ => $self->{$_} } keys %$opt } if $opt;
-    $self->__validate_options( $opt );
     $self->__set_defaults();
     $self->{orig_list} = $orig_list_ref;
-    $self->{list}      = $self->__copy_orig_list();
+    $self->{list}      = $self->__copy_orig_list(); #
     $self->__length_longest();
     $self->{col_width} = $self->{length_longest} + $self->{pad};
     local $SIG{'INT'} = sub {
@@ -341,11 +300,10 @@ sub choose {
             carp "EOT: $!";
             return;
         }
-        my ( $new_width, $new_height ) = $self->__get_term_size();
+        my ( $new_width, $new_height ) = $self->{plugin}->__get_term_size();
         if ( $new_width != $self->{term_width} || $new_height != $self->{term_height} ) {
             $self->{list} = $self->__copy_orig_list();
             print CR, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
-            #print LEFT x $self->{screen_col}, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
             print CLEAR_TO_END_OF_SCREEN;
             $self->__write_first_screen();
             next;
@@ -734,7 +692,7 @@ sub __length_longest {
 
 sub __write_first_screen {
     my ( $self ) = @_;
-    ( $self->{term_width}, $self->{term_height} ) = $self->__get_term_size();
+    ( $self->{term_width}, $self->{term_height} ) = $self->{plugin}->__get_term_size();
     ( $self->{avail_width}, $self->{avail_height} ) = ( $self->{term_width}, $self->{term_height} );
     if ( $self->{max_width} && $self->{avail_width} > $self->{max_width} ) {
         $self->{avail_width} = $self->{max_width};
@@ -748,7 +706,7 @@ sub __write_first_screen {
     $self->{tail} = $self->{page} ? 1 : 0;
     $self->{avail_height} -= $self->{nr_prompt_lines} + $self->{tail};
     if ( $self->{avail_height} < $self->{keep} ) {
-        my $height = ( $self->__get_term_size() )[1];
+        my $height = ( $self->{plugin}->__get_term_size() )[1];
         $self->{avail_height} = $height >= $self->{keep} ? $self->{keep} : $height;
         $self->{avail_height} = 1 if $self->{avail_height} < 1;
     }
@@ -769,7 +727,8 @@ sub __write_first_screen {
     print CLEAR_SCREEN if $self->{clear_screen};
     print $self->{prompt_copy} if $self->{prompt} ne '';
     $self->__wr_screen();
-    $self->__term_cursor_position() if $self->{mouse};
+    $self->{plugin}->__term_cursor_position() if $self->{mouse};
+    $self->{cursor_row} = $self->{screen_row};
 }
 
 
@@ -817,7 +776,7 @@ sub __size_and_layout {
     }
     my $all_in_first_row;
     if ( $layout == 2 ) {
-        $layout = 3 if scalar @{$self->{list}} <= $self->{avail_height};
+        $layout = 3 if scalar @{$self->{list}} <= $self->{avail_height}; # ###
     }
     elsif ( $layout < 2 ) {
         for my $idx ( 0 .. $#{$self->{list}} ) {
@@ -865,14 +824,15 @@ sub __size_and_layout {
         # order
         my $cols_per_row = int( $tmp_avail_width / $self->{col_width} );
         $cols_per_row = 1 if $cols_per_row < 1;
-        my $rows = int( ( $#{$self->{list}} + $cols_per_row ) / $cols_per_row );
+        my $rows = int( ( $#{$self->{list}} + $cols_per_row ) / $cols_per_row ); # -1
         $self->{rest} = @{$self->{list}} % $cols_per_row;
         if ( $self->{order} == 1 ) {
             my @rearranged_idx;
             my $begin = 0;
             my $end = $rows - 1;
             for my $c ( 0 .. $cols_per_row - 1 ) {
-                --$end if $self->{rest} && $c >= $self->{rest};
+                --$end if $self->{rest} && $c >= $self->{rest};                             # rest: bottom
+                #$end = $begin + $self->{rest} if $c == $cols_per_row - 1 && $self->{rest}; # rest: right
                 $rearranged_idx[$c] = [ $begin .. $end ];
                 $begin = $end + 1;
                 $end = $begin + $rows - 1;
@@ -880,7 +840,8 @@ sub __size_and_layout {
             for my $r ( 0 .. $rows - 1 ) {
                 my @temp_idx;
                 for my $c ( 0 .. $cols_per_row - 1 ) {
-                    next if $self->{rest} && $r == $rows - 1 && $c >= $self->{rest};
+                    next if $self->{rest} && $r == $rows - 1 && $c >= $self->{rest};          # rest: bottom
+                    #next if $self->{rest} && $r >= $self->{rest} && $c == $cols_per_row - 1; # rest: right
                     push @temp_idx, $rearranged_idx[$c][$r];
                 }
                 push @{$self->{rc2idx}}, \@temp_idx;
@@ -1072,11 +1033,92 @@ sub __unicode_sprintf {
 }
 
 
+sub __mouse_info_to_key {
+    my ( $self, $abs_cursor_y, $button, $abs_mouse_x, $abs_mouse_y ) = @_;
+    if ( $button == 4 ) {
+        return VK_PAGE_UP;
+    }
+    elsif ( $button == 5 ) {
+        return VK_PAGE_DOWN;
+    }
+    my $pos_top_row = $abs_cursor_y - $self->{cursor_row};
+    return NEXT_get_key if $abs_mouse_y < $pos_top_row;
+    my $mouse_row = $abs_mouse_y - $pos_top_row;
+    my $mouse_col = $abs_mouse_x;
+    my( $found_row, $found_col );
+    my $found = 0;
+    if ( $#{$self->{rc2idx}} == 0 ) {
+        my $row = 0;
+        if ( $row == $mouse_row ) {
+            my $end_last_col = 0;
+            COL: for my $col ( 0 .. $#{$self->{rc2idx}[$row]} ) {
+                my $gcs_element = Unicode::GCString->new( $self->{list}[$self->{rc2idx}[$row][$col]] );
+                my $end_this_col = $end_last_col + $gcs_element->columns() + $self->{pad_one_row};
+                if ( $col == 0 ) {
+                    $end_this_col -= int( $self->{pad_one_row} / 2 );
+                }
+                if ( $col == $#{$self->{rc2idx}[$row]} ) {
+                    $end_this_col = $self->{avail_width} if $end_this_col > $self->{avail_width};
+                }
+                if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
+                    $found = 1;
+                    $found_row = $row + $self->{row_on_top};
+                    $found_col = $col;
+                    last;
+                }
+                $end_last_col = $end_this_col;
+            }
+        }
+    }
+    else {
+        ROW: for my $row ( 0 .. $#{$self->{rc2idx}} ) {
+            if ( $row == $mouse_row ) {
+                my $end_last_col = 0;
+                COL: for my $col ( 0 .. $#{$self->{rc2idx}[$row]} ) {
+                    my $end_this_col = $end_last_col + $self->{col_width};
+                    if ( $col == 0 ) {
+                        $end_this_col -= int( $self->{pad} / 2 );
+                    }
+                    if ( $col == $#{$self->{rc2idx}[$row]} ) {
+                        $end_this_col = $self->{avail_width} if $end_this_col > $self->{avail_width};
+                    }
+                    if ( $end_last_col < $mouse_col && $end_this_col >= $mouse_col ) {
+                        $found = 1;
+                        $found_row = $row + $self->{row_on_top};
+                        $found_col = $col;
+                        last ROW;
+                    }
+                    $end_last_col = $end_this_col;
+                }
+            }
+        }
+    }
+    return NEXT_get_key if ! $found;
+    my $return_char = '';
+    if ( $button == 1 ) {
+        $return_char = KEY_ENTER;
+    }
+    elsif ( $button == 3 ) {
+        $return_char = KEY_SPACE;
+    }
+    else {
+        return NEXT_get_key;
+    }
+    if ( $found_row != $self->{cursor}[ROW] || $found_col != $self->{cursor}[COL] ) {
+        my $tmp = $self->{cursor};
+        $self->{cursor} = [ $found_row, $found_col ];
+        $self->__wr_cell( $tmp->[0], $tmp->[1] );
+        $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
+    }
+    return $return_char;
+}
+
+
 
 1;
 
-__END__
 
+__END__
 
 =pod
 
@@ -1088,7 +1130,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.075_01
+Version 1.100
 
 =cut
 
@@ -1107,7 +1149,7 @@ Version 1.075_01
 
     choose( [ 'Press ENTER to continue' ], { prompt => '' } );    # no choice
 
-OO-interface
+    # or OO-interface
 
     use 5.10.1;
     use Term::Choose;
@@ -1120,7 +1162,7 @@ OO-interface
     say $choice;
 
     $new->config( { justify => 1 } )
-    my @choices = $new->choose( [ 1 .. 100 ], { justify => 1 } );  # multiple choice
+    my @choices = $new->choose( [ 1 .. 100 ] );                    # multiple choice
     say "@choices";
 
     my $stopp = Term::Choose->config( { prompt => '' } )
@@ -1150,9 +1192,9 @@ Nothing by default.
 
 This constructor returns a new Term::Choose object.
 
-The argument - a reference to a hash with C<option-key => option-value> pairs - is optional.
+The argument - a reference to a hash with C<option-key =\> option-value> pairs - is optional.
 
-For detailed information about the options see L</Options>.
+For detailed information about the options see L</OPTIONS>.
 
 =head2 config( [ \%options ] )
 
@@ -1162,7 +1204,7 @@ This method expects a hash reference as its argument.
 
 The method C<config> can set/change the different options.
 
-For detailed information about the different options, their allowed and default values see L</Options>.
+For detailed information about the different options, their allowed and default values see L</OPTIONS>.
 
 =head2 choose( $array_ref )
 
@@ -1181,7 +1223,7 @@ As a second and optional argument it can be passed a reference to a hash where t
 The array the reference refers to is called in the documentation simply array or list respective elements (of the
 array).
 
-For more information how to use C<choose> and its return values see L<Usage and return values>.
+For more information how to use C<choose> and its return values see L<USAGE AND RETURN VALUES>.
 
 =head1 SUBROUTINES
 
@@ -1195,11 +1237,11 @@ The function C<choose> allows to choose from a list. It takes the same arguments
 
               choose( $array_ref [, \%options] );
 
-See the L</Options> section for more details about the different options and how to set them.
+See the L</OPTIONS> section for more details about the different options and how to set them.
 
-See also the following section L<Usage and return values>.
+See also the following section L<USAGE AND RETURN VALUES>.
 
-=head3 Usage and return values
+=head1 USAGE AND RETURN VALUES
 
 =over
 
@@ -1237,7 +1279,7 @@ The "q" key (or Ctrl-D) returns I<undef> or an empty list in list context.
 With a I<mouse> mode enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list
 context the right mouse key can be used instead the "SpaceBar" key.
 
-=head3 Keys to move around:
+=head2 Keys to move around:
 
 =over
 
@@ -1259,7 +1301,7 @@ Home key (or Ctrl-A) to jump to the beginning of the list, End key (or Ctrl-E) t
 
 =back
 
-=head3 Modifications for the output
+=head2 Modifications for the output
 
 For the output on the screen the array elements are modified:
 
@@ -1298,11 +1340,11 @@ if the length of an element is greater than the width of the screen the element 
 All these modifications are made on a copy of the original array so I<choose> returns the chosen elements as they were
 passed to the function without modifications.
 
-=head3 Options
+=head1 OPTIONS
 
 Options which expect a number as their value expect integers.
 
-=head4 prompt
+=head2 prompt
 
 If I<prompt> is undefined a default prompt-string will be shown.
 
@@ -1312,7 +1354,7 @@ default in list and scalar context: 'Your choice:'
 
 default in void context: 'Close with ENTER'
 
-=head4 layout
+=head2 layout
 
 From broad to narrow: 0 > 1 > 2 > 3
 
@@ -1372,7 +1414,7 @@ From broad to narrow: 0 > 1 > 2 > 3
 
 =back
 
-=head4 max_height
+=head2 max_height
 
 If defined sets the maximal number of rows used for printing list items.
 
@@ -1386,7 +1428,7 @@ Allowed values: 1 or greater
 
 (default: undef)
 
-=head4 max_width
+=head2 max_width
 
 If defined, sets the output width to I<max_width> if the terminal width is greater than I<max_width>.
 
@@ -1396,7 +1438,7 @@ Allowed values: 1 or greater
 
 (default: undef)
 
-=head4 order
+=head2 order
 
 If the output has more than one row and more than one column:
 
@@ -1406,7 +1448,7 @@ If the output has more than one row and more than one column:
 
 Default may change in a future release.
 
-=head4 justify
+=head2 justify
 
 0 - elements ordered in columns are left justified (default)
 
@@ -1414,25 +1456,25 @@ Default may change in a future release.
 
 2 - elements ordered in columns are centered
 
-=head4 pad
+=head2 pad
 
 Sets the number of whitespaces between columns. (default: 2)
 
 Allowed values: 0 or greater
 
-=head4 pad_one_row
+=head2 pad_one_row
 
 Sets the number of whitespaces between elements if we have only one row. (default: value of the option I<pad>)
 
 Allowed values: 0 or greater
 
-=head4 clear_screen
+=head2 clear_screen
 
 0 - off (default)
 
 1 - clears the screen before printing the choices
 
-=head4 default
+=head2 default
 
 With the option I<default> it can be selected an element, which will be highlighted as the default instead of the first
 element.
@@ -1445,20 +1487,20 @@ Allowed values: 0 or greater
 
 (default: undef)
 
-=head4 index
+=head2 index
 
 0 - off (default)
 
 1 - return the index of the chosen element instead of the chosen element respective the indices of the chosen elements
 instead of the chosen elements.
 
-=head4 page
+=head2 page
 
 0 - off
 
 1 - print the page number on the bottom of the screen if there is more then one page. (default)
 
-=head4 mouse
+=head2 mouse
 
 The following is valid if the OS is not MSWin32. For MSWin32 see the end of this section.
 
@@ -1480,7 +1522,7 @@ If the OS is MSWin32 1, 3 and 4 enable the mouse and are equivalent. The mouse m
 output width is limited to 223 print-columns and the output height is limited to 223 rows. The mouse mode 0 disables the
 mouse (default).
 
-=head4 keep
+=head2 keep
 
 I<keep> prevents that all the terminal rows are used by the prompt lines.
 
@@ -1492,19 +1534,19 @@ Allowed values: 1 or greater
 
 (default: 5)
 
-=head4 beep
+=head2 beep
 
 0 - off (default)
 
 1 - on
 
-=head4 hide_cursor
+=head2 hide_cursor
 
 0 - keep the terminals highlighting of the cursor position
 
 1 - hide the terminals highlighting of the cursor position (default)
 
-=head4 limit
+=head2 limit
 
 Sets the maximal allowed length of the array. (default: undef)
 
@@ -1513,19 +1555,19 @@ elements.
 
 Allowed values: 1 or greater
 
-=head4 undef
+=head2 undef
 
 Sets the string displayed on the screen instead an undefined element.
 
 default: '<undef>'
 
-=head4 empty
+=head2 empty
 
 Sets the string displayed on the screen instead an empty string.
 
 default: '<empty>'
 
-=head4 lf
+=head2 lf
 
 If I<prompt> lines are folded the option I<lf> allows to insert spaces at beginning of the folded lines.
 
@@ -1542,7 +1584,7 @@ See INITIAL_TAB and SUBSEQUENT_TAB in L<Text::LineFold>.
 
 (default: undef)
 
-=head4 ll
+=head2 ll
 
 If all elements have the same length and this length is known before calling I<choose> the length can be passed with
 this option.
@@ -1571,9 +1613,9 @@ Allowed values: 1 or greater
 
 (default: undef)
 
-=head3 Error handling
+=head1 ERROR HANDLING
 
-=head4 croak
+=head2 croak
 
 =over
 
@@ -1583,7 +1625,7 @@ Allowed values: 1 or greater
 
 =back
 
-=head4 carp
+=head2 carp
 
 =over
 

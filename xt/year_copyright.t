@@ -1,7 +1,6 @@
-#!/usr/bin/env perl
+use 5.010001;
 use warnings;
 use strict;
-use 5.10.1;
 use Test::More tests => 1;
 
 use Time::Piece;

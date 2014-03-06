@@ -1,23 +1,16 @@
-package Term::Choose::Linux;
+package # hide from PAUSE
+Term::Choose::Linux;
 
 use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.075_01';
-
-use Exporter qw(import);
-our @EXPORT_OK = qw( __init_term __get_key __get_term_size __term_cursor_position __reset_term );
+our $VERSION = '1.100';
 
 use Term::ReadKey qw( GetTerminalSize ReadKey ReadMode );
 
 use constant {
-    UP                              => "\e[A",
-    CR                              => "\r",
     GET_CURSOR_POSITION             => "\e[6n",
-
-    HIDE_CURSOR                     => "\e[?25l",
-    SHOW_CURSOR                     => "\e[?25h",
 
     SET_ANY_EVENT_MOUSE_1003        => "\e[?1003h",
     SET_EXT_MODE_MOUSE_1005         => "\e[?1005h",
@@ -25,18 +18,12 @@ use constant {
     UNSET_ANY_EVENT_MOUSE_1003      => "\e[?1003l",
     UNSET_EXT_MODE_MOUSE_1005       => "\e[?1005l",
     UNSET_SGR_EXT_MODE_MOUSE_1006   => "\e[?1006l",
-
-    MAX_ROW_MOUSE_1003              => 223,
-    MAX_COL_MOUSE_1003              => 223,
-
-    CLEAR_TO_END_OF_SCREEN          => "\e[0J",
-    RESET                           => "\e[0m",
 };
 
 use constant {
     NEXT_get_key => -1,
     KEY_BTAB     => 0x08,
-    KEY_ESC      => 0x1b,
+    KEY_ESC      => 0x1b, # unused
 };
 
 use constant {
@@ -48,13 +35,17 @@ use constant {
     VK_UP        => 38,
     VK_RIGHT     => 39,
     VK_DOWN      => 40,
-    VK_INSERT    => 45,
-    VK_DELETE    => 46,
+    VK_INSERT    => 45, # unused
+    VK_DELETE    => 46, # unused
 };
 
 
-sub __get_key {
-    my ( $self ) = @_;
+sub new {
+    return bless {}, $_[0];
+}
+
+sub __get_key_OS {
+    my ( $self, $mouse ) = @_;
     my $c1 = ReadKey( 0 );
     return if ! defined $c1;
     if ( $c1 eq "\e" ) {
@@ -95,8 +86,8 @@ sub __get_key {
                         $rx = ReadKey( 0 );
                     }
                     if ( $rx eq 'R' ) {
+                        #$self->{abs_cursor_x} = $abs_curs_x; # unused
                         $self->{abs_cursor_y} = $abs_curs_y;
-                        $self->{abs_cursor_x} = $abs_curs_x; # unused
                     }
                     return NEXT_get_key;
                 }
@@ -105,13 +96,15 @@ sub __get_key {
                 }
             }
             # http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
-            elsif ( $c3 eq 'M' && $self->{mouse} ) {
+            elsif ( $c3 eq 'M' && $mouse ) {
                 my $event_type = ord( ReadKey( 0 ) ) - 32;
                 my $x          = ord( ReadKey( 0 ) ) - 32;
                 my $y          = ord( ReadKey( 0 ) ) - 32;
-                return $self->__handle_mouse( $event_type, $x, $y );
+                my $button = $self->__mouse_event_to_button( $event_type );
+                return NEXT_get_key if $button == NEXT_get_key;
+                return [ $self->{abs_cursor_y}, $button, $x, $y ];
             }
-            elsif ( $c3 eq '<' && $self->{mouse} ) {  # SGR 1006
+            elsif ( $c3 eq '<' && $mouse ) {  # SGR 1006
                 my $event_type = '';
                 my $m1;
                 while ( ( $m1 = ReadKey( 0 ) ) =~ m/^[0-9]$/ ) {
@@ -132,7 +125,9 @@ sub __get_key {
                 return NEXT_get_key if $m3 !~ /^[mM]$/;
                 my $button_released = $m3 eq 'm' ? 1 : 0;
                 return NEXT_get_key if $button_released;
-                return $self->__handle_mouse( $event_type, $x, $y );
+                my $button = $self->__mouse_event_to_button( $event_type );
+                return NEXT_get_key if $button == NEXT_get_key;
+                return [ $self->{abs_cursor_y}, $button, $x, $y ];
             }
             else {
                 return NEXT_get_key;
@@ -147,32 +142,51 @@ sub __get_key {
     }
 };
 
-sub __init_term {
-    my ( $self ) = @_;
-    $self->{old_handle} = select( $self->{handle_out} );
-    $self->{backup_flush} = $|;
-    $| = 1;
-    if ( $self->{mouse} ) {
-        if ( $self->{mouse} == 3 ) {
+
+sub __mouse_event_to_button {
+    my ( $self, $event_type ) = @_;
+    my $button_drag = ( $event_type & 0x20 ) >> 5;
+    return NEXT_get_key if $button_drag;
+    my $button;
+    my $low_2_bits = $event_type & 0x03;
+    if ( $low_2_bits == 3 ) {
+        $button = 0;
+    }
+    else {
+        if ( $event_type & 0x40 ) {
+            $button = $low_2_bits + 4; # 4,5
+        }
+        else {
+            $button = $low_2_bits + 1; # 1,2,3
+        }
+    }
+    return $button;
+}
+
+
+sub __set_mode {
+    my ( $self, $mouse ) = @_;
+    if ( $mouse ) {
+        if ( $mouse == 3 ) {
             my $return = binmode STDIN, ':utf8';
             if ( $return ) {
                 print SET_ANY_EVENT_MOUSE_1003;
                 print SET_EXT_MODE_MOUSE_1005;
             }
             else {
-                $self->{mouse} = 0;
+                $mouse = 0;
                 warn "binmode STDIN, :utf8: $!\n";
                 warn "mouse-mode disabled\n";
             }
         }
-        elsif ( $self->{mouse} == 4 ) {
+        elsif ( $mouse == 4 ) {
             my $return = binmode STDIN, ':raw';
             if ( $return ) {
                 print SET_ANY_EVENT_MOUSE_1003;
                 print SET_SGR_EXT_MODE_MOUSE_1006;
             }
             else {
-                $self->{mouse} = 0;
+                $mouse = 0;
                 warn "binmode STDIN, :raw: $!\n";
                 warn "mouse-mode disabled\n";
             }
@@ -183,54 +197,40 @@ sub __init_term {
                 print SET_ANY_EVENT_MOUSE_1003;
             }
             else {
-                $self->{mouse} = 0;
+                $mouse = 0;
                 warn "binmode STDIN, :raw: $!\n";
                 warn "mouse-mode disabled\n";
             }
         }
     }
-    print HIDE_CURSOR if $self->{hide_cursor};
     Term::ReadKey::ReadMode( 'ultra-raw' );
+    return $self, $mouse;
 };
 
-sub __reset_term {
-    my ( $self, $from_choose ) = @_;
-    if ( $from_choose ) {
-        print CR, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
-        print CLEAR_TO_END_OF_SCREEN;
-    }
-    print RESET;
-    if ( $self->{mouse} ) {
+
+sub __reset_mode {
+    my ( $self, $mouse ) = @_;
+    if ( $mouse ) {
         binmode STDIN, ':encoding(UTF-8)' or warn "binmode STDIN, :encoding(UTF-8): $!\n";
-        print UNSET_EXT_MODE_MOUSE_1005     if $self->{mouse} == 3;
-        print UNSET_SGR_EXT_MODE_MOUSE_1006 if $self->{mouse} == 4;
+        print UNSET_EXT_MODE_MOUSE_1005     if $mouse == 3;
+        print UNSET_SGR_EXT_MODE_MOUSE_1006 if $mouse == 4;
         print UNSET_ANY_EVENT_MOUSE_1003;
     }
-    print SHOW_CURSOR if $self->{hide_cursor};
-    $| = $self->{backup_flush};
     Term::ReadKey::ReadMode( 'restore' );
-    select( $self->{old_handle} );
-    if ( $self->{backup_opt} ) {
-        my $backup_opt = delete $self->{backup_opt};
-        for my $key ( keys %$backup_opt ) {
-            $self->{$key} = $backup_opt->{$key};
-        }
-    }
 }
 
 
 sub __term_cursor_position {
     my ( $self ) = @_;
-    $self->{abs_cursor_x} = 0;
+    #$self->{abs_cursor_x} = 0; # unused
     $self->{abs_cursor_y} = 0;
     print GET_CURSOR_POSITION;
-    $self->{cursor_row} = $self->{screen_row};
 }
 
 
 sub __get_term_size {
-    my ( $self ) = @_;
-    return GetTerminalSize( $self->{handle_out} );
+    my ( $self, $handle_out ) = @_;
+    return( ( GetTerminalSize( $handle_out ) )[0,1] );
 }
 
 
@@ -250,7 +250,7 @@ Term::Choose::Linux
 
 =head1 VERSION
 
-Version 1.075_01
+Version 1.100
 
 =head1 DESCRIPTION
 

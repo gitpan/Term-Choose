@@ -1,29 +1,16 @@
-package Term::Choose::Win32;
+package # hide from PAUSE
+Term::Choose::Win32;
 
 use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.075_01';
-
-use Exporter qw(import);
-our @EXPORT_OK = qw( __init_term __get_key __get_term_size __term_cursor_position __reset_term );
+our $VERSION = '1.100';
 
 use Term::Size::Win32    qw( chars );
 use Win32::Console       qw( STD_INPUT_HANDLE ENABLE_MOUSE_INPUT ENABLE_PROCESSED_INPUT
                              RIGHT_ALT_PRESSED LEFT_ALT_PRESSED RIGHT_CTRL_PRESSED LEFT_CTRL_PRESSED SHIFT_PRESSED );
 use Win32::Console::ANSI qw( :func );
-
-use constant {
-    UP                              => "\e[A",
-    CR                              => "\r",
-
-    HIDE_CURSOR                     => "\e[?25l",
-    SHOW_CURSOR                     => "\e[?25h",
-
-    CLEAR_TO_END_OF_SCREEN          => "\e[0J",
-    RESET                           => "\e[0m",
-};
 
 use constant {
     NEXT_get_key    => -1,
@@ -39,8 +26,8 @@ use constant {
     VK_UP        => 38,
     VK_RIGHT     => 39,
     VK_DOWN      => 40,
-    VK_INSERT    => 45,
-    VK_DELETE    => 46,
+    VK_INSERT    => 45, # unused
+    VK_DELETE    => 46, # unused
 };
 
 use constant {
@@ -56,15 +43,18 @@ use constant SHIFTED_MASK => RIGHT_ALT_PRESSED  | LEFT_ALT_PRESSED  |
 
 
 INIT {
-    # MSWin32: ordinary   print "\e(U";
-    # causes the the 00-load test to fail
-    # workaround:
+    # ordinary   print "\e(U";
+    # causes the 00-load test to fail
+    # workaround: INIT { print "\e(U" }
     print "\e(U";
 }
 
+sub new {
+    return bless {}, $_[0];
+}
 
-sub __get_key {
-    my ( $self ) = @_;
+sub __get_key_OS {
+    my ( $self, $mouse ) = @_;
     my @event = $self->{input}->Input;
     my $event_type = shift @event;
     return NEXT_get_key if ! defined $event_type;
@@ -91,82 +81,64 @@ sub __get_key {
             elsif ( $v_key_code == VK_UP )        { return VK_UP }
             elsif ( $v_key_code == VK_RIGHT )     { return VK_RIGHT }
             elsif ( $v_key_code == VK_DOWN )      { return VK_DOWN }
-            elsif ( $v_key_code == VK_INSERT )    { return VK_INSERT }
-            elsif ( $v_key_code == VK_DELETE )    { return VK_DELETE }
+            elsif ( $v_key_code == VK_INSERT )    { return VK_INSERT } # unused
+            elsif ( $v_key_code == VK_DELETE )    { return VK_DELETE } # unused
             else                                  { return NEXT_get_key }
         }
     }
-    elsif ( $self->{mouse} && $event_type == 2 ) {
+    elsif ( $mouse && $event_type == 2 ) {
         my( $x, $y, $button_state, $control_key, $event_flags ) = @event;
-        my $compat_event_type;
+        my $button;
         if ( ! $event_flags ) {
             if ( $button_state & LEFTMOST_BUTTON_PRESSED ) {
-                $compat_event_type = 0b0000000; # 1
+                $button = 1;
             }
             elsif ( $button_state & RIGHTMOST_BUTTON_PRESSED ) {
-                $compat_event_type = 0b0000010; # 3
+                $button = 3;
             }
             elsif ( $button_state & FROM_LEFT_2ND_BUTTON_PRESSED ) {
-                $compat_event_type = 0b0000001; # 2
+                $button = 2;
             }
             else {
                 return NEXT_get_key;
             }
         }
         elsif ( $event_flags & MOUSE_WHEELED ) {
-            if ( $button_state >> 24 ) {
-                $compat_event_type = 0b1000001; # 5
-            }
-            else {
-                $compat_event_type = 0b1000000; # 4
-            }
+            $button = $button_state >> 24 ? 5 : 4;
         }
         else {
             return NEXT_get_key;
         }
-        return $self->__handle_mouse( $compat_event_type, $x, $y );
+        return [ $self->{abs_cursor_y}, $button, $x, $y ];
     }
     else {
         return NEXT_get_key;
     }
 }
 
-
-sub __init_term {
-    my ( $self ) = @_;
-    $self->{old_handle} = select( $self->{handle_out} );
-    $self->{backup_flush} = $|;
-    $| = 1;
+sub __set_mode {
+    my ( $self, $mouse ) = @_;
     $self->{input} = Win32::Console->new( STD_INPUT_HANDLE );
     $self->{old_in_mode} = $self->{input}->Mode();
-    $self->{input}->Mode( !ENABLE_PROCESSED_INPUT )                    if ! $self->{mouse};
-    $self->{input}->Mode( !ENABLE_PROCESSED_INPUT|ENABLE_MOUSE_INPUT ) if   $self->{mouse};
-    print HIDE_CURSOR if $self->{hide_cursor};
+    $self->{input}->Mode( !ENABLE_PROCESSED_INPUT )                    if ! $mouse;
+    $self->{input}->Mode( !ENABLE_PROCESSED_INPUT|ENABLE_MOUSE_INPUT ) if   $mouse;
+    return $self, $mouse;
 }
 
 
-sub __reset_term {
-    my ( $self, $from_choose ) = @_;
-    if ( $from_choose ) {
-        #print LEFT x $self->{screen_col}, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
-        print CR, UP x ( $self->{screen_row} + $self->{nr_prompt_lines} );
-        print CLEAR_TO_END_OF_SCREEN;
-    }
-    print RESET;
+sub __reset_mode {
+    my ( $self, $mouse ) = @_;
     $self->{input}->Mode( $self->{old_in_mode} );
     $self->{input}->Flush;
     # workaround Bug #33513:
     $self->{input}{handle} = undef;
     #
-    print SHOW_CURSOR if $self->{hide_cursor};
-    $| = $self->{backup_flush};
-    select( $self->{old_handle} );
 }
 
 
 sub __get_term_size {
-    my ( $self ) = @_;
-    my ( $term_width, $term_height ) = chars( $self->{handle_out} );
+    my ( $self, $handle_out ) = @_;
+    my ( $term_width, $term_height ) = chars( $handle_out );
     return $term_width - 1, $term_height;
 }
 
@@ -174,10 +146,10 @@ sub __get_term_size {
 sub __term_cursor_position {
     my ( $self ) = @_;
     ( $self->{abs_cursor_x}, $self->{abs_cursor_y} ) = Cursor();
-    #$self->{abs_cursor_x}--;
+    #$self->{abs_cursor_x}--; # unused
     $self->{abs_cursor_y}--;
-    $self->{cursor_row} = $self->{screen_row};
 }
+
 
 
 
@@ -198,7 +170,7 @@ Term::Choose::Win32
 
 =head1 VERSION
 
-Version 1.075_01
+Version 1.100
 
 =head1 DESCRIPTION
 

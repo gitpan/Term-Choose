@@ -39,7 +39,7 @@ for my $key ( @all ) {
     next if $key ~~ @deprecated;
     open $fh, '<', $file or die $!;
     while ( my $line = <$fh> ) {
-        if ( $line =~ /^=head4\s\Q$key\E/ ... $line =~ /^=head/ ) {
+        if ( $line =~ /^=head2\s\Q$key\E/ ... $line =~ /^=head/ ) {
             chomp $line;
             next if $line =~ /^\s*\z/;
             push @{$pod{$key}}, $line;

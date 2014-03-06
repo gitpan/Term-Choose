@@ -1,6 +1,10 @@
 Revision history for Term::Choose
 
 
+1.100   2014-03-06
+        - Rewritten in OO.
+        - OS specific code: plugins "Term::Choose::Linux" and "Term::Choose::Win32".
+
 1.075_01   2014-02-27
         - Increased version number to get "prerequisite" warning.
 
