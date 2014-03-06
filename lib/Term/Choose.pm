@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.100';
+our $VERSION = '1.101';
 use Exporter 'import';
 our @EXPORT_OK = qw( choose );
 
@@ -765,20 +765,22 @@ sub __prepare_promptline {
 
 sub __size_and_layout {
     my ( $self ) = @_;
-    my $layout = $self->{layout};
+#    my $layout = $self->{layout};
     $self->{rc2idx} = [];
     if ( $self->{length_longest} > $self->{avail_width} ) {
         $self->{avail_col_width} = $self->{avail_width};
-        $layout = 3;
+#        $layout = 3;
+        $self->{layout} = 3;
     }
     else {
         $self->{avail_col_width} = $self->{length_longest};
     }
     my $all_in_first_row;
-    if ( $layout == 2 ) {
-        $layout = 3 if scalar @{$self->{list}} <= $self->{avail_height}; # ###
-    }
-    elsif ( $layout < 2 ) {
+#    if ( $layout == 2 ) {
+#        $layout = 3 if scalar @{$self->{list}} <= $self->{avail_height};
+#    }
+#    elsif ( $layout < 2 ) {
+    if ( $self->{layout} < 2 ) {
         for my $idx ( 0 .. $#{$self->{list}} ) {
             $all_in_first_row .= $self->{list}[$idx];
             $all_in_first_row .= ' ' x $self->{pad_one_row} if $idx < $#{$self->{list}};
@@ -792,7 +794,8 @@ sub __size_and_layout {
     if ( $all_in_first_row ) {
         $self->{rc2idx}[0] = [ 0 .. $#{$self->{list}} ];
     }
-    elsif ( $layout == 3 ) {
+#    elsif ( $layout == 3 ) {
+    elsif ( $self->{layout} == 3 ) {
         if ( $self->{length_longest} <= $self->{avail_width} ) {
             for my $idx ( 0 .. $#{$self->{list}} ) {
                 $self->{rc2idx}[$idx][0] = $idx;
@@ -817,7 +820,8 @@ sub __size_and_layout {
             $tmc *= $self->{col_width};
             if ( $tmc < $tmp_avail_width ) {
                 $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 1.5 ) ) if $self->{layout} == 1;
-                $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 6 ) )   if $self->{layout} == 2;
+#                $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 6 ) )   if $self->{layout} == 2;
+                $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 4 ) )   if $self->{layout} == 2;
                 $tmp_avail_width = $tmc;
             }
         }
@@ -831,8 +835,8 @@ sub __size_and_layout {
             my $begin = 0;
             my $end = $rows - 1;
             for my $c ( 0 .. $cols_per_row - 1 ) {
-                --$end if $self->{rest} && $c >= $self->{rest};                             # rest: bottom
-                #$end = $begin + $self->{rest} if $c == $cols_per_row - 1 && $self->{rest}; # rest: right
+                --$end if $self->{rest} && $c >= $self->{rest};                                 # rest: bottom
+                #$end = $begin + $self->{rest} -1  if $c == $cols_per_row - 1 && $self->{rest}; # rest: right
                 $rearranged_idx[$c] = [ $begin .. $end ];
                 $begin = $end + 1;
                 $end = $begin + $rows - 1;
@@ -841,7 +845,7 @@ sub __size_and_layout {
                 my @temp_idx;
                 for my $c ( 0 .. $cols_per_row - 1 ) {
                     next if $self->{rest} && $r == $rows - 1 && $c >= $self->{rest};          # rest: bottom
-                    #next if $self->{rest} && $r >= $self->{rest} && $c == $cols_per_row - 1; # rest: right
+                    #next if $c == $cols_per_row - 1 && $self->{rest} && $r >= $self->{rest}; # rest: right
                     push @temp_idx, $rearranged_idx[$c][$r];
                 }
                 push @{$self->{rc2idx}}, \@temp_idx;
@@ -1130,7 +1134,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.100
+Version 1.101
 
 =cut
 
@@ -1165,18 +1169,16 @@ Version 1.100
     my @choices = $new->choose( [ 1 .. 100 ] );                    # multiple choice
     say "@choices";
 
-    my $stopp = Term::Choose->config( { prompt => '' } )
+    my $stopp = Term::Choose->new( { prompt => '' } )
     $stopp->choose( [ 'Press ENTER to continue' ] );               # no choice
 
 =head1 DESCRIPTION
 
 Choose from a list of items.
 
-Based on the I<choose> function from the L<Term::Clui> module.
+Based on the C<choose> function from the L<Term::Clui> module.
 
 Term::Choose provides a functional interface (L</SUBROUTINES>) and an object-oriented interface (L</METHODS>).
-
-For OS 'MSWin32' see L<Term::Choose::Win32>.
 
 =head1 EXPORT
 
@@ -1186,39 +1188,39 @@ Nothing by default.
 
 =head1 METHODS
 
-=head2 new( [ \%options ] )
+=head2 new
 
-    $new = Term::Choose->new( { prompt => 1, ... } );
+    $new = Term::Choose->new( [ \%options] );
 
 This constructor returns a new Term::Choose object.
 
-The argument - a reference to a hash with C<option-key =\> option-value> pairs - is optional.
+The argument - a reference to a hash of "option-key => option-value" pairs - is optional.
 
 For detailed information about the options see L</OPTIONS>.
 
-=head2 config( [ \%options ] )
+=head2 config
 
-    $new->config( { prompt => 'Choose:', ... } );
+    $new->config( \%options );
 
 This method expects a hash reference as its argument.
 
-The method C<config> can set/change the different options.
+The method C<config> sets the different options.
 
 For detailed information about the different options, their allowed and default values see L</OPTIONS>.
 
-=head2 choose( $array_ref )
+=head2 choose
 
-The method C<choose> allows to choose from a list.
+The method C<choose> allows the user to choose from a list.
 
 The first argument is an array reference which holds the list of the available choices.
 
 As a second and optional argument it can be passed a reference to a hash where the keys are the option names and the values the option values.
 
-    $choice = $new->choose( $array_ref );
+    $choice = $new->choose( $array_ref [, \%options] );
 
-    @choices= $new->choose( $array_ref );
+    @choices= $new->choose( $array_ref [, \%options] );
 
-              $new->choose( $array_ref );
+              $new->choose( $array_ref [, \%options] );
 
 The array the reference refers to is called in the documentation simply array or list respective elements (of the
 array).
@@ -1227,7 +1229,7 @@ For more information how to use C<choose> and its return values see L<USAGE AND 
 
 =head1 SUBROUTINES
 
-=head2 choose( $array_ref, [ \%options ] )
+=head2 choose
 
 The function C<choose> allows to choose from a list. It takes the same arguments as the method L</choose>.
 
@@ -1247,37 +1249,37 @@ See also the following section L<USAGE AND RETURN VALUES>.
 
 =item
 
-If I<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and
-confirming with "Return".
+If C<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and
+confirming with c<Return>.
 
-I<choose> then returns the chosen item.
-
-=item
-
-If I<choose> is called in an I<list context>, the user can also mark an item with the "SpaceBar".
-
-I<choose> then returns - when "Return" is pressed - the list of marked items including the highlighted item.
-
-In I<list context> "Ctrl-SpaceBar" inverts the choices: marked items are unmarked and unmarked items are marked.
+C<choose> then returns the chosen item.
 
 =item
 
-If I<choose> is called in an I<void context>, the user can move around but mark nothing; the output shown by I<choose>
-can be closed with "Return".
+If C<choose> is called in an I<list context>, the user can also mark an item with the C<SpaceBar>.
 
-Called in void context I<choose> returns nothing.
+C<choose> then returns - when C<Return> is pressed - the list of marked items including the highlighted item.
+
+In I<list context> C<Ctrl-SpaceBar> inverts the choices: marked items are unmarked and unmarked items are marked.
+
+=item
+
+If C<choose> is called in an I<void context>, the user can move around but mark nothing; the output shown by C<choose>
+can be closed with C<Return>.
+
+Called in void context C<choose> returns nothing.
 
 =back
 
 If the items of the list don't fit on the screen, the user can scroll to the next (previous) page(s).
 
-If the window size is changed, then as soon as the user enters a keystroke I<choose> rewrites the screen. In list
+If the window size is changed, then as soon as the user enters a keystroke C<choose> rewrites the screen. In list
 context marked items are reset.
 
-The "q" key (or Ctrl-D) returns I<undef> or an empty list in list context.
+The C<q> key (or C<Ctrl-D>) returns C<undef> or an empty list in list context.
 
 With a I<mouse> mode enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list
-context the right mouse key can be used instead the "SpaceBar" key.
+context the right mouse key can be used instead the C<SpaceBar> key.
 
 =head2 Keys to move around:
 
@@ -1285,19 +1287,19 @@ context the right mouse key can be used instead the "SpaceBar" key.
 
 =item *
 
-Arrow keys (or hjkl),
+C<Arrow> keys (or C<hjkl>),
 
 =item *
 
-Tab key (or Ctrl-I) to move forward, BackSpace key (or Ctrl-H or Shift-Tab) to move backward,
+C<Tab> key (or C<Ctrl-I>) to move forward, C<BackSpace> key (or C<Ctrl-H> or C<Shift-Tab>) to move backward,
 
 =item *
 
-PageUp key (or Ctrl-B) to go back one page, PageDown key (or Ctrl-F) to go forward one page,
+C<PageUp> key (or C<Ctrl-B>) to go back one page, C<PageDown> key (or C<Ctrl-F>) to go forward one page,
 
 =item *
 
-Home key (or Ctrl-A) to jump to the beginning of the list, End key (or Ctrl-E) to jump to the end of the list.
+C<Home> key (or C<Ctrl-A>) to jump to the beginning of the list, C<End> key (or C<Ctrl-E>) to jump to the end of the list.
 
 =back
 
@@ -1333,11 +1335,11 @@ if the length of an element is greater than the width of the screen the element 
 
     $element = substr( $element, 0, $allowed_length - 3 ) . '...';*
 
-* L<Term::Choose> uses its own function to cut strings which uses print columns for the arithmetic.
+* C<Term::Choose> uses its own function to cut strings which uses print columns for the arithmetic.
 
 =back
 
-All these modifications are made on a copy of the original array so I<choose> returns the chosen elements as they were
+All these modifications are made on a copy of the original array so C<choose> returns the chosen elements as they were
 passed to the function without modifications.
 
 =head1 OPTIONS
@@ -1391,12 +1393,12 @@ From broad to narrow: 0 > 1 > 2 > 3
 2 - layout "V"
 
  .----------------------.   .----------------------.   .----------------------.   .----------------------.
- | ..                   |   | .. ..                |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
- | ..                   |   | .. ..                |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
- | ..                   |   | .. ..                |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
- | ..                   |   | ..                   |   | .. .. ..             |   | .. .. .. .. .. .. .. |
- | ..                   |   |                      |   | .. .. ..             |   | .. .. .. .. .. .. .. |
- | ..                   |   |                      |   |                      |   | .. .. .. .. .. .. .. |
+ | .. ..                |   | .. .. ..             |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
+ | .. ..                |   | .. .. ..             |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
+ | ..                   |   | .. .. ..             |   | .. .. .. ..          |   | .. .. .. .. .. .. .. |
+ |                      |   | .. ..                |   | .. .. ..             |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   | .. .. ..             |   | .. .. .. .. .. .. .. |
+ |                      |   |                      |   |                      |   | .. .. .. .. .. .. .. |
  '----------------------'   '----------------------'   '----------------------'   '----------------------'
 
 =item
@@ -1515,8 +1517,8 @@ The following is valid if the OS is not MSWin32. For MSWin32 see the end of this
 
 4 - extended SGR mouse mode (1006)
 
-If a mouse mode is enabled layers for STDIN are changed. Then before leaving I<choose> as a cleanup STDIN is marked as
-UTF-8 with ":encoding(UTF-8)".
+If a mouse mode is enabled layers for C<STDIN> are changed. Then before leaving C<choose> as a cleanup C<STDIN> is
+marked as C<UTF-8> with C<:encoding(UTF-8)>.
 
 If the OS is MSWin32 1, 3 and 4 enable the mouse and are equivalent. The mouse mode 2 enables also the mouse but the
 output width is limited to 223 print-columns and the output height is limited to 223 rows. The mouse mode 0 disables the
@@ -1573,23 +1575,23 @@ If I<prompt> lines are folded the option I<lf> allows to insert spaces at beginn
 
 The option I<lf> expects a reference to an array with one or two elements;
 
-- the first element (INITIAL_TAB) sets the number of spaces inserted at beginning of paragraphs
+- the first element (C<INITIAL_TAB>) sets the number of spaces inserted at beginning of paragraphs
 
-- a second element (SUBSEQUENT_TAB) sets the number of spaces inserted at the beginning of all broken lines apart from the
+- a second element (C<SUBSEQUENT_TAB>) sets the number of spaces inserted at the beginning of all broken lines apart from the
 beginning of paragraphs
 
 Allowed values for the two elements are: 0 or greater.
 
-See INITIAL_TAB and SUBSEQUENT_TAB in L<Text::LineFold>.
+See C<INITIAL_TAB> and C<SUBSEQUENT_TAB> in L<Text::LineFold>.
 
 (default: undef)
 
 =head2 ll
 
-If all elements have the same length and this length is known before calling I<choose> the length can be passed with
+If all elements have the same length and this length is known before calling C<choose> the length can be passed with
 this option.
 
-If I<ll> is set, then I<choose> doesn't calculate the length of the longest element itself but uses the value passed
+If I<ll> is set, then C<choose> doesn't calculate the length of the longest element itself but uses the value passed
 with this option.
 
 I<length> refers here to the number of print columns the element will use on the terminal.
@@ -1629,13 +1631,13 @@ Allowed values: 1 or greater
 
 =over
 
-=item * If the array referred by the first argument is empty I<choose> warns and returns I<undef> respective an empty list.
+=item * If the array referred by the first argument is empty C<choose> warns and returns I<undef> respective an empty list.
 
 =item * If an option does not exist I<new|config|choose> warns.
 
 =item * If an option value is not valid I<new|config|choose> warns and the default is used instead.
 
-=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> (I<choose> warns with "EOT: $!" and returns
+=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> (C<choose> warns with "EOT: $!" and returns
 I<undef> or an empty list in list context).
 
 =back
@@ -1700,7 +1702,7 @@ required.
 
 =head2 Decoded strings
 
-I<choose> expects decoded strings as array elements.
+C<choose> expects decoded strings as array elements.
 
 =head2 encoding layer for STDOUT
 
@@ -1766,7 +1768,7 @@ Matthäus Kiem <cuer2s@gmail.com>
 
 =head1 CREDITS
 
-Based on and inspired by the I<choose> function from the L<Term::Clui> module.
+Based on and inspired by the C<choose> function from the L<Term::Clui> module.
 
 Thanks to the L<Perl-Community.de|http://www.perl-community.de> and the people form
 L<stackoverflow|http://stackoverflow.com> for the help.
