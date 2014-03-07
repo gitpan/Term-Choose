@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.101';
+our $VERSION = '1.102';
 
 use Term::Size::Win32    qw( chars );
 use Win32::Console       qw( STD_INPUT_HANDLE ENABLE_MOUSE_INPUT ENABLE_PROCESSED_INPUT
@@ -170,7 +170,7 @@ Term::Choose::Win32
 
 =head1 VERSION
 
-Version 1.101
+Version 1.102
 
 =head1 DESCRIPTION
 

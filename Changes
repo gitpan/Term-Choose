@@ -1,6 +1,10 @@
 Revision history for Term::Choose
 
 
+1.102   2014-03-07
+        - Bugfix option "limit".
+        - Code refactoring.
+
 1.101   2014-03-06
         - Change behavior of layout 2.
         - Fixed documentation.

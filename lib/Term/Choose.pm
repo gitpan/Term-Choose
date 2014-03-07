@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.101';
+our $VERSION = '1.102';
 use Exporter 'import';
 our @EXPORT_OK = qw( choose );
 
@@ -282,8 +282,11 @@ sub choose {
     $self->{wantarray}  = wantarray;
     $self->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
     $self->__set_defaults();
+    if ( defined $self->{limit} && @$orig_list_ref > $self->{limit} ) {
+        $self->{list_to_long} = 1;
+    }
     $self->{orig_list} = $orig_list_ref;
-    $self->{list}      = $self->__copy_orig_list(); #
+    $self->__copy_orig_list();
     $self->__length_longest();
     $self->{col_width} = $self->{length_longest} + $self->{pad};
     local $SIG{'INT'} = sub {
@@ -618,7 +621,7 @@ sub __copy_orig_list {
     my ( $self ) = @_;
     if ( $self->{ll} ) {
         if ( $self->{list_to_long} ) {
-            return [ map {
+            $self->{list} = [ map {
                 my $copy = $_;
                 if ( ! $copy ) {
                     $copy = $self->{undef} if ! defined $copy;
@@ -627,18 +630,20 @@ sub __copy_orig_list {
                 $copy;
             } @{$self->{orig_list}}[ 0 .. $self->{limit} - 1 ] ];
         }
-        return [ map {
-            my $copy = $_;
-            if ( ! $copy ) {
-                $copy = $self->{undef} if ! defined $copy;
-                $copy = $self->{empty} if $copy eq '';
-            }
-            $copy;
-        } @{$self->{orig_list}} ];
+        else {
+            $self->{list} = [ map {
+                my $copy = $_;
+                if ( ! $copy ) {
+                    $copy = $self->{undef} if ! defined $copy;
+                    $copy = $self->{empty} if $copy eq '';
+                }
+                $copy;
+            } @{$self->{orig_list}} ];
+        }
     }
     else {
         if ( $self->{list_to_long} ) {
-            return [ map {
+            $self->{list} = [ map {
                 my $copy = $_;
                 if ( ! $copy ) {
                     $copy = $self->{undef} if ! defined $copy;
@@ -652,19 +657,21 @@ sub __copy_orig_list {
                 $copy;
             } @{$self->{orig_list}}[ 0 .. $self->{limit} - 1 ] ];
         }
-        return [ map {
-            my $copy = $_;
-            if ( ! $copy ) {
-                $copy = $self->{undef} if ! defined $copy;
-                $copy = $self->{empty} if $copy eq '';
-            }
-            if ( ref $copy ) {
-                $copy = sprintf "%s(0x%x)", ref $copy, $copy;
-            }
-            $copy =~ s/\p{Space}/ /g;
-            $copy =~ s/\p{C}//g;
-            $copy;
-        } @{$self->{orig_list}} ];
+        else {
+            $self->{list} = [ map {
+                my $copy = $_;
+                if ( ! $copy ) {
+                    $copy = $self->{undef} if ! defined $copy;
+                    $copy = $self->{empty} if $copy eq '';
+                }
+                if ( ref $copy ) {
+                    $copy = sprintf "%s(0x%x)", ref $copy, $copy;
+                }
+                $copy =~ s/\p{Space}/ /g;
+                $copy =~ s/\p{C}//g;
+                $copy;
+            } @{$self->{orig_list}} ];
+        }
     }
 }
 
@@ -765,22 +772,16 @@ sub __prepare_promptline {
 
 sub __size_and_layout {
     my ( $self ) = @_;
-#    my $layout = $self->{layout};
     $self->{rc2idx} = [];
     if ( $self->{length_longest} > $self->{avail_width} ) {
         $self->{avail_col_width} = $self->{avail_width};
-#        $layout = 3;
         $self->{layout} = 3;
     }
     else {
         $self->{avail_col_width} = $self->{length_longest};
     }
     my $all_in_first_row;
-#    if ( $layout == 2 ) {
-#        $layout = 3 if scalar @{$self->{list}} <= $self->{avail_height};
-#    }
-#    elsif ( $layout < 2 ) {
-    if ( $self->{layout} < 2 ) {
+    if ( $self->{layout} == 0 || $self->{layout} == 1 ) {
         for my $idx ( 0 .. $#{$self->{list}} ) {
             $all_in_first_row .= $self->{list}[$idx];
             $all_in_first_row .= ' ' x $self->{pad_one_row} if $idx < $#{$self->{list}};
@@ -794,7 +795,6 @@ sub __size_and_layout {
     if ( $all_in_first_row ) {
         $self->{rc2idx}[0] = [ 0 .. $#{$self->{list}} ];
     }
-#    elsif ( $layout == 3 ) {
     elsif ( $self->{layout} == 3 ) {
         if ( $self->{length_longest} <= $self->{avail_width} ) {
             for my $idx ( 0 .. $#{$self->{list}} ) {
@@ -812,15 +812,14 @@ sub __size_and_layout {
         }
     }
     else {
-        # auto_format
         my $tmp_avail_width = $self->{avail_width};
+        # auto_format
         if ( $self->{layout} == 1 || $self->{layout} == 2 ) {
             my $tmc = int( @{$self->{list}} / $self->{avail_height} );
             $tmc++ if @{$self->{list}} % $self->{avail_height};
             $tmc *= $self->{col_width};
             if ( $tmc < $tmp_avail_width ) {
                 $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 1.5 ) ) if $self->{layout} == 1;
-#                $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 6 ) )   if $self->{layout} == 2;
                 $tmc = int( $tmc + ( ( $tmp_avail_width - $tmc ) / 4 ) )   if $self->{layout} == 2;
                 $tmp_avail_width = $tmc;
             }
@@ -828,15 +827,14 @@ sub __size_and_layout {
         # order
         my $cols_per_row = int( $tmp_avail_width / $self->{col_width} );
         $cols_per_row = 1 if $cols_per_row < 1;
-        my $rows = int( ( $#{$self->{list}} + $cols_per_row ) / $cols_per_row ); # -1
         $self->{rest} = @{$self->{list}} % $cols_per_row;
         if ( $self->{order} == 1 ) {
+            my $rows = int( ( @{$self->{list}} - 1 + $cols_per_row ) / $cols_per_row );
             my @rearranged_idx;
             my $begin = 0;
             my $end = $rows - 1;
             for my $c ( 0 .. $cols_per_row - 1 ) {
-                --$end if $self->{rest} && $c >= $self->{rest};                                 # rest: bottom
-                #$end = $begin + $self->{rest} -1  if $c == $cols_per_row - 1 && $self->{rest}; # rest: right
+                --$end if $self->{rest} && $c >= $self->{rest};
                 $rearranged_idx[$c] = [ $begin .. $end ];
                 $begin = $end + 1;
                 $end = $begin + $rows - 1;
@@ -844,8 +842,7 @@ sub __size_and_layout {
             for my $r ( 0 .. $rows - 1 ) {
                 my @temp_idx;
                 for my $c ( 0 .. $cols_per_row - 1 ) {
-                    next if $self->{rest} && $r == $rows - 1 && $c >= $self->{rest};          # rest: bottom
-                    #next if $c == $cols_per_row - 1 && $self->{rest} && $r >= $self->{rest}; # rest: right
+                    next if $r == $rows - 1 && $self->{rest} && $c >= $self->{rest};
                     push @temp_idx, $rearranged_idx[$c][$r];
                 }
                 push @{$self->{rc2idx}}, \@temp_idx;
@@ -1134,7 +1131,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.101
+Version 1.102
 
 =cut
 
@@ -1633,11 +1630,11 @@ Allowed values: 1 or greater
 
 =item * If the array referred by the first argument is empty C<choose> warns and returns I<undef> respective an empty list.
 
-=item * If an option does not exist I<new|config|choose> warns.
+=item * If an option does not exist C<new|config|choose> warns.
 
-=item * If an option value is not valid I<new|config|choose> warns and the default is used instead.
+=item * If an option value is not valid C<new|config|choose> warns and the default is used instead.
 
-=item * If after pressing a key L<Term::ReadKey>::ReadKey returns I<undef> (C<choose> warns with "EOT: $!" and returns
+=item * If after pressing a key L<Term::ReadKey>::ReadKey returns C<undef> (C<choose> warns with C<EOT: $!> and returns
 I<undef> or an empty list in list context).
 
 =back
