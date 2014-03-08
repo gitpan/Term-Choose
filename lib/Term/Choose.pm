@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.102';
+our $VERSION = '1.103';
 use Exporter 'import';
 our @EXPORT_OK = qw( choose );
 
@@ -138,6 +138,7 @@ sub __set_defaults {
     #$self->{max_height}      //= undef;
     #$self->{max_width}       //= undef;
     $self->{mouse}            //= 0;
+    #$self->{no_spacebar}     //= undef; # NOTE: experimental
     $self->{order}            //= 1;
     $self->{pad}              //= 2;
     $self->{pad_one_row}      //= $self->{pad};
@@ -165,6 +166,7 @@ sub __validate_options {
         max_height      => [ 1      ],
         max_width       => [ 1      ],
         mouse           => [ 0,   4 ],
+        no_spacebar     => 'ARRAY',     # NOTE: experimental
         order           => [ 0,   1 ],
         pad             => [ 0      ],
         pad_one_row     => [ 0      ],
@@ -187,6 +189,15 @@ sub __validate_options {
                  || defined $opt->{$key}[0] && $opt->{$key}[0] !~ m/^[0-9]+\z/
                  || defined $opt->{$key}[1] && $opt->{$key}[1] !~ m/^[0-9]+\z/
             ) {
+                push @warn, "choose: option '$key': the passed value is not a valid value. Falling back to the default value.";
+            }
+            else {
+                $self->{$key} = $opt->{$key};
+            }
+        }
+        elsif ( $key eq 'no_spacebar' ) { # NOTE: experimental
+            local $" = '';
+            if ( ref $opt->{$key} ne 'ARRAY' || "@{$opt->{$key}}" !~ /^[0-9]+\z/ ) {
                 push @warn, "choose: option '$key': the passed value is not a valid value. Falling back to the default value.";
             }
             else {
@@ -537,16 +548,6 @@ sub choose {
                 }
             }
         }
-        elsif ( $key == CONTROL_SPACE ) {
-            if ( defined $self->{wantarray} && $self->{wantarray} ) {
-                for my $i ( 0 .. $#{$self->{rc2idx}} ) {
-                    for my $j ( 0 .. $#{$self->{rc2idx}[$i]} ) {
-                        $self->{marked}[$i][$j] = $self->{marked}[$i][$j] ? 0 : 1;
-                    }
-                }
-                $self->__wr_screen();
-            }
-        }
         elsif ( $key == KEY_q || $key == CONTROL_D ) {
             $self->__reset_term( 1 );
             return;
@@ -595,6 +596,11 @@ sub choose {
         }
         elsif ( $key == KEY_SPACE ) {
             if ( defined $self->{wantarray} && $self->{wantarray} ) {
+                # NOTE: experimental
+                if ( $self->{no_spacebar} ) {
+                    next if grep { $self->{rc2idx}[$self->{cursor}[ROW]][$self->{cursor}[COL]] == $_ } @{$self->{no_spacebar}};
+                }
+                #####
                 if ( ! $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] ) {
                     $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] = 1;
                 }
@@ -604,11 +610,60 @@ sub choose {
                 $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
             }
         }
+        elsif ( $key == CONTROL_SPACE ) {
+            if ( defined $self->{wantarray} && $self->{wantarray} ) {
+                for my $i ( 0 .. $#{$self->{rc2idx}} ) {
+                    for my $j ( 0 .. $#{$self->{rc2idx}[$i]} ) {
+                        $self->{marked}[$i][$j] = $self->{marked}[$i][$j] ? 0 : 1;
+                    }
+                }
+                # NOTE: experimental
+                $self->__no_spacebar_to_unmark() if $self->{no_spacebar};
+                #####
+                $self->__wr_screen();
+            }
+        }
         else {
             $self->__beep();
         }
     }
 }
+
+
+sub __no_spacebar_to_unmark {# NOTE: experimental
+    my ( $self ) = @_;
+    my ( $row, $col );
+    my $cols_per_row = $#{$self->{rc2idx}[0]};
+    if ( $self->{layout} == 3 ) {
+        for my $idx ( @{$self->{no_spacebar}} ) {
+            $self->{marked}[$idx][0] = 0;
+        }
+    }
+    elsif ( $self->{order} == 0 ) {
+        for my $idx ( @{$self->{no_spacebar}} ) {
+            $row = int( $idx / $cols_per_row );
+            $col = $idx % $cols_per_row;
+            $self->{marked}[$row][$col] = 0;
+        }
+    }
+    elsif ( $self->{order} == 1 ) {
+        my $rows_per_col = @{$self->{rc2idx}};
+        my $full = $rows_per_col * ( $self->{rest} || $cols_per_row );
+        for my $idx ( @{$self->{no_spacebar}} ) {
+            if ( $idx <= $full ) {
+                $row = $idx % $rows_per_col;
+                $col = int( $idx / $rows_per_col );
+            }
+            else {
+                my $rows_per_col_short = $rows_per_col - 1;
+                $row = ( $idx - $full ) % $rows_per_col_short;
+                $col = int( ( $idx - $self->{rest} ) / $rows_per_col_short );
+            }
+            $self->{marked}[$row][$col] = 0;
+        }
+    }
+}
+
 
 
 sub __beep {
@@ -1131,7 +1186,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.102
+Version 1.103
 
 =cut
 
@@ -1175,7 +1230,7 @@ Choose from a list of items.
 
 Based on the C<choose> function from the L<Term::Clui> module.
 
-Term::Choose provides a functional interface (L</SUBROUTINES>) and an object-oriented interface (L</METHODS>).
+C<Term::Choose> provides a functional interface (L</SUBROUTINES>) and an object-oriented interface (L</METHODS>).
 
 =head1 EXPORT
 
@@ -1247,7 +1302,7 @@ See also the following section L<USAGE AND RETURN VALUES>.
 =item
 
 If C<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and
-confirming with c<Return>.
+confirming with C<Return>.
 
 C<choose> then returns the chosen item.
 
@@ -1322,7 +1377,7 @@ white-spaces in elements are replaced with simple spaces.
 
 =item *
 
-characters which match the Unicode character property I<Other> are removed.
+characters which match the Unicode character property C<Other> are removed.
 
     $element =~ s/\p{C}//g;
 
@@ -1332,7 +1387,8 @@ if the length of an element is greater than the width of the screen the element 
 
     $element = substr( $element, 0, $allowed_length - 3 ) . '...';*
 
-* C<Term::Choose> uses its own function to cut strings which uses print columns for the arithmetic.
+* C<Term::Choose> uses its own function to cut strings which uses C<columns> from L<Unicode::GCString> to determine the
+string length.
 
 =back
 
@@ -1517,8 +1573,8 @@ The following is valid if the OS is not MSWin32. For MSWin32 see the end of this
 If a mouse mode is enabled layers for C<STDIN> are changed. Then before leaving C<choose> as a cleanup C<STDIN> is
 marked as C<UTF-8> with C<:encoding(UTF-8)>.
 
-If the OS is MSWin32 1, 3 and 4 enable the mouse and are equivalent. The mouse mode 2 enables also the mouse but the
-output width is limited to 223 print-columns and the output height is limited to 223 rows. The mouse mode 0 disables the
+If the OS is MSWin32 I<1>, I<3> and I<4> enable the mouse and are equivalent. The I<mouse> mode I<2> enables also the mouse but the
+output width is limited to 223 print-columns and the output height is limited to 223 rows. The I<mouse> mode I<0> disables the
 mouse (default).
 
 =head2 keep
@@ -1593,7 +1649,7 @@ with this option.
 
 I<length> refers here to the number of print columns the element will use on the terminal.
 
-A way to determine the number of print columns is the use of I<columns> from L<Unicode::GCString>.
+A way to determine the number of print columns is the use of C<columns> from L<Unicode::GCString>.
 
 The length of undefined elements and elements with an empty string depends on the value of the option I<undef>
 respective on the value of the option I<empty>.
@@ -1604,11 +1660,20 @@ If elements contain unsupported characters the output might break if the width (
 replacement character does not correspond to the width of the replaced character - for example when a unsupported
 non-spacing character is replaced by a replacement character with a normal width.
 
-I<ll> is set to a value less than the length of the elements the output could break.
+If I<ll> is set to a value less than the length of the elements the output could break.
 
 If the value of I<ll> is greater than the screen width the elements will be trimmed to fit into the screen.
 
 Allowed values: 1 or greater
+
+(default: undef)
+
+=head2 no_spacebar
+
+This option is experimental! As long as the option is experimental the option name could change without previous
+announcement.
+L<no_spacebar> expects as its value a reference to an array. The elements of the array are indexes of choices which
+should not be markable with the C<SpaceBar> or with the right mouse key.
 
 (default: undef)
 
@@ -1628,14 +1693,14 @@ Allowed values: 1 or greater
 
 =over
 
-=item * If the array referred by the first argument is empty C<choose> warns and returns I<undef> respective an empty list.
+=item * If the array referred by the first argument is empty C<choose> warns and returns C<undef> respective an empty list.
 
 =item * If an option does not exist C<new|config|choose> warns.
 
 =item * If an option value is not valid C<new|config|choose> warns and the default is used instead.
 
-=item * If after pressing a key L<Term::ReadKey>::ReadKey returns C<undef> (C<choose> warns with C<EOT: $!> and returns
-I<undef> or an empty list in list context).
+=item * If after pressing a key L<Term::ReadKey>::ReadKey returns C<undef> C<choose> warns with C<EOT: $!> and returns
+I<undef> or an empty list in list context.
 
 =back
 
@@ -1653,10 +1718,6 @@ Used modules not provided as core modules:
 
 =item
 
-L<Term::ReadKey>
-
-=item
-
 L<Text::LineFold>
 
 =item
@@ -1665,7 +1726,7 @@ L<Unicode::GCString>
 
 =back
 
-If the OS is MSWin32 the following module are required additionally
+Additionally, if the OS is MSWin32
 
 =over
 
@@ -1683,7 +1744,7 @@ L<Win32::Console::ANSI>
 
 =back
 
-else
+are required. Else
 
 =over
 
@@ -1691,11 +1752,9 @@ else
 
 L<Term::ReadKey>
 
-=item
-
 =back
 
-required.
+is required.
 
 =head2 Decoded strings
 
@@ -1703,7 +1762,7 @@ C<choose> expects decoded strings as array elements.
 
 =head2 encoding layer for STDOUT
 
-For a correct output it is required to set an encoding layer for STDOUT matching the terminal's character set.
+For a correct output it is required to set an encoding layer for C<STDOUT> matching the terminal's character set.
 
 =head2 Monospaced font
 
@@ -1716,6 +1775,8 @@ The following ANSI escape sequences are used:
     "\e[A"      Cursor Up
 
     "\e[C"      Cursor Forward
+
+    "\e[D"      Cursor Back
 
     "\e[0J"     Clear to End of Screen (Erase Data)
 
@@ -1739,9 +1800,9 @@ If the option "clear_screen" is enabled:
 
     "\e[1;1H"   Go to Top Left (Cursor Position)
 
-If the OS is MSWin32 the Win32::Console::ANSI module is used to understand these escape sequences.
+If the OS is MSWin32 the L<Win32::Console::ANSI> module is used to understand these escape sequences.
 
-If a "mouse" mode is enabled
+If a I<mouse> mode is enabled
 
     "\e[6n"    Get Cursor Position (Device Status Report)
 
@@ -1749,9 +1810,9 @@ If a "mouse" mode is enabled
 
     "\e[?1003l", "\e[?1005l", "\e[?1006l"   Disable Mouse Tracking
 
-are used to enable/disable the different mouse modes.
+are used to enable/disable the different I<mouse> modes.
 
-To read key and mouse events with MSWin32  Win32::Console is used instead.
+To read key and mouse events with MSWin32 OS L<Win32::Console> is used instead.
 
 =head1 SUPPORT
 
