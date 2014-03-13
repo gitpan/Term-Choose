@@ -5,39 +5,11 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.103';
+our $VERSION = '1.104';
 
 use Term::ReadKey qw( GetTerminalSize ReadKey ReadMode );
 
-use constant {
-    GET_CURSOR_POSITION             => "\e[6n",
-
-    SET_ANY_EVENT_MOUSE_1003        => "\e[?1003h",
-    SET_EXT_MODE_MOUSE_1005         => "\e[?1005h",
-    SET_SGR_EXT_MODE_MOUSE_1006     => "\e[?1006h",
-    UNSET_ANY_EVENT_MOUSE_1003      => "\e[?1003l",
-    UNSET_EXT_MODE_MOUSE_1005       => "\e[?1005l",
-    UNSET_SGR_EXT_MODE_MOUSE_1006   => "\e[?1006l",
-};
-
-use constant {
-    NEXT_get_key => -1,
-    KEY_BTAB     => 0x08,
-    KEY_ESC      => 0x1b, # unused
-};
-
-use constant {
-    VK_PAGE_UP   => 33,
-    VK_PAGE_DOWN => 34,
-    VK_END       => 35,
-    VK_HOME      => 36,
-    VK_LEFT      => 37,
-    VK_UP        => 38,
-    VK_RIGHT     => 39,
-    VK_DOWN      => 40,
-    VK_INSERT    => 45, # unused
-    VK_DELETE    => 46, # unused
-};
+use Term::Choose::Constants qw( :linux );
 
 
 sub new {
@@ -204,7 +176,7 @@ sub __set_mode {
         }
     }
     Term::ReadKey::ReadMode( 'ultra-raw' );
-    return $self, $mouse;
+    return $mouse;
 };
 
 
@@ -250,7 +222,11 @@ Term::Choose::Linux
 
 =head1 VERSION
 
-Version 1.103
+Version 1.104
+
+=head1 SYNOPSIS
+
+Internal use only.
 
 =head1 DESCRIPTION
 

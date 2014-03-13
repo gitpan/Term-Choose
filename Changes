@@ -1,6 +1,9 @@
 Revision history for Term::Choose
 
 
+1.104   2014-03-13
+        - Bugfix cleanup.
+
 1.103   2014-03-08
         - Added experimental option "no_spacebar".
         - Update documentation.

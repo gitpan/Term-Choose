@@ -5,41 +5,23 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.103';
+our $VERSION = '1.104';
 
 use Term::Size::Win32    qw( chars );
 use Win32::Console       qw( STD_INPUT_HANDLE ENABLE_MOUSE_INPUT ENABLE_PROCESSED_INPUT
                              RIGHT_ALT_PRESSED LEFT_ALT_PRESSED RIGHT_CTRL_PRESSED LEFT_CTRL_PRESSED SHIFT_PRESSED );
 use Win32::Console::ANSI qw( :func );
 
-use constant {
-    NEXT_get_key    => -1,
-    CONTROL_SPACE   => 0x00,
-};
+use Term::Choose::Constants qw( :win32 );
 
-use constant {
-    VK_PAGE_UP   => 33,
-    VK_PAGE_DOWN => 34,
-    VK_END       => 35,
-    VK_HOME      => 36,
-    VK_LEFT      => 37,
-    VK_UP        => 38,
-    VK_RIGHT     => 39,
-    VK_DOWN      => 40,
-    VK_INSERT    => 45, # unused
-    VK_DELETE    => 46, # unused
-};
 
-use constant {
-    MOUSE_WHEELED                => 0x0004,
-    LEFTMOST_BUTTON_PRESSED      => 0x0001,
-    RIGHTMOST_BUTTON_PRESSED     => 0x0002,
-    FROM_LEFT_2ND_BUTTON_PRESSED => 0x0004,
-};
-
-use constant SHIFTED_MASK => RIGHT_ALT_PRESSED  | LEFT_ALT_PRESSED  |
-                             RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED |
-                             SHIFT_PRESSED;
+sub SHIFTED_MASK () {
+      RIGHT_ALT_PRESSED
+    | LEFT_ALT_PRESSED
+    | RIGHT_CTRL_PRESSED
+    | LEFT_CTRL_PRESSED
+    | SHIFT_PRESSED
+}
 
 
 INIT {
@@ -122,17 +104,23 @@ sub __set_mode {
     $self->{old_in_mode} = $self->{input}->Mode();
     $self->{input}->Mode( !ENABLE_PROCESSED_INPUT )                    if ! $mouse;
     $self->{input}->Mode( !ENABLE_PROCESSED_INPUT|ENABLE_MOUSE_INPUT ) if   $mouse;
-    return $self, $mouse;
+    return $mouse;
 }
 
 
 sub __reset_mode {
     my ( $self, $mouse ) = @_;
-    $self->{input}->Mode( $self->{old_in_mode} );
-    $self->{input}->Flush;
-    # workaround Bug #33513:
-    $self->{input}{handle} = undef;
-    #
+    if ( defined $self->{input} ) {
+        if ( defined $self->{old_in_mode} ) {
+            $self->{input}->Mode( $self->{old_in_mode} );
+            delete $self->{old_in_mode};
+        }
+        $self->{input}->Flush;
+        # workaround Bug #33513:
+        #$self->{input}{handle} = undef;
+        delete $self->{input}{handle};
+        #
+    }
 }
 
 
@@ -170,7 +158,7 @@ Term::Choose::Win32
 
 =head1 VERSION
 
-Version 1.103
+Version 1.104
 
 =head1 DESCRIPTION
 

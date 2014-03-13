@@ -37,7 +37,6 @@
             "Term::ReadKey" : "0",
             "Text::LineFold" : "0",
             "Unicode::GCString" : "0",
-            "constant" : "0",
             "perl" : "5.010001",
             "strict" : "0",
             "warnings" : "0"
@@ -45,5 +44,5 @@
       }
    },
    "release_status" : "stable",
-   "version" : "1.103"
+   "version" : "1.104"
 }

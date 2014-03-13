@@ -31,7 +31,6 @@ WriteMakefile(
         'Test::More'        => 0,
     },
     PREREQ_PM => {
-        'constant'          => 0,
         'strict'            => 0,
         'warnings'          => 0,
         'Carp'              => 0,

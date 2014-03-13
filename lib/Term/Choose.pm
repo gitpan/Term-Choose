@@ -4,13 +4,15 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.103';
+our $VERSION = '1.104';
 use Exporter 'import';
 our @EXPORT_OK = qw( choose );
 
 use Carp qw( croak carp );
 use Text::LineFold;
 use Unicode::GCString;
+
+use Term::Choose::Constants qw( :choose  );
 
 no warnings 'utf8';
 #use warnings FATAL => qw( all );
@@ -30,85 +32,17 @@ BEGIN {
     }
 }
 
-use constant {
-    ROW     => 0,
-    COL     => 1,
-    MIN     => 0,
-    MAX     => 1,
-};
-
-use constant {
-    UP                              => "\e[A",
-    RIGHT                           => "\e[C",
-    LEFT                            => "\e[D",
-    LF                              => "\n",
-    CR                              => "\r",
-
-    HIDE_CURSOR                     => "\e[?25l",
-    SHOW_CURSOR                     => "\e[?25h",
-
-    MAX_ROW_MOUSE_1003              => 223,
-    MAX_COL_MOUSE_1003              => 223,
-
-    BEEP                            => "\07",
-    CLEAR_SCREEN                    => "\e[2J\e[1;1H",
-    CLEAR_TO_END_OF_SCREEN          => "\e[0J",
-    RESET                           => "\e[0m",
-    UNDERLINE                       => "\e[4m",
-    REVERSE                         => "\e[7m",
-    BOLD                            => "\e[1m",
-};
-
-use constant {
-    NEXT_get_key      => -1,
-
-    CONTROL_SPACE   => 0x00,
-    CONTROL_A       => 0x01,
-    CONTROL_B       => 0x02,
-    CONTROL_C       => 0x03,
-    CONTROL_D       => 0x04,
-    CONTROL_E       => 0x05,
-    CONTROL_F       => 0x06,
-    CONTROL_H       => 0x08,
-    KEY_BTAB        => 0x08,
-    CONTROL_I       => 0x09,
-    KEY_TAB         => 0x09,
-    KEY_ENTER       => 0x0d,
-    KEY_ESC         => 0x1b,
-    KEY_SPACE       => 0x20,
-    KEY_h           => 0x68,
-    KEY_j           => 0x6a,
-    KEY_k           => 0x6b,
-    KEY_l           => 0x6c,
-    KEY_q           => 0x71,
-    KEY_Tilde       => 0x7e,
-    KEY_BSPACE      => 0x7f,
-};
-
-use constant {
-    VK_PAGE_UP   => 33,
-    VK_PAGE_DOWN => 34,
-    VK_END       => 35,
-    VK_HOME      => 36,
-    VK_LEFT      => 37,
-    VK_UP        => 38,
-    VK_RIGHT     => 39,
-    VK_DOWN      => 40,
-    VK_INSERT    => 45, # unused
-    VK_DELETE    => 46, # unused
-};
-
 
 sub new {
-    return bless {}, $_[0] if @_ == 1;
-    return bless {}, $_[0] if ! defined $_[1];
-    my ( $class, $opt ) = @_;
-    my $argc = @_ - 1;
-    croak "new: called with $argc arguments - 0 or 1 arguments expected." if $argc > 1;
-    croak "new: the (optional) argument must be a HASH reference."        if ref $opt ne 'HASH';
-    my $self = {};
-    bless $self, $class;
-    $self->__validate_options( $opt );
+    my $class = shift;
+    my ( $opt ) = @_;
+    croak "new: called with " . @_ . " arguments - 0 or 1 arguments expected." if @_ > 1;
+    my $self = bless {}, $class;
+    #$self->{plugin} = $Plugin_Package->new();
+    if ( defined $opt ) {
+        croak "new: the (optional) argument must be a HASH reference." if ref $opt ne 'HASH';
+        $self->__validate_options( $opt );
+    }
     return $self;
 }
 
@@ -138,7 +72,7 @@ sub __set_defaults {
     #$self->{max_height}      //= undef;
     #$self->{max_width}       //= undef;
     $self->{mouse}            //= 0;
-    #$self->{no_spacebar}     //= undef; # NOTE: experimental
+    #$self->{no_spacebar}     //= undef;
     $self->{order}            //= 1;
     $self->{pad}              //= 2;
     $self->{pad_one_row}      //= $self->{pad};
@@ -150,27 +84,27 @@ sub __set_defaults {
 sub __validate_options {
     my ( $self, $opt ) = @_;
     return if ! defined $opt;
-    my $valid = {       #   min   max
-        beep            => [ 0,   1 ],
-        clear_screen    => [ 0,   1 ],
-        default         => [ 0      ],
+    my $valid = {
+        beep            => '[ 0 1 ]',
+        clear_screen    => '[ 0 1 ]',
+        default         => '[ 0-9 ]+',
         empty           => '',
-        hide_cursor     => [ 0,   1 ],
-        index           => [ 0,   1 ],
-        justify         => [ 0,   2 ],
-        keep            => [ 1      ],
-        layout          => [ 0,   3 ],
+        hide_cursor     => '[ 0 1 ]',
+        index           => '[ 0 1 ]',
+        justify         => '[ 0 1 2 ]',
+        keep            => '[ 1-9 ][ 0-9 ]*',
+        layout          => '[ 0 1 2 3 ]',
         lf              => 'ARRAY',
-        ll              => [ 1      ],
-        limit           => [ 1      ],
-        max_height      => [ 1      ],
-        max_width       => [ 1      ],
-        mouse           => [ 0,   4 ],
-        no_spacebar     => 'ARRAY',     # NOTE: experimental
-        order           => [ 0,   1 ],
-        pad             => [ 0      ],
-        pad_one_row     => [ 0      ],
-        page            => [ 0,   1 ],
+        ll              => '[ 1-9 ][ 0-9 ]*',
+        limit           => '[ 1-9 ][ 0-9 ]*',
+        max_height      => '[ 1-9 ][ 0-9 ]*',
+        max_width       => '[ 1-9 ][ 0-9 ]*',
+        mouse           => '[ 0 1 2 3 4 ]',
+        no_spacebar     => 'ARRAY',
+        order           => '[ 0 1 ]',
+        pad             => '[ 0-9 ]+',
+        pad_one_row     => '[ 0-9 ]+',
+        page            => '[ 0 1 ]',
         prompt          => '',
         undef           => '',
     };
@@ -178,46 +112,56 @@ sub __validate_options {
     for my $key ( keys %$opt ) {
         if ( ! exists $valid->{$key} ) {
             push @warn, "choose: '$key' is not a valid option name.";
+            next;
         }
-        elsif ( ! defined $opt->{$key} ) {
-        }
-        elsif ( $valid->{$key} eq '' ) {
+        next if ! defined $opt->{$key};
+        if ( $valid->{$key} eq '' ) {
             $self->{$key} = $opt->{$key};
         }
         elsif ( $key eq 'lf' ) {
-            if (    ref $opt->{$key} ne 'ARRAY' || @{$opt->{$key}} > 2
-                 || defined $opt->{$key}[0] && $opt->{$key}[0] !~ m/^[0-9]+\z/
-                 || defined $opt->{$key}[1] && $opt->{$key}[1] !~ m/^[0-9]+\z/
-            ) {
-                push @warn, "choose: option '$key': the passed value is not a valid value. Falling back to the default value.";
+            my $err;
+            if ( ref $opt->{$key} eq 'ARRAY' && @{$opt->{$key}} <= 2 ) {
+                no warnings 'uninitialized';
+                /^[0-9]+\z/ || ++$err for @{$opt->{$key}};
             }
             else {
+                ++$err;
+            }
+            if ( ! $err ) {
                 $self->{$key} = $opt->{$key};
+            }
+            else {
+                push @warn, [ "'$key'", "the passed value" ];
             }
         }
-        elsif ( $key eq 'no_spacebar' ) { # NOTE: experimental
-            local $" = '';
-            if ( ref $opt->{$key} ne 'ARRAY' || "@{$opt->{$key}}" !~ /^[0-9]+\z/ ) {
-                push @warn, "choose: option '$key': the passed value is not a valid value. Falling back to the default value.";
+        elsif ( $key eq 'no_spacebar' ) {
+            my $err;
+            if ( ref $opt->{$key} eq 'ARRAY' ) {
+                no warnings 'uninitialized';
+                /^[0-9]+\z/ || ++$err for @{$opt->{$key}};
             }
             else {
+                ++$err;
+            }
+            if ( ! $err ) {
                 $self->{$key} = $opt->{$key};
+            }
+            else {
+                push @warn, [ "'$key'", "the passed value" ];
             }
         }
-        elsif ( $opt->{$key} =~ m/^[0-9]+\z/ ) {
-            if ( $opt->{$key} < $valid->{$key}[MIN] || defined $valid->{$key}[MAX] && $opt->{$key} > $valid->{$key}[MAX] ) {
-                push @warn, "choose: option '$key': '$opt->{$key}' is not a valid value. Falling back to the default value.";
-            }
-            else {
-                $self->{$key} = $opt->{$key};
-            }
+        elsif ( $opt->{$key} =~ m/^$valid->{$key}\z/x ) {
+            $self->{$key} = $opt->{$key};
         }
         else {
-            die "Bug!";
+            push @warn, [ "'$key'", "'$opt->{$key}'" ];
         }
     }
     if ( @warn ) {
-        carp $_ for @warn;
+        for my $w ( @warn ) {
+            my ( $option, $value ) = @$w;
+            carp "choose: option $option : $value is not a valid value. Falling back to the default value.";
+        }
         print "Press a key to continue";
         my $dummy = <STDIN>;
     }
@@ -229,7 +173,9 @@ sub __init_term {
     $self->{old_handle} = select( $self->{handle_out} );
     $self->{backup_flush} = $|;
     $| = 1;
-    ( $self->{plugin}, $self->{mouse} ) = $Plugin_Package->new()->__set_mode( $self->{mouse} );
+    #( $self->{plugin}, $self->{mouse} ) = $Plugin_Package->new()->__set_mode( $self->{mouse} );
+    $self->{plugin} = $Plugin_Package->new();
+    $self->{mouse} = $self->{plugin}->__set_mode( $self->{mouse} );
     print HIDE_CURSOR if $self->{hide_cursor};
 }
 
@@ -241,11 +187,21 @@ sub __reset_term {
         print CLEAR_TO_END_OF_SCREEN;
     }
     print RESET;
-    $self->{plugin}->__reset_mode( $self->{mouse} );
-    print SHOW_CURSOR if $self->{hide_cursor};
-    $| = $self->{backup_flush};
-    select( $self->{old_handle} );
-    if ( $self->{backup_opt} ) {
+    if ( defined $self->{plugin} ) {
+        $self->{plugin}->__reset_mode( $self->{mouse} );
+    }
+    if ( $self->{hide_cursor} ) {
+        print SHOW_CURSOR;
+    }
+    if ( defined $self->{backup_flush} ) {
+        $| = $self->{backup_flush};
+        delete $self->{backup_flush};
+    }
+    if ( defined $self->{old_handle} ) {
+        select( $self->{old_handle} );
+        delete $self->{old_handle};
+    }
+    if ( defined $self->{backup_opt} ) {
         my $backup_opt = delete $self->{backup_opt};
         for my $key ( keys %$backup_opt ) {
             $self->{$key} = $backup_opt->{$key};
@@ -263,11 +219,13 @@ sub __get_key {
 
 
 sub config {
-    my ( $self, $opt ) = @_;
-    my $argc = @_ - 1;
-    croak "config: called with $argc arguments - 0 or 1 arguments expected." if $argc > 1;
-    croak "config: the argument must be a HASH reference." if defined $_[1] && ref $_[1] ne 'HASH';
-    $self->__validate_options( $opt );
+    my $self = shift;
+    my ( $opt ) = @_;
+    croak "config: called with " . @_ . " arguments - 0 or 1 arguments expected." if @_ > 1; #
+    if ( defined $opt ) {
+        croak "config: the argument must be a HASH reference." if ref $opt ne 'HASH';
+        $self->__validate_options( $opt );
+    }
 }
 
 
@@ -275,10 +233,10 @@ sub choose {
     if ( ref $_[0] ne 'Term::Choose' ) {
         return Term::Choose->new( $_[1] )->choose( $_[0] );
     }
-    my ( $self, $orig_list_ref, $opt ) = @_;
-    my $argc = @_ - 1;
-    croak "choose: called with $argc arguments - 0 or 1 arguments expected." if $argc < 1 || $argc > 2;
-    croak "choose: the first argument must be an ARRAY reference."           if ref $orig_list_ref ne 'ARRAY';
+    my $self = shift;
+    my ( $orig_list_ref, $opt ) = @_;
+    croak "choose: called with " . @_ . " arguments - 0 or 1 arguments expected." if @_ < 1 || @_ > 2;
+    croak "choose: the first argument must be an ARRAY reference." if ref $orig_list_ref ne 'ARRAY';
     if ( ! @$orig_list_ref ) {
         carp "choose: The first argument refers to an empty list!";
         return;
@@ -293,7 +251,7 @@ sub choose {
     $self->{wantarray}  = wantarray;
     $self->{handle_out} = -t \*STDOUT ? \*STDOUT : \*STDERR;
     $self->__set_defaults();
-    if ( defined $self->{limit} && @$orig_list_ref > $self->{limit} ) {
+    if ( $self->{limit} && @$orig_list_ref > $self->{limit} ) {
         $self->{list_to_long} = 1;
     }
     $self->{orig_list} = $orig_list_ref;
@@ -558,7 +516,6 @@ sub choose {
             exit( 1 );
         }
         elsif ( $key == KEY_ENTER ) {
-            #$self->__reset_term( 1 );
             my @chosen;
             if ( ! defined $self->{wantarray} ) {
                 $self->__reset_term( 1 );
@@ -590,24 +547,27 @@ sub choose {
             }
             else {
                 my $i = $self->{rc2idx}[$self->{cursor}[ROW]][$self->{cursor}[COL]];
+                my $chosen = $self->{index} ? $i : $self->{orig_list}[$i];
                 $self->__reset_term( 1 );
-                return $self->{index} ? $i : $self->{orig_list}[$i];
+                return $chosen;
             }
         }
         elsif ( $key == KEY_SPACE ) {
             if ( defined $self->{wantarray} && $self->{wantarray} ) {
-                # NOTE: experimental
-                if ( $self->{no_spacebar} ) {
-                    next if grep { $self->{rc2idx}[$self->{cursor}[ROW]][$self->{cursor}[COL]] == $_ } @{$self->{no_spacebar}};
-                }
-                #####
-                if ( ! $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] ) {
-                    $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] = 1;
+                if (    $self->{no_spacebar}
+                     && grep { $self->{rc2idx}[$self->{cursor}[ROW]][$self->{cursor}[COL]] == $_ } @{$self->{no_spacebar}}
+                ) {
+                    $self->__beep();
                 }
                 else {
-                    $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] = 0;
+                    if ( ! $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] ) {
+                        $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] = 1;
+                    }
+                    else {
+                        $self->{marked}[$self->{cursor}[ROW]][$self->{cursor}[COL]] = 0;
+                    }
+                    $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
                 }
-                $self->__wr_cell( $self->{cursor}[ROW], $self->{cursor}[COL] );
             }
         }
         elsif ( $key == CONTROL_SPACE ) {
@@ -617,9 +577,7 @@ sub choose {
                         $self->{marked}[$i][$j] = $self->{marked}[$i][$j] ? 0 : 1;
                     }
                 }
-                # NOTE: experimental
-                $self->__no_spacebar_to_unmark() if $self->{no_spacebar};
-                #####
+                $self->__unmark_no_spacebar() if $self->{no_spacebar};
                 $self->__wr_screen();
             }
         }
@@ -630,16 +588,17 @@ sub choose {
 }
 
 
-sub __no_spacebar_to_unmark {# NOTE: experimental
+sub __unmark_no_spacebar {
     my ( $self ) = @_;
-    my ( $row, $col );
-    my $cols_per_row = $#{$self->{rc2idx}[0]};
     if ( $self->{layout} == 3 ) {
         for my $idx ( @{$self->{no_spacebar}} ) {
             $self->{marked}[$idx][0] = 0;
         }
+        return;
     }
-    elsif ( $self->{order} == 0 ) {
+    my ( $row, $col );
+    my $cols_per_row = $#{$self->{rc2idx}[0]};
+    if ( $self->{order} == 0 ) {
         for my $idx ( @{$self->{no_spacebar}} ) {
             $row = int( $idx / $cols_per_row );
             $col = $idx % $cols_per_row;
@@ -733,7 +692,7 @@ sub __copy_orig_list {
 
 sub __length_longest {
     my ( $self ) = @_;
-    if ( defined $self->{ll} ) {
+    if ( $self->{ll} ) {
         $self->{length_longest} = $self->{ll};
         $self->{length} = [];
     }
@@ -815,7 +774,7 @@ sub __prepare_promptline {
             Urgent => 'FORCE'
         );
         if ( defined $self->{lf} ) {
-            $self->{prompt_copy} = $line_fold->fold( ' ' x ( $self->{lf}[0] // 0 ), ' ' x ( $self->{lf}[1] // 0 ), $self->{prompt} );
+            $self->{prompt_copy} = $line_fold->fold( ' ' x $self->{lf}[0], ' ' x $self->{lf}[1], $self->{prompt} );
         }
         else {
             $self->{prompt_copy} = $line_fold->fold( $self->{prompt}, 'PLAIN' );
@@ -1186,7 +1145,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.103
+Version 1.104
 
 =cut
 
@@ -1670,8 +1629,6 @@ Allowed values: 1 or greater
 
 =head2 no_spacebar
 
-This option is experimental! As long as the option is experimental the option name could change without previous
-announcement.
 L<no_spacebar> expects as its value a reference to an array. The elements of the array are indexes of choices which
 should not be markable with the C<SpaceBar> or with the right mouse key.
 
