@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.104';
+our $VERSION = '1.105';
 use Exporter 'import';
 our @EXPORT_OK = qw( choose );
 
@@ -12,7 +12,7 @@ use Carp qw( croak carp );
 use Text::LineFold;
 use Unicode::GCString;
 
-use Term::Choose::Constants qw( :choose  );
+use Term::Choose::Constants qw( :choose );
 
 no warnings 'utf8';
 #use warnings FATAL => qw( all );
@@ -38,11 +38,11 @@ sub new {
     my ( $opt ) = @_;
     croak "new: called with " . @_ . " arguments - 0 or 1 arguments expected." if @_ > 1;
     my $self = bless {}, $class;
-    #$self->{plugin} = $Plugin_Package->new();
     if ( defined $opt ) {
         croak "new: the (optional) argument must be a HASH reference." if ref $opt ne 'HASH';
         $self->__validate_options( $opt );
     }
+    $self->{plugin} = $Plugin_Package->new();
     return $self;
 }
 
@@ -122,32 +122,32 @@ sub __validate_options {
             my $err;
             if ( ref $opt->{$key} eq 'ARRAY' && @{$opt->{$key}} <= 2 ) {
                 no warnings 'uninitialized';
-                /^[0-9]+\z/ || ++$err for @{$opt->{$key}};
+                /^[0-9]+\z/ || ++$err && last for @{$opt->{$key}};
             }
             else {
                 ++$err;
             }
-            if ( ! $err ) {
-                $self->{$key} = $opt->{$key};
+            if ( $err ) {
+                push @warn, [ "'$key'", "the passed value" ];
             }
             else {
-                push @warn, [ "'$key'", "the passed value" ];
+                $self->{$key} = $opt->{$key};
             }
         }
         elsif ( $key eq 'no_spacebar' ) {
             my $err;
             if ( ref $opt->{$key} eq 'ARRAY' ) {
                 no warnings 'uninitialized';
-                /^[0-9]+\z/ || ++$err for @{$opt->{$key}};
+                /^[0-9]+\z/ || ++$err && last for @{$opt->{$key}};
             }
             else {
                 ++$err;
             }
-            if ( ! $err ) {
-                $self->{$key} = $opt->{$key};
+            if ( $err ) {
+                push @warn, [ "'$key'", "the passed value" ];
             }
             else {
-                push @warn, [ "'$key'", "the passed value" ];
+                $self->{$key} = $opt->{$key};
             }
         }
         elsif ( $opt->{$key} =~ m/^$valid->{$key}\z/x ) {
@@ -173,8 +173,6 @@ sub __init_term {
     $self->{old_handle} = select( $self->{handle_out} );
     $self->{backup_flush} = $|;
     $| = 1;
-    #( $self->{plugin}, $self->{mouse} ) = $Plugin_Package->new()->__set_mode( $self->{mouse} );
-    $self->{plugin} = $Plugin_Package->new();
     $self->{mouse} = $self->{plugin}->__set_mode( $self->{mouse} );
     print HIDE_CURSOR if $self->{hide_cursor};
 }
@@ -553,10 +551,17 @@ sub choose {
             }
         }
         elsif ( $key == KEY_SPACE ) {
-            if ( defined $self->{wantarray} && $self->{wantarray} ) {
-                if (    $self->{no_spacebar}
-                     && grep { $self->{rc2idx}[$self->{cursor}[ROW]][$self->{cursor}[COL]] == $_ } @{$self->{no_spacebar}}
-                ) {
+            if ( $self->{wantarray} ) {
+                my $locked = 0;
+                if ( $self->{no_spacebar} ) {
+                    for my $no_spacebar ( @{$self->{no_spacebar}} ) {
+                        if ( $self->{rc2idx}[$self->{cursor}[ROW]][$self->{cursor}[COL]] == $no_spacebar ) {
+                            ++$locked;
+                            last;
+                        }
+                    }
+                }
+                if ( $locked ) {
                     $self->__beep();
                 }
                 else {
@@ -571,7 +576,7 @@ sub choose {
             }
         }
         elsif ( $key == CONTROL_SPACE ) {
-            if ( defined $self->{wantarray} && $self->{wantarray} ) {
+            if ( $self->{wantarray} ) {
                 for my $i ( 0 .. $#{$self->{rc2idx}} ) {
                     for my $j ( 0 .. $#{$self->{rc2idx}[$i]} ) {
                         $self->{marked}[$i][$j] = $self->{marked}[$i][$j] ? 0 : 1;
@@ -1145,7 +1150,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.104
+Version 1.105
 
 =cut
 
@@ -1271,7 +1276,7 @@ If C<choose> is called in an I<list context>, the user can also mark an item wit
 
 C<choose> then returns - when C<Return> is pressed - the list of marked items including the highlighted item.
 
-In I<list context> C<Ctrl-SpaceBar> inverts the choices: marked items are unmarked and unmarked items are marked.
+In I<list context> C<Ctrl-SpaceBar> (or C<Ctrl-@>) inverts the choices: marked items are unmarked and unmarked items are marked.
 
 =item
 
@@ -1629,7 +1634,7 @@ Allowed values: 1 or greater
 
 =head2 no_spacebar
 
-L<no_spacebar> expects as its value a reference to an array. The elements of the array are indexes of choices which
+I<no_spacebar> expects as its value a reference to an array. The elements of the array are indexes of choices which
 should not be markable with the C<SpaceBar> or with the right mouse key.
 
 (default: undef)

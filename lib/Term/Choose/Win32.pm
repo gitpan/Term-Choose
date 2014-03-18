@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.104';
+our $VERSION = '1.105';
 
 use Term::Size::Win32    qw( chars );
 use Win32::Console       qw( STD_INPUT_HANDLE ENABLE_MOUSE_INPUT ENABLE_PROCESSED_INPUT
@@ -117,8 +117,8 @@ sub __reset_mode {
         }
         $self->{input}->Flush;
         # workaround Bug #33513:
-        #$self->{input}{handle} = undef;
         delete $self->{input}{handle};
+        #$self->{input}{handle} = undef;
         #
     }
 }
@@ -158,7 +158,7 @@ Term::Choose::Win32
 
 =head1 VERSION
 
-Version 1.104
+Version 1.105
 
 =head1 DESCRIPTION
 

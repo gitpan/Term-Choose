@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.104';
+our $VERSION = '1.105';
 
 use Exporter qw( import );
 
@@ -154,7 +154,7 @@ Term::Choose::Constants
 
 =head1 VERSION
 
-Version 1.104
+Version 1.105
 
 =head1 DESCRIPTION
 
