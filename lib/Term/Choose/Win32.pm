@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.106';
+our $VERSION = '1.107';
 
 use Win32::Console       qw( STD_INPUT_HANDLE ENABLE_MOUSE_INPUT ENABLE_PROCESSED_INPUT
                              RIGHT_ALT_PRESSED LEFT_ALT_PRESSED RIGHT_CTRL_PRESSED LEFT_CTRL_PRESSED SHIFT_PRESSED );
@@ -149,19 +149,17 @@ sub __term_cursor_position {
 
 __END__
 
-
-
 =pod
 
 =encoding UTF-8
 
-=head1 NAME - Plugin for Term::Choose.
+=head1 NAME
 
-Term::Choose::Win32
+Term::Choose::Win32 - Plugin for Term::Choose.
 
 =head1 VERSION
 
-Version 1.106
+Version 1.107
 
 =head1 DESCRIPTION
 

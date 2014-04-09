@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.106';
+our $VERSION = '1.107';
 use Exporter 'import';
 our @EXPORT_OK = qw( choose );
 
@@ -1150,7 +1150,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.106
+Version 1.107
 
 =cut
 
@@ -1298,7 +1298,7 @@ If the items of the list don't fit on the screen, the user can scroll to the nex
 If the window size is changed, then as soon as the user enters a keystroke C<choose> rewrites the screen. In list
 context marked items are reset.
 
-The C<q> key (or C<Ctrl-D>) returns C<undef> or an empty list in list context.
+C<choose> returns C<undef> or an empty list in list context if the C<q> key (or C<Ctrl-D>) is pressed.
 
 With a I<mouse> mode enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list
 context the right mouse key can be used instead the C<SpaceBar> key.
@@ -1612,7 +1612,7 @@ For MSWin32 see also the end of this section.
 4 - extended SGR mouse mode (1006)
 
 If a mouse mode is enabled layers for C<STDIN> are changed. Then before leaving C<choose> as a cleanup C<STDIN> is
-marked as C<UTF-8> with C<:encoding(UTF-8)>.
+marked as C<UTF-8> with C<:encoding(UTF-8)>. This doesn't apply if the OS is MSWin32.
 
 If the OS is MSWin32 there is no difference between the mouse modes 1, 3, and 4 - the all enable the mouse with the help
 of L<Win32::Console>.
@@ -1688,7 +1688,7 @@ default: "<undef>"
 
 =item * If an option does not exist C<new|config|choose> warns.
 
-=item * If an option value is not valid C<new|config|choose> warns and the default is used instead.
+=item * If an option value is not valid C<new|config|choose> warns and uses the default value instead.
 
 =item * If after pressing a key L<Term::ReadKey>::ReadKey returns C<undef> C<choose> warns with C<EOT: $!> and returns
 I<undef> or an empty list in list context.

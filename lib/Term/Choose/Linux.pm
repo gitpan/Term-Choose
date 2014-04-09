@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.106';
+our $VERSION = '1.107';
 
 use Term::ReadKey qw( GetTerminalSize ReadKey ReadMode );
 
@@ -215,7 +215,6 @@ sub __term_cursor_position {
 
 __END__
 
-
 =pod
 
 =encoding UTF-8
@@ -226,7 +225,7 @@ Term::Choose::Linux - Plugin for Term::Choose.
 
 =head1 VERSION
 
-Version 1.106
+Version 1.107
 
 =head1 SYNOPSIS
 

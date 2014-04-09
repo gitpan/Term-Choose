@@ -5,7 +5,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.106';
+our $VERSION = '1.107';
 
 use Exporter qw( import );
 
@@ -150,15 +150,15 @@ __END__
 
 =head1 NAME
 
-Term::Choose::Constants
+Term::Choose::Constants - Provides constants for Term::Choose and its plugins.
 
 =head1 VERSION
 
-Version 1.106
+Version 1.107
 
 =head1 DESCRIPTION
 
-This module is not expected to be directly used by any module other than L<Term::Choose>.
+This module is not expected to be directly used by any modules other than L<Term::Choose> and its plugins.
 
 =head1 SEE ALSO
 

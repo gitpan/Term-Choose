@@ -1,6 +1,9 @@
 Revision history for Term::Choose
 
 
+1.107   2014-04-09
+        - Documentation: update and bugfix.
+
 1.106   2014-04-09
         - Use "Win32::Console" directly to get the terminal size.
         - Update documentation.
