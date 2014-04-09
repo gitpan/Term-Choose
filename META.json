@@ -1,10 +1,10 @@
 {
-   "abstract" : "unknown",
+   "abstract" : "Choose items from a list.",
    "author" : [
       "Matthaeus Kiem <cuer2s@gmail.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.88, CPAN::Meta::Converter version 2.120921",
+   "generated_by" : "ExtUtils::MakeMaker version 6.94, CPAN::Meta::Converter version 2.140640",
    "license" : [
       "perl_5"
    ],
@@ -44,5 +44,12 @@
       }
    },
    "release_status" : "stable",
-   "version" : "1.105"
+   "resources" : {
+      "repository" : {
+         "type" : "git",
+         "url" : "https://github.com/kuerbis/Term-Choose.git",
+         "web" : "https://github.com/kuerbis/Term-Choose"
+      }
+   },
+   "version" : "1.106"
 }

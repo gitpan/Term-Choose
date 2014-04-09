@@ -5,9 +5,8 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.105';
+our $VERSION = '1.106';
 
-use Term::Size::Win32    qw( chars );
 use Win32::Console       qw( STD_INPUT_HANDLE ENABLE_MOUSE_INPUT ENABLE_PROCESSED_INPUT
                              RIGHT_ALT_PRESSED LEFT_ALT_PRESSED RIGHT_CTRL_PRESSED LEFT_CTRL_PRESSED SHIFT_PRESSED );
 use Win32::Console::ANSI qw( :func );
@@ -31,9 +30,12 @@ INIT {
     print "\e(U";
 }
 
+
+
 sub new {
     return bless {}, $_[0];
 }
+
 
 sub __get_key_OS {
     my ( $self, $mouse ) = @_;
@@ -98,6 +100,7 @@ sub __get_key_OS {
     }
 }
 
+
 sub __set_mode {
     my ( $self, $mouse ) = @_;
     $self->{input} = Win32::Console->new( STD_INPUT_HANDLE );
@@ -109,7 +112,7 @@ sub __set_mode {
 
 
 sub __reset_mode {
-    my ( $self, $mouse ) = @_;
+    my ( $self, $mouse ) = @_;  # no use for $mouse on win32
     if ( defined $self->{input} ) {
         if ( defined $self->{old_in_mode} ) {
             $self->{input}->Mode( $self->{old_in_mode} );
@@ -125,8 +128,8 @@ sub __reset_mode {
 
 
 sub __get_term_size {
-    my ( $self, $handle_out ) = @_;
-    my ( $term_width, $term_height ) = chars( $handle_out );
+    my ( $self, $handle_out ) = @_;  # no use for $handle_out on win32
+    my ( $term_width, $term_heighT ) = Win32::Console->new()->Size();
     return $term_width - 1, $term_height;
 }
 
@@ -152,13 +155,13 @@ __END__
 
 =encoding UTF-8
 
-=head1 NAME
+=head1 NAME - Plugin for Term::Choose.
 
 Term::Choose::Win32
 
 =head1 VERSION
 
-Version 1.105
+Version 1.106
 
 =head1 DESCRIPTION
 

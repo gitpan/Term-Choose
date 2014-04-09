@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.105';
+our $VERSION = '1.106';
 use Exporter 'import';
 our @EXPORT_OK = qw( choose );
 
@@ -281,7 +281,7 @@ sub choose {
         next if $key == NEXT_get_key;
         next if $key == KEY_Tilde;
 
-        # $self->{rc2idx} holds the new list (AoA) formated in "__size_and_layout" appropirate to the choosen layout.
+        # $self->{rc2idx} holds the new list (AoA) formated in "__size_and_layout" appropirate to the chosen layout.
         # $self->{rc2idx} does not hold the values dircetly but the respective list indexes from the original list.
         # If the original list would be ( 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' ) and the new formated list should be
         #     a d g
@@ -1150,14 +1150,14 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.105
+Version 1.106
 
 =cut
 
 =head1 SYNOPSIS
 
     use 5.10.1;
-    use Term::Choose qw(choose);
+    use Term::Choose qw( choose );
 
     my $array_ref = [ qw( one two three four five ) ];
 
@@ -1169,7 +1169,9 @@ Version 1.105
 
     choose( [ 'Press ENTER to continue' ], { prompt => '' } );    # no choice
 
-    # or OO-interface
+
+    # or OO-interface:
+
 
     use 5.10.1;
     use Term::Choose;
@@ -1200,7 +1202,7 @@ C<Term::Choose> provides a functional interface (L</SUBROUTINES>) and an object-
 
 Nothing by default.
 
-    use Term::Choose qw(choose);
+    use Term::Choose qw( choose );
 
 =head1 METHODS
 
@@ -1208,9 +1210,9 @@ Nothing by default.
 
     $new = Term::Choose->new( [ \%options] );
 
-This constructor returns a new Term::Choose object.
+This constructor returns a new C<Term::Choose> object.
 
-The argument - a reference to a hash of "option-key => option-value" pairs - is optional.
+To set the different options it can be passed a reference to a hash as an optional argument.
 
 For detailed information about the options see L</OPTIONS>.
 
@@ -1218,9 +1220,9 @@ For detailed information about the options see L</OPTIONS>.
 
     $new->config( \%options );
 
-This method expects a hash reference as its argument.
+The C<config> method is meant to set the different options. The options are passed as a hash reference.
 
-The method C<config> sets the different options.
+Options set with C<config> overwrite options set with the C<new> method.
 
 For detailed information about the different options, their allowed and default values see L</OPTIONS>.
 
@@ -1230,7 +1232,11 @@ The method C<choose> allows the user to choose from a list.
 
 The first argument is an array reference which holds the list of the available choices.
 
-As a second and optional argument it can be passed a reference to a hash where the keys are the option names and the values the option values.
+As a second and optional argument it can be passed a reference to a hash where the keys are the option names and the
+values the option values.
+
+Options set with C<choose> overwrite options set with C<new> or C<config>. Before leaving C<choose> restores the
+overwritten options.
 
     $choice = $new->choose( $array_ref [, \%options] );
 
@@ -1238,8 +1244,8 @@ As a second and optional argument it can be passed a reference to a hash where t
 
               $new->choose( $array_ref [, \%options] );
 
-The array the reference refers to is called in the documentation simply array or list respective elements (of the
-array).
+When in the documentation is mentioned "array" or "list" or "elements" or "items" (of the array/list) than these
+refer to this array passed as a reference as the first argument.
 
 For more information how to use C<choose> and its return values see L<USAGE AND RETURN VALUES>.
 
@@ -1247,7 +1253,7 @@ For more information how to use C<choose> and its return values see L<USAGE AND 
 
 =head2 choose
 
-The function C<choose> allows to choose from a list. It takes the same arguments as the method L</choose>.
+The function C<choose> allows the user to choose from a list. It takes the same arguments as the method L</choose>.
 
     $choice = choose( $array_ref [, \%options] );
 
@@ -1265,7 +1271,7 @@ See also the following section L<USAGE AND RETURN VALUES>.
 
 =item
 
-If C<choose> is called in a I<scalar context>, the user can choose an item by using the "move-around-keys" and
+If C<choose> is called in a I<scalar context>, the user can choose an item by using the L</Keys to move around> and
 confirming with C<Return>.
 
 C<choose> then returns the chosen item.
@@ -1297,57 +1303,57 @@ The C<q> key (or C<Ctrl-D>) returns C<undef> or an empty list in list context.
 With a I<mouse> mode enabled (and if supported by the terminal) the item can be chosen with the left mouse key, in list
 context the right mouse key can be used instead the C<SpaceBar> key.
 
-=head2 Keys to move around:
+=head2 Keys to move around
 
 =over
 
 =item *
 
-C<Arrow> keys (or C<hjkl>),
+the C<Arrow> keys (or the C<h,j,k,l> keys) to move up and down or to move to the right and to the left,
 
 =item *
 
-C<Tab> key (or C<Ctrl-I>) to move forward, C<BackSpace> key (or C<Ctrl-H> or C<Shift-Tab>) to move backward,
+the C<Tab> key (or C<Ctrl-I>) to move forward, the C<BackSpace> key (or C<Ctrl-H> or C<Shift-Tab>) to move backward,
 
 =item *
 
-C<PageUp> key (or C<Ctrl-B>) to go back one page, C<PageDown> key (or C<Ctrl-F>) to go forward one page,
+the C<PageUp> key (or C<Ctrl-B>) to go back one page, the C<PageDown> key (or C<Ctrl-F>) to go forward one page,
 
 =item *
 
-C<Home> key (or C<Ctrl-A>) to jump to the beginning of the list, C<End> key (or C<Ctrl-E>) to jump to the end of the list.
+the C<Home> key (or C<Ctrl-A>) to jump to the beginning of the list, the C<End> key (or C<Ctrl-E>) to jump to the end of
+the list.
 
 =back
 
 =head2 Modifications for the output
 
-For the output on the screen the array elements are modified:
+For the output on the screen the array elements are modified.
+
+All the modifications are made on a copy of the original array so C<choose> returns the chosen elements as they were
+passed to the function without modifications.
+
+Modifications:
 
 =over
 
 =item *
 
-if an element is not defined the value from the option I<undef> is assigned to the element.
+If an element is not defined the value from the option I<undef> is assigned to the element.
 
 =item *
 
-if an element holds an empty string the value from the option I<empty> is assigned to the element.
+If an element holds an empty string the value from the option I<empty> is assigned to the element.
 
 =item *
 
-white-spaces in elements are replaced with simple spaces.
+White-spaces in elements are replaced with simple spaces.
 
     $element =~ s/\p{Space}/ /g;
 
 =item *
 
-characters which match the Unicode character property C<Other> are removed.
-
-    $element =~ s/\p{C}//g;
-
-=item *
-
-if the length of an element is greater than the width of the screen the element is cut.
+If the length of an element is greater than the width of the screen the element is cut.
 
     $element = substr( $element, 0, $allowed_length - 3 ) . '...';*
 
@@ -1356,22 +1362,100 @@ string length.
 
 =back
 
-All these modifications are made on a copy of the original array so C<choose> returns the chosen elements as they were
-passed to the function without modifications.
+The following should be without meaning if you comply with the requirements.
+
+=over
+
+=item *
+
+Characters which match the Unicode character property C<Other> are removed.
+
+    $element =~ s/\p{C}//g;
+
+=item *
+
+If an element is a reference it will be replaced with a string: the reference type followed with the hexadecimal value
+of the reference enclosed in parentheses.
+
+    if ( ref $element ) {
+        $element = sprintf "%s(0x%x)", ref $element, $element;
+    }
+
+=item *
+
+The category of C<utf8> C<warnings> is disabled.
+
+    no warnings 'utf8';
+
+=back
 
 =head1 OPTIONS
 
 Options which expect a number as their value expect integers.
 
-=head2 prompt
+=head2 beep
 
-If I<prompt> is undefined a default prompt-string will be shown.
+0 - off (default)
 
-If the I<prompt> value is an empty string ("") no prompt-line will be shown.
+1 - on
 
-default in list and scalar context: 'Your choice:'
+=head2 clear_screen
 
-default in void context: 'Close with ENTER'
+0 - off (default)
+
+1 - clears the screen before printing the choices
+
+=head2 default
+
+With the option I<default> it can be selected an element, which will be highlighted as the default instead of the first
+element.
+
+I<default> expects a zero indexed value, so e.g. to highlight the third element the value would be I<2>.
+
+If the passed value is greater than the index of the last array element the first element is highlighted.
+
+Allowed values: 0 or greater
+
+(default: undefined)
+
+=head2 empty
+
+Sets the string displayed on the screen instead an empty string.
+
+default: "<empty>"
+
+=head2 hide_cursor
+
+0 - keep the terminals highlighting of the cursor position
+
+1 - hide the terminals highlighting of the cursor position (default)
+
+=head2 index
+
+0 - off (default)
+
+1 - return the index of the chosen element instead of the chosen element respective the indices of the chosen elements
+instead of the chosen elements.
+
+=head2 justify
+
+0 - elements ordered in columns are left justified (default)
+
+1 - elements ordered in columns are right justified
+
+2 - elements ordered in columns are centered
+
+=head2 keep
+
+I<keep> prevents that all the terminal rows are used by the prompt lines.
+
+Setting I<keep> ensures that at least I<keep> terminal rows are available for printing list rows.
+
+If the terminal height is less than I<keep> I<keep> is set to the terminal height.
+
+Allowed values: 1 or greater
+
+(default: 5)
 
 =head2 layout
 
@@ -1433,164 +1517,11 @@ From broad to narrow: 0 > 1 > 2 > 3
 
 =back
 
-=head2 max_height
-
-If defined sets the maximal number of rows used for printing list items.
-
-If the available height is less than I<max_height> I<max_height> is set to the available height.
-
-Height in this context means print rows.
-
-I<max_height> overwrites I<keep> if I<max_height> is set and less than I<keep>.
-
-Allowed values: 1 or greater
-
-(default: undef)
-
-=head2 max_width
-
-If defined, sets the output width to I<max_width> if the terminal width is greater than I<max_width>.
-
-Width refers here to the number of print columns.
-
-Allowed values: 1 or greater
-
-(default: undef)
-
-=head2 order
-
-If the output has more than one row and more than one column:
-
-0 - elements are ordered horizontally
-
-1 - elements are ordered vertically (default)
-
-Default may change in a future release.
-
-=head2 justify
-
-0 - elements ordered in columns are left justified (default)
-
-1 - elements ordered in columns are right justified
-
-2 - elements ordered in columns are centered
-
-=head2 pad
-
-Sets the number of whitespaces between columns. (default: 2)
-
-Allowed values: 0 or greater
-
-=head2 pad_one_row
-
-Sets the number of whitespaces between elements if we have only one row. (default: value of the option I<pad>)
-
-Allowed values: 0 or greater
-
-=head2 clear_screen
-
-0 - off (default)
-
-1 - clears the screen before printing the choices
-
-=head2 default
-
-With the option I<default> it can be selected an element, which will be highlighted as the default instead of the first
-element.
-
-I<default> expects a zero indexed value, so e.g. to highlight the third element the value would be I<2>.
-
-If the passed value is greater than the index of the last array element the first element is highlighted.
-
-Allowed values: 0 or greater
-
-(default: undef)
-
-=head2 index
-
-0 - off (default)
-
-1 - return the index of the chosen element instead of the chosen element respective the indices of the chosen elements
-instead of the chosen elements.
-
-=head2 page
-
-0 - off
-
-1 - print the page number on the bottom of the screen if there is more then one page. (default)
-
-=head2 mouse
-
-The following is valid if the OS is not MSWin32. For MSWin32 see the end of this section.
-
-0 - no mouse mode (default)
-
-1 - mouse mode 1003 enabled
-
-2 - mouse mode 1003 enabled; the output width is limited to 223 print-columns and the height to 223 rows (mouse mode
-1003 doesn't work above 223)
-
-3 - extended mouse mode (1005) - uses utf8
-
-4 - extended SGR mouse mode (1006)
-
-If a mouse mode is enabled layers for C<STDIN> are changed. Then before leaving C<choose> as a cleanup C<STDIN> is
-marked as C<UTF-8> with C<:encoding(UTF-8)>.
-
-If the OS is MSWin32 I<1>, I<3> and I<4> enable the mouse and are equivalent. The I<mouse> mode I<2> enables also the mouse but the
-output width is limited to 223 print-columns and the output height is limited to 223 rows. The I<mouse> mode I<0> disables the
-mouse (default).
-
-=head2 keep
-
-I<keep> prevents that all the terminal rows are used by the prompt lines.
-
-Setting I<keep> ensures that at least I<keep> terminal rows are available for printing list rows.
-
-If the terminal height is less than I<keep> I<keep> is set to the terminal height.
-
-Allowed values: 1 or greater
-
-(default: 5)
-
-=head2 beep
-
-0 - off (default)
-
-1 - on
-
-=head2 hide_cursor
-
-0 - keep the terminals highlighting of the cursor position
-
-1 - hide the terminals highlighting of the cursor position (default)
-
-=head2 limit
-
-Sets the maximal allowed length of the array. (default: undef)
-
-If the array referred by the first argument has more than limit elements choose uses only the first limit array
-elements.
-
-Allowed values: 1 or greater
-
-=head2 undef
-
-Sets the string displayed on the screen instead an undefined element.
-
-default: '<undef>'
-
-=head2 empty
-
-Sets the string displayed on the screen instead an empty string.
-
-default: '<empty>'
-
 =head2 lf
 
 If I<prompt> lines are folded the option I<lf> allows to insert spaces at beginning of the folded lines.
 
-The option I<lf> expects a reference to an array with one or two elements;
+The option I<lf> expects a reference to an array with one or two elements:
 
 - the first element (C<INITIAL_TAB>) sets the number of spaces inserted at beginning of paragraphs
 
@@ -1601,7 +1532,16 @@ Allowed values for the two elements are: 0 or greater.
 
 See C<INITIAL_TAB> and C<SUBSEQUENT_TAB> in L<Text::LineFold>.
 
-(default: undef)
+(default: undefined)
+
+=head2 limit
+
+Sets the maximal allowed length of the array. (default: undefined)
+
+If the array referred by the first argument has more than I<limit> elements choose uses only the first I<limit> array
+elements.
+
+Allowed values: 1 or greater
 
 =head2 ll
 
@@ -1630,14 +1570,103 @@ If the value of I<ll> is greater than the screen width the elements will be trim
 
 Allowed values: 1 or greater
 
-(default: undef)
+(default: undefined)
+
+=head2 max_height
+
+If defined sets the maximal number of rows used for printing list items.
+
+If the available height is less than I<max_height> I<max_height> is set to the available height.
+
+Height in this context means print rows.
+
+I<max_height> overwrites I<keep> if I<max_height> is set and less than I<keep>.
+
+Allowed values: 1 or greater
+
+(default: undefined)
+
+=head2 max_width
+
+If defined, sets the output width to I<max_width> if the terminal width is greater than I<max_width>.
+
+Width refers here to the number of print columns.
+
+Allowed values: 1 or greater
+
+(default: undefined)
+
+=head2 mouse
+
+For MSWin32 see also the end of this section.
+
+0 - no mouse mode (default)
+
+1 - mouse mode 1003 enabled
+
+2 - mouse mode 1003 enabled; the output width is limited to 223 print-columns and the height to 223 rows (mouse mode
+1003 doesn't work above 223)
+
+3 - extended mouse mode (1005) - uses utf8
+
+4 - extended SGR mouse mode (1006)
+
+If a mouse mode is enabled layers for C<STDIN> are changed. Then before leaving C<choose> as a cleanup C<STDIN> is
+marked as C<UTF-8> with C<:encoding(UTF-8)>.
+
+If the OS is MSWin32 there is no difference between the mouse modes 1, 3, and 4 - the all enable the mouse with the help
+of L<Win32::Console>.
 
 =head2 no_spacebar
 
 I<no_spacebar> expects as its value a reference to an array. The elements of the array are indexes of choices which
 should not be markable with the C<SpaceBar> or with the right mouse key.
 
-(default: undef)
+(default: undefined)
+
+=head2 order
+
+If the output has more than one row and more than one column:
+
+0 - elements are ordered horizontally
+
+1 - elements are ordered vertically (default)
+
+Default may change in a future release.
+
+=head2 pad
+
+Sets the number of whitespaces between columns. (default: 2)
+
+Allowed values: 0 or greater
+
+=head2 pad_one_row
+
+Sets the number of whitespaces between elements if we have only one row. (default: value of the option I<pad>)
+
+Allowed values: 0 or greater
+
+=head2 page
+
+0 - off
+
+1 - print the page number on the bottom of the screen if there is more then one page. (default)
+
+=head2 prompt
+
+If I<prompt> is undefined a default prompt-string will be shown.
+
+If the I<prompt> value is an empty string ("") no prompt-line will be shown.
+
+default in list and scalar context: C<Your choice:>
+
+default in void context: C<Close with ENTER>
+
+=head2 undef
+
+Sets the string displayed on the screen instead an undefined element.
+
+default: "<undef>"
 
 =head1 ERROR HANDLING
 
@@ -1645,9 +1674,9 @@ should not be markable with the C<SpaceBar> or with the right mouse key.
 
 =over
 
-=item * If passed an invalid number of arguments to a method/function it dies.
+=item * If passed an invalid number of arguments C<new|config|choose> dies.
 
-=item * If passed an invalid argument to a method/function it dies.
+=item * If passed an invalid argument C<new|config|choose> dies.
 
 =back
 
@@ -1716,11 +1745,14 @@ L<Term::ReadKey>
 
 =back
 
-is required.
+is additionally required.
 
 =head2 Decoded strings
 
 C<choose> expects decoded strings as array elements.
+
+If the operating system is MSWin32 C<Term::Choose> disables the automatic conversion done by C<Win32::Console::ANSI>
+globally - see C<"\e(U"> in L<Win32::Console::ANSI|Win32::Console::ANSI/Escape sequences for Select Character Set>.
 
 =head2 encoding layer for STDOUT
 
@@ -1774,7 +1806,7 @@ If a I<mouse> mode is enabled
 
 are used to enable/disable the different I<mouse> modes.
 
-To read key and mouse events with MSWin32 OS L<Win32::Console> is used instead.
+To read key and mouse events with an MSWin32 OS L<Win32::Console> is used instead.
 
 =head1 SUPPORT
 

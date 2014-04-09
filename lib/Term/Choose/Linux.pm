@@ -5,16 +5,18 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.105';
+our $VERSION = '1.106';
 
 use Term::ReadKey qw( GetTerminalSize ReadKey ReadMode );
 
 use Term::Choose::Constants qw( :linux );
 
 
+
 sub new {
     return bless {}, $_[0];
 }
+
 
 sub __get_key_OS {
     my ( $self, $mouse ) = @_;
@@ -192,6 +194,12 @@ sub __reset_mode {
 }
 
 
+sub __get_term_size {
+    my ( $self, $handle_out ) = @_;
+    return( ( GetTerminalSize( $handle_out ) )[ 0, 1 ] );
+}
+
+
 sub __term_cursor_position {
     my ( $self ) = @_;
     #$self->{abs_cursor_x} = 0; # unused
@@ -200,10 +208,6 @@ sub __term_cursor_position {
 }
 
 
-sub __get_term_size {
-    my ( $self, $handle_out ) = @_;
-    return( ( GetTerminalSize( $handle_out ) )[0,1] );
-}
 
 
 
@@ -218,11 +222,11 @@ __END__
 
 =head1 NAME
 
-Term::Choose::Linux
+Term::Choose::Linux - Plugin for Term::Choose.
 
 =head1 VERSION
 
-Version 1.105
+Version 1.106
 
 =head1 SYNOPSIS
 

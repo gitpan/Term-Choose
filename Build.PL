@@ -7,7 +7,6 @@ use Module::Build;
 my %prereqs_os_specific;
 if ( $^O eq 'MSWin32' ) {
     %prereqs_os_specific = (
-        'Term::Size::Win32'    => 0,
         'Win32::Console'       => 0,
         'Win32::Console::ANSI' => 0,
     );
@@ -22,6 +21,11 @@ else {
 my $builder = Module::Build->new(
     module_name         => 'Term::Choose',
     license             => 'perl',
+    meta_merge => {
+        resources => {
+            repository => 'https://github.com/kuerbis/Term-Choose',
+        }
+    },
     dist_author         => 'Matthaeus Kiem <cuer2s@gmail.com>',
     dist_version_from   => 'lib/Term/Choose.pm',
     configure_requires => {

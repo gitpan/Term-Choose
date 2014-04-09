@@ -26,6 +26,8 @@ while ( my $line = <$fh> ) {
             next if $op eq 'prompt';
             next if $op ~~ @deprecated;
             $option_default{$op} = $2;
+            $option_default{$op} =~ s/^undef\z/undefined/;
+            $option_default{$op} =~ s/^["']([^'"]+)["']\z/$1/;
          }
     }
 }
@@ -71,7 +73,11 @@ for my $key ( @long ) {
     }
     else {
         for my $line ( @{$pod{$key}} ) {
-            if ( $line =~ /default:\s('[^']+'|\w+)(?:\)|\s*)/ ) {
+            if ( $line =~ /default:\s["']([^'"]+)["'](?:\)|\s*)/ ) {
+                $pod_default{$key} = $1;
+                last;
+            }
+            if ( $line =~ /default:\s(\w+)(?:\)|\s*)/ ) {
                 $pod_default{$key} = $1;
                 last;
             }

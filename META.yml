@@ -1,29 +1,31 @@
 ---
-abstract: unknown
+abstract: 'Choose items from a list.'
 author:
   - 'Matthaeus Kiem <cuer2s@gmail.com>'
 build_requires:
-  Test::More: 0
+  Test::More: '0'
 configure_requires:
-  ExtUtils::MakeMaker: 0
+  ExtUtils::MakeMaker: '0'
 dynamic_config: 1
-generated_by: 'ExtUtils::MakeMaker version 6.88, CPAN::Meta::Converter version 2.120921'
+generated_by: 'ExtUtils::MakeMaker version 6.94, CPAN::Meta::Converter version 2.140640'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
+  version: '1.4'
 name: Term-Choose
 no_index:
   directory:
     - t
     - inc
 requires:
-  Carp: 0
-  Exporter: 0
-  Term::ReadKey: 0
-  Text::LineFold: 0
-  Unicode::GCString: 0
-  perl: 5.010001
-  strict: 0
-  warnings: 0
-version: 1.105
+  Carp: '0'
+  Exporter: '0'
+  Term::ReadKey: '0'
+  Text::LineFold: '0'
+  Unicode::GCString: '0'
+  perl: '5.010001'
+  strict: '0'
+  warnings: '0'
+resources:
+  repository: https://github.com/kuerbis/Term-Choose.git
+version: '1.106'
