@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use 5.10.1;
 
-our $VERSION = '1.107';
+our $VERSION = '1.108';
 use Exporter 'import';
 our @EXPORT_OK = qw( choose );
 
@@ -1150,7 +1150,7 @@ Term::Choose - Choose items from a list.
 
 =head1 VERSION
 
-Version 1.107
+Version 1.108
 
 =cut
 
@@ -1754,7 +1754,7 @@ C<choose> expects decoded strings as array elements.
 If the operating system is MSWin32 C<Term::Choose> disables the automatic conversion done by C<Win32::Console::ANSI>
 globally - see C<"\e(U"> in L<Win32::Console::ANSI|Win32::Console::ANSI/Escape sequences for Select Character Set>.
 
-=head2 encoding layer for STDOUT
+=head2 Encoding layer for STDOUT
 
 For a correct output it is required to set an encoding layer for C<STDOUT> matching the terminal's character set.
 
