@@ -1,5 +1,5 @@
 ---
-abstract: 'Choose items from a list.'
+abstract: 'Choose items from a list - ANNOUNCEMENT.'
 author:
   - 'Matthaeus Kiem <cuer2s@gmail.com>'
 build_requires:
@@ -28,4 +28,4 @@ requires:
   warnings: '0'
 resources:
   repository: https://github.com/kuerbis/Term-Choose.git
-version: '1.110'
+version: '1.111'
