@@ -28,4 +28,4 @@ requires:
   warnings: '0'
 resources:
   repository: https://github.com/kuerbis/Term-Choose.git
-version: 1.112_02
+version: 1.112_03
