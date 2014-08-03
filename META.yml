@@ -3,7 +3,6 @@ abstract: 'Choose items from a list interactively.'
 author:
   - 'Matthaeus Kiem <cuer2s@gmail.com>'
 build_requires:
-  Devel::Peek: '0'
   Test::Fatal: '0'
   Test::More: '0'
 configure_requires:
@@ -30,4 +29,4 @@ requires:
   warnings: '0'
 resources:
   repository: https://github.com/kuerbis/Term-Choose.git
-version: 1.113_02
+version: 1.113_03

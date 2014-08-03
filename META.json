@@ -22,7 +22,6 @@
    "prereqs" : {
       "build" : {
          "requires" : {
-            "Devel::Peek" : "0",
             "Test::Fatal" : "0",
             "Test::More" : "0"
          }
@@ -53,5 +52,5 @@
          "web" : "https://github.com/kuerbis/Term-Choose"
       }
    },
-   "version" : "1.113_02"
+   "version" : "1.113_03"
 }
