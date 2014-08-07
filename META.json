@@ -39,7 +39,7 @@
             "Term::ReadKey" : "0",
             "Text::LineFold" : "0",
             "Unicode::GCString" : "0",
-            "perl" : "5.010001",
+            "perl" : "5.010000",
             "strict" : "0",
             "warnings" : "0"
          }
@@ -53,5 +53,5 @@
          "web" : "https://github.com/kuerbis/Term-Choose"
       }
    },
-   "version" : "1.113_06"
+   "version" : "1.113_07"
 }
