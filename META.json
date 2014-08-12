@@ -23,6 +23,7 @@
       "build" : {
          "requires" : {
             "Expect" : "0",
+            "Term::ReadKey" : "0",
             "Test::Fatal" : "0",
             "Test::More" : "0"
          }
@@ -53,5 +54,5 @@
          "web" : "https://github.com/kuerbis/Term-Choose"
       }
    },
-   "version" : "1.113_09"
+   "version" : "1.113_10"
 }
