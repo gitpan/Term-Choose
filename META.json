@@ -46,7 +46,7 @@
          }
       }
    },
-   "release_status" : "testing",
+   "release_status" : "stable",
    "resources" : {
       "repository" : {
          "type" : "git",
@@ -54,5 +54,5 @@
          "web" : "https://github.com/kuerbis/Term-Choose"
       }
    },
-   "version" : "1.113_10"
+   "version" : "1.114"
 }
