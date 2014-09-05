@@ -26,9 +26,9 @@ requires:
   Term::ReadKey: '0'
   Text::LineFold: '0'
   Unicode::GCString: '0'
-  perl: '5.010000'
+  perl: '5.008000'
   strict: '0'
   warnings: '0'
 resources:
   repository: https://github.com/kuerbis/Term-Choose.git
-version: '1.115'
+version: 1.115_01
